@@ -1,0 +1,64 @@
+/* The floating quick capture panel: a card on a transparent window (macOS); the margin around it
+   leaves room for its shadow. */
+:root {
+  --card: #ffffff;
+  --ink: #1f1e1c;
+  --muted: #8a867f;
+  --line: #e4e1da;
+  --error: #b42318;
+  --warning: #b54708;
+  --hover: #f1efea;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --card: #262523;
+    --ink: #f2f0eb;
+    --muted: #8f8b84;
+    --line: #3a3834;
+    --error: #f97066;
+    --warning: #fdb022;
+    --hover: #33312e;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: transparent; }
+body { padding: 14px 18px 22px; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--ink); }
+main {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+textarea {
+  flex: 1;
+  min-height: 84px;
+  width: 100%;
+  padding: 14px 16px 6px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 17px;
+}
+textarea::placeholder { color: var(--muted); }
+textarea:disabled { opacity: 0.6; }
+footer { display: flex; gap: 12px; padding: 6px 16px 10px; font-size: 12px; color: var(--muted); -webkit-user-select: none; user-select: none; }
+#hint { margin-left: auto; white-space: nowrap; }
+#preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#preview.problem { color: var(--warning); }
+/* Suggestions at the cursor: types after "/", a relation's objects, a select's options. */
+#list { list-style: none; margin: 0 10px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; flex: none; -webkit-user-select: none; user-select: none; }
+#list li { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 7px; font-size: 14px; cursor: default; }
+#list li[aria-selected="true"] { background: var(--hover); }
+#list .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#list .emoji { width: 18px; text-align: center; }
+#list .detail { font-size: 12px; color: var(--muted); }
+.error { color: var(--error); }
+[hidden] { display: none !important; }

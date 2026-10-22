@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="options">
+    <form id="form">
+      <label>Vasta address <input id="server" type="url" placeholder="https://vasta.example.home" required /></label>
+      <small>Where the capture API answers (<code>/api/capture</code>), e.g. http://127.0.0.1:5173.</small>
+      <label>Capture token <input id="token" type="password" required /></label>
+      <small>The value of <code>VASTA_CAPTURE_TOKEN</code> on the server.</small>
+      <label>App address <input id="app" type="url" placeholder="Same as the Vasta address" /></label>
+      <small>Optional: where "Open in Vasta" links point, if the app lives elsewhere.</small>
+      <div class="row"><button type="submit">Save</button><span id="status"></span></div>
+    </form>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

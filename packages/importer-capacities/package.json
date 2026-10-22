@@ -1,0 +1,14 @@
+{
+  "name": "@vasta/importer-capacities",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "vasta-import-capacities": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@vasta/core": "workspace:*",
+    "fflate": "0.8.2"
+  }
+}

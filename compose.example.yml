@@ -1,0 +1,18 @@
+# Vasta with Docker Compose (docs/deploy.md). Next to it, a .env with the settings from
+# .env.example; then:
+#   docker compose up -d
+#   docker compose logs vasta      # the setup code for the first account
+services:
+  vasta:
+    image: ghcr.io/ariedotme/vasta:latest
+    # build: .                     # or build the image from a checkout of the repository
+    container_name: vasta
+    restart: unless-stopped
+    env_file: .env
+    # Media go to ./data/media unless VASTA_S3_* in .env name an S3-compatible bucket (docs/deploy.md).
+    volumes:
+      - ./data:/data
+    # Published only to this machine: a reverse proxy in front adds HTTPS (docs/deploy.md). When the
+    # proxy runs in Docker too, put both on a shared network instead.
+    ports:
+      - "127.0.0.1:5174:5174"

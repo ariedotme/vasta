@@ -1,0 +1,17 @@
+{
+  "name": "@vasta/cli",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "vasta": "./bin/vasta"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1"
+  },
+  "devDependencies": {
+    "@vasta/core": "workspace:*",
+    "@vasta/server": "workspace:*"
+  }
+}

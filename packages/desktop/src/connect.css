@@ -1,0 +1,70 @@
+:root {
+  --bg: #f7f6f3;
+  --ink: #1f1e1c;
+  --muted: #6f6c66;
+  --line: #dddad3;
+  --field: #ffffff;
+  --accent: #1f1e1c;
+  --accent-ink: #f7f6f3;
+  --error: #b42318;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1e1c;
+    --ink: #f2f0eb;
+    --muted: #a19d95;
+    --line: #3a3834;
+    --field: #2a2926;
+    --accent: #f2f0eb;
+    --accent-ink: #1f1e1c;
+    --error: #f97066;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.titlebar { position: fixed; inset: 0 0 auto; height: 48px; }
+main { width: min(360px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; }
+form, #unreachable { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+label { font-size: 13px; color: var(--muted); }
+input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
+input:focus { outline: 2px solid color-mix(in srgb, var(--ink) 35%, transparent); outline-offset: 1px; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+button {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: 0.5; cursor: default; }
+.muted { color: var(--muted); }
+.error { color: var(--error); margin: 0; text-align: left; }
+#status { margin: 0; }
+footer { position: fixed; bottom: 12px; font-size: 12px; }
+[hidden] { display: none !important; }

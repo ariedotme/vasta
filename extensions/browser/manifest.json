@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Save to Vasta",
+  "version": "0.1.0",
+  "description": "Save the current page or a link to your Vasta space, through its capture API.",
+  "permissions": ["activeTab", "storage", "contextMenus"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "action": { "default_title": "Save to Vasta", "default_popup": "popup.html" },
+  "options_ui": { "page": "options.html", "open_in_tab": false },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "commands": {
+    "_execute_action": { "suggested_key": { "default": "Alt+Shift+V" }, "description": "Save this page to Vasta" }
+  }
+}

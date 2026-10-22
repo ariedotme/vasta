@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quick Capture</title>
+    <link rel="stylesheet" href="capture.css" />
+    <script type="module" src="capture.js"></script>
+  </head>
+  <body>
+    <main>
+      <textarea id="text" rows="3" spellcheck="true" placeholder="A thought, a link, a task… or / for an object of a type" autofocus></textarea>
+      <ul id="list" role="listbox" aria-label="Suggestions" hidden></ul>
+      <footer>
+        <span id="error" class="error" role="alert" hidden></span>
+        <span id="preview" hidden></span>
+        <span id="hint">Enter saves to today’s note · Shift+Enter adds a line · Esc closes</span>
+      </footer>
+    </main>
+  </body>
+</html>

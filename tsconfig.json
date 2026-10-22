@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true
+  },
+  "include": [
+    "packages/core/src",
+    "packages/core/test",
+    "packages/editor-schema/src",
+    "packages/editor-schema/test",
+    "packages/importer-capacities/src",
+    "packages/importer-capacities/test",
+    "packages/server/src",
+    "packages/server/test",
+    "packages/server/bench",
+    "packages/cli/src",
+    "packages/cli/test"
+  ]
+}

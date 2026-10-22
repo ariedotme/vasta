@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vasta</title>
+    <link rel="stylesheet" href="connect.css" />
+    <script type="module" src="connect.js"></script>
+  </head>
+  <body>
+    <!-- macOS has no title bar: this strip moves the window. -->
+    <div class="titlebar" data-tauri-drag-region></div>
+    <main>
+      <img src="icon.svg" alt="" width="56" height="56" />
+      <h1>Vasta</h1>
+
+      <p id="status" class="muted" hidden></p>
+
+      <form id="setup" hidden>
+        <label for="server">Address of your Vasta server</label>
+        <input id="server" name="server" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="notes.example.org" required />
+        <p id="error" class="error" role="alert" hidden></p>
+        <div class="actions">
+          <button type="button" id="cancel" hidden>Cancel</button>
+          <button type="submit" class="primary">Connect</button>
+        </div>
+      </form>
+
+      <div id="unreachable" hidden>
+        <p class="error" id="unreachable-text"></p>
+        <div class="actions">
+          <button type="button" id="change">Change server</button>
+          <button type="button" id="retry" class="primary">Try again</button>
+        </div>
+      </div>
+    </main>
+    <footer id="version" class="muted"></footer>
+  </body>
+</html>

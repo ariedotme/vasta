@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-submit-capture"
+description = "Enables the submit_capture command without any pre-configured scope."
+commands.allow = ["submit_capture"]
+
+[[permission]]
+identifier = "deny-submit-capture"
+description = "Denies the submit_capture command without any pre-configured scope."
+commands.deny = ["submit_capture"]

@@ -1,0 +1,43 @@
+{
+  "name": "@vasta/web",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@floating-ui/dom": "1.8.0",
+    "@iconify-json/ph": "1.2.2",
+    "@iconify/vue": "5.0.3",
+    "@sqlite.org/sqlite-wasm": "3.53.4-build2",
+    "@tiptap/core": "3.32.0",
+    "@tiptap/extension-collaboration": "3.32.0",
+    "@tiptap/extension-details": "3.32.0",
+    "@tiptap/extension-highlight": "3.32.0",
+    "@tiptap/extension-list": "3.32.0",
+    "@tiptap/extension-table": "3.32.0",
+    "@tiptap/extensions": "3.32.0",
+    "@tiptap/pm": "3.32.0",
+    "@tiptap/starter-kit": "3.32.0",
+    "@tiptap/suggestion": "3.32.0",
+    "@tiptap/vue-3": "3.32.0",
+    "@tiptap/y-tiptap": "3.0.9",
+    "@vasta/core": "workspace:*",
+    "@vasta/editor-schema": "workspace:*",
+    "vue": "3.5.44",
+    "vue-router": "5.4.0",
+    "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@vitejs/plugin-vue": "6.0.10",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.2",
+    "vite": "8.3.4",
+    "vue-tsc": "3.3.13"
+  }
+}

@@ -1,0 +1,38 @@
+<script setup lang="ts">
+import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import AppIcon from '../components/AppIcon.vue'
+import { iconTextClasses } from '../lib/colors.ts'
+import { displayTitle } from '../lib/format.ts'
+import { summaryOf, typesById } from '../lib/state.ts'
+
+const props = defineProps(nodeViewProps)
+const router = useRouter()
+const objectId = computed(() => props.node.attrs.objectId as string)
+const summary = computed(() => summaryOf(objectId.value))
+const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
+const label = computed(() => (summary.value ? displayTitle(summary.value, type.value) : (props.node.attrs.label as string)))
+/** A mention of one block opens the object at that block. */
+const blockId = computed(() => props.node.attrs.blockId as string | null)
+const blockLabel = computed(() => props.node.attrs.blockLabel as string | null)
+const open = () => router.push(blockId.value ? `/o/${objectId.value}#b-${blockId.value}` : `/o/${objectId.value}`)
+</script>
+
+<template>
+  <NodeViewWrapper
+    as="span"
+    class="mx-px inline-flex cursor-pointer items-baseline gap-1 rounded-md px-1 align-baseline font-medium underline decoration-line-strong decoration-1 underline-offset-[3px] hover:bg-hover"
+    :class="!summary ? 'text-ink-faint' : ''"
+    contenteditable="false"
+    @click="open"
+  >
+    <AppIcon
+      :icon="summary?.icon ?? type?.icon"
+      fallback="ph:file-text"
+      :size="14"
+      class="relative top-[2px]"
+      :class="type?.color ? iconTextClasses[type.color] : 'text-ink-soft'"
+    />{{ label }}<template v-if="blockId"><span class="text-ink-faint">›</span><span class="font-normal">{{ blockLabel || 'a block' }}</span></template>
+  </NodeViewWrapper>
+</template>

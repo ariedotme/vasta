@@ -1,0 +1,207 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Surface and text tokens. Light by default; `.dark` on <html> follows the OS setting. */
+@theme {
+  --color-canvas: #f7f6f3;
+  --color-surface: #ffffff;
+  --color-raised: #fbfaf8;
+  --color-line: #e8e6e1;
+  --color-line-strong: #d6d3cc;
+  --color-ink: #1f1e1c;
+  --color-ink-soft: #5f5c57;
+  --color-ink-faint: #9a968f;
+  --color-accent: #2f6fea;
+  --color-hover: #efede8;
+  /* Charts (components/BarChart.vue): the series and a value past its target. Checked with the
+     dataviz validator against each mode's surface. */
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+}
+
+/* Charts and nutrients, used through var() only (so not in @theme, which keeps just what classes
+   use). Nutrients look the same everywhere they show, always beside their name; checked with the
+   dataviz validator as a set (all pairs) in both modes. Fiber is optional and rare: neutral. */
+:root {
+  --color-chart: var(--color-kcal);
+  --color-chart-over: #d97706;
+  --color-kcal: #2a78d6;
+  --color-protein: #e87ba4;
+  --color-carbs: #eda100;
+  --color-fat: #008300;
+  --color-fiber: #9a968f;
+  /* Flow metrics (components/charts/FlowChart.vue): status categories, the reference palette's
+     first three slots (validated all pairs in both modes; aqua under 3:1 in light: legend and table). */
+  --color-flow-todo: #eb6834;
+  --color-flow-doing: #2a78d6;
+  --color-flow-done: #1baf7a;
+}
+
+.dark {
+  --color-canvas: #16181b;
+  --color-surface: #1d2024;
+  --color-raised: #23262b;
+  --color-line: #2e3237;
+  --color-line-strong: #3b4047;
+  --color-ink: #e9e7e3;
+  --color-ink-soft: #b1ada6;
+  --color-ink-faint: #7c7973;
+  --color-accent: #6b9bff;
+  --color-hover: #292d32;
+  --color-chart-over: #c47a0c;
+  --color-kcal: #3987e5;
+  --color-protein: #d55181;
+  --color-carbs: #c98500;
+  --color-fat: #008300;
+  --color-fiber: #7c7973;
+  --color-flow-todo: #d95926;
+  --color-flow-doing: #3987e5;
+  --color-flow-done: #199e70;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+/* Installed app (main.ts): pan only, no pinch zoom; everywhere: no double-tap zoom. */
+html.standalone, html.standalone body { touch-action: pan-x pan-y; }
+html { touch-action: manipulation; }
+
+/* The visible height on phones, without the part the browser toolbar covers. */
+#app { height: 100dvh; }
+
+.vasta-fade-enter-active, .vasta-fade-leave-active { transition: opacity 0.2s; }
+.vasta-fade-enter-from, .vasta-fade-leave-to { opacity: 0; }
+
+/* Touch screens: no zoom on focus (iOS zooms into inputs under 16px), and a long press on app
+   controls opens their menu (lib/long-press.ts) instead of selecting text or previewing links. */
+@media (hover: none) {
+  input, textarea:not([data-large-text]), select { font-size: 16px; }
+  a:not(.vasta-doc *), button, [role='button'] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+}
+
+/* Thin scrollbars in the app's palette instead of the platform default. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-line-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: var(--color-ink-faint); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* An object's properties: a table of name | value rows (ObjectPage, ReverseRelations). */
+.vasta-prop-row { display: flex; align-items: flex-start; border-bottom: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent); font-size: 0.875rem; }
+.vasta-prop-row:first-child { border-top: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent); }
+.vasta-prop-row > :last-child { padding-left: 0.375rem; padding-block: 0.125rem; }
+.vasta-prop-name {
+  display: flex; align-items: center; gap: 0.5rem; align-self: stretch; flex-shrink: 0; width: 8rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.25rem; color: var(--color-ink-soft);
+  border-right: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent);
+}
+.vasta-prop-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 768px) { .vasta-prop-name { width: 11rem; } }
+
+/* ------------------------------------------------------------------------ */
+/* Rich text */
+
+.vasta-doc {
+  outline: none;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+.vasta-doc > * + * { margin-top: 0.25rem; }
+.vasta-doc p.is-empty:first-child::before,
+.vasta-doc p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-ink-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.vasta-doc h1:not(.vasta-ui *) { font-size: 1.6rem; font-weight: 700; margin-top: 1.4rem; }
+.vasta-doc h2:not(.vasta-ui *) { font-size: 1.3rem; font-weight: 700; margin-top: 1.2rem; }
+.vasta-doc h3:not(.vasta-ui *) { font-size: 1.12rem; font-weight: 650; margin-top: 1rem; }
+.vasta-doc h4:not(.vasta-ui *) { font-size: 1rem; font-weight: 650; margin-top: 0.8rem; }
+/* An embedded block starts at the top of its frame, a heading too. */
+.vasta-block-embed .vasta-doc > :first-child:not(.vasta-ui *) { margin-top: 0; }
+.vasta-doc ul:not(.vasta-ui *) { list-style: disc; padding-left: 1.4rem; }
+.vasta-doc ol:not(.vasta-ui *) { list-style: decimal; padding-left: 1.4rem; }
+.vasta-doc li > p { margin: 0.1rem 0; }
+.vasta-doc ul[data-type='taskList'] { list-style: none; padding-left: 0.2rem; }
+.vasta-doc ul[data-type='taskList'] li { display: flex; gap: 0.5rem; align-items: flex-start; }
+.vasta-doc ul[data-type='taskList'] li > label { margin-top: 0.3rem; }
+.vasta-doc ul[data-type='taskList'] li > div { flex: 1; }
+.vasta-doc ul[data-type='taskList'] li[data-checked='true'] > div { color: var(--color-ink-faint); text-decoration: line-through; }
+.vasta-doc blockquote { border-left: 3px solid var(--color-line-strong); padding-left: 0.9rem; color: var(--color-ink-soft); }
+.vasta-doc hr:not(.vasta-ui *) { border: none; border-top: 1px solid var(--color-line); margin: 1rem 0; }
+/* App UI inside documents (embedded queries) marks itself .vasta-ui to opt out of text styles. */
+.vasta-doc a:not(.vasta-ui *) { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+.vasta-doc code { background: var(--color-hover); border-radius: 4px; padding: 0.1rem 0.3rem; font-size: 0.9em; }
+.vasta-doc pre { background: var(--color-raised); border: 1px solid var(--color-line); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.88rem; overflow-x: auto; }
+.vasta-doc pre code { background: none; padding: 0; }
+.vasta-doc mark { border-radius: 3px; padding: 0 2px; color: inherit; }
+/* A quote's passage (Save as quote): a click opens the quote. */
+.vasta-doc mark.vasta-quote { cursor: pointer; text-decoration: underline dotted color-mix(in oklab, currentColor 45%, transparent); text-underline-offset: 3px; }
+.vasta-doc table:not(.vasta-ui *) { border-collapse: collapse; width: 100%; margin: 0.5rem 0; table-layout: fixed; }
+.vasta-doc td:not(.vasta-ui *), .vasta-doc th:not(.vasta-ui *) { border: 1px solid var(--color-line); padding: 0.35rem 0.6rem; vertical-align: top; }
+.vasta-doc .selectedCell { background: color-mix(in oklab, var(--color-accent) 12%, transparent); }
+
+.vasta-doc div[data-type='details'] { display: flex; gap: 0.35rem; }
+.vasta-doc div[data-type='details'] > button { margin-top: 0.3rem; width: 1.2rem; height: 1.2rem; border-radius: 4px; display: grid; place-items: center; color: var(--color-ink-faint); }
+.vasta-doc div[data-type='details'] > button::before { content: '▸'; transition: transform 0.15s; }
+.vasta-doc div[data-type='details'].is-open > button::before { transform: rotate(90deg); }
+.vasta-doc div[data-type='details'] > div { flex: 1; }
+.vasta-doc div[data-type='details'] summary { list-style: none; font-weight: 600; }
+.vasta-doc div[data-type='details'] summary::-webkit-details-marker { display: none; }
+.vasta-doc div[data-type='details'] div[data-type='detailsContent'] { padding-left: 0.2rem; }
+.vasta-doc div[data-type='details']:not(.is-open) div[data-type='detailsContent'] { display: none; }
+
+.vasta-doc .vasta-columns { display: grid; gap: 1.25rem; }
+.vasta-doc .vasta-column { min-width: 0; }
+/* Columns stack on phones (the widths are an inline style, hence !important). */
+@media (max-width: 767px) { .vasta-doc .vasta-columns { grid-template-columns: minmax(0, 1fr) !important; } }
+.vasta-doc .vasta-group { border-radius: 12px; padding: 0.9rem 1rem; }
+.vasta-doc .vasta-unsupported { border: 1px dashed var(--color-line-strong); border-radius: 8px; padding: 0.5rem 0.75rem; color: var(--color-ink-faint); font-size: 0.85rem; }
+/* Upload placeholder (editor/uploads.ts) */
+.vasta-upload { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.25rem 0; color: var(--color-ink-faint); font-size: 0.85rem; }
+.vasta-upload img { max-height: 16rem; max-width: 100%; width: auto; border-radius: 8px; opacity: 0.5; }
+/* Block selection and handle (editor/blocks.ts) */
+.vasta-doc .vasta-block-selected { background: color-mix(in oklab, var(--color-accent) 13%, transparent); border-radius: 6px; box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 13%, transparent); }
+.vasta-doc.vasta-blocks-mode { caret-color: transparent; }
+.vasta-doc.vasta-blocks-mode ::selection { background: transparent; }
+.vasta-block-handle { position: absolute; z-index: 10; display: grid; place-items: center; width: 20px; height: 22px; border-radius: 5px; color: var(--color-ink-faint); cursor: grab; }
+.vasta-block-handle svg { pointer-events: none; }
+.vasta-block-handle:hover { background: var(--color-hover); color: var(--color-ink-soft); }
+.vasta-block-handle:active { cursor: grabbing; }
+.vasta-block-handle[hidden] { display: none; }
+/* Touch: a larger target, and a visible resting state since nothing hovers. */
+.vasta-block-handle-touch { width: 22px; height: 28px; margin-top: -3px; color: var(--color-ink-soft); background: var(--color-hover); touch-action: none; }
+.vasta-block-handle-dragging { color: #fff; background: var(--color-accent); box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
+.vasta-drop-line { position: absolute; z-index: 10; height: 4px; border-radius: 2px; background: var(--color-accent); opacity: 0.6; pointer-events: none; }
+.vasta-drop-line[hidden] { display: none; }
+.vasta-doc.ProseMirror-focused .ProseMirror-selectednode { outline: 2px solid color-mix(in oklab, var(--color-accent) 50%, transparent); border-radius: 8px; }
+
+/* A calendar entry being moved or resized (lib/calendar-drag.ts). */
+.vasta-dragging, .vasta-dragging * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }
+.vasta-resizing, .vasta-resizing * { cursor: ns-resize !important; }
+
+/* A block with a background (the block menu's Color): the tint reaches a little past the text, which stays in line. */
+.vasta-doc .vasta-bg { margin-inline: -0.375rem; padding-inline: 0.375rem; border-radius: 0.375rem; }
+
+/* A block the page was opened to (an inbox item in its daily note). */
+.vasta-flash { box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 35%, transparent); transition: box-shadow 0.4s; }

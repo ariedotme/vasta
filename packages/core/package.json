@@ -1,0 +1,30 @@
+{
+  "name": "@vasta/core",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./store": "./src/store.ts",
+    "./client": "./src/client-store.ts",
+    "./sync-client": "./src/sync-client.ts",
+    "./sql-wasm": "./src/sql-wasm.ts",
+    "./node": "./src/store-node.ts",
+    "./media": "./src/media-store.ts",
+    "./media-node": "./src/media-store-node.ts",
+    "./media-s3": "./src/media-store-s3.ts",
+    "./calendar": "./src/calendar.ts",
+    "./markdown": "./src/markdown.ts",
+    "./ics": "./src/ics.ts"
+  },
+  "dependencies": {
+    "@vasta/editor-schema": "workspace:*",
+    "aws4fetch": "1.0.20",
+    "ical.js": "2.2.1",
+    "marked": "18.1.0"
+  },
+  "devDependencies": {
+    "@sqlite.org/sqlite-wasm": "3.53.4-build2"
+  }
+}

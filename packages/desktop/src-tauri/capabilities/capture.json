@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "capture",
+  "description": "The floating quick capture panel (capture.html): hand the text over, ask for suggestions, fit its size, or close.",
+  "windows": ["capture"],
+  "local": true,
+  "permissions": ["core:default", "allow-submit-capture", "allow-close-capture", "allow-suggest-capture", "allow-fit-capture"]
+}

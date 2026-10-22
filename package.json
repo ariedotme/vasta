@@ -1,0 +1,25 @@
+{
+  "name": "vasta-notes",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@10.14.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @vasta/server --filter @vasta/web dev",
+    "dev:prod": "TELEGRAM_BOT_TOKEN= VASTA_DATA=$PWD/data-prod pnpm dev",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && pnpm --filter @vasta/web typecheck",
+    "import:capacities": "node packages/importer-capacities/src/cli.ts",
+    "vasta": "node --no-warnings --env-file-if-exists=.env packages/server/src/cli.ts",
+    "load-test": "node --no-warnings packages/server/bench/load.ts",
+    "seed": "node --no-warnings packages/server/src/seed.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

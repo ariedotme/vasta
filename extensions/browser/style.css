@@ -1,0 +1,17 @@
+:root { color-scheme: light dark; font: 13px/1.4 system-ui, sans-serif; }
+body { margin: 0; padding: 12px; }
+body.popup { width: 320px; }
+body.options { max-width: 420px; }
+form { display: flex; flex-direction: column; gap: 8px; }
+label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+small { margin-top: -4px; color: GrayText; }
+input, textarea { font: inherit; padding: 6px 8px; border: 1px solid #8884; border-radius: 6px; background: Field; color: FieldText; }
+textarea { resize: vertical; }
+.page { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.page span { color: GrayText; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+button { font: inherit; padding: 6px 12px; border: 0; border-radius: 6px; background: #222; color: #fff; cursor: pointer; }
+button:disabled { opacity: 0.4; cursor: default; }
+#status { margin: 8px 0 0; }
+#status.error { color: #dc2626; }
+#status.ok { color: #16a34a; }

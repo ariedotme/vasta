@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fit-capture"
+description = "Enables the fit_capture command without any pre-configured scope."
+commands.allow = ["fit_capture"]
+
+[[permission]]
+identifier = "deny-fit-capture"
+description = "Denies the fit_capture command without any pre-configured scope."
+commands.deny = ["fit_capture"]

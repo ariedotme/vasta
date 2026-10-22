@@ -1,0 +1,33 @@
+name: Bug
+description: Something does not work as it should
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings › This device shows the server's build; the desktop app shows its own version there too.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      multiple: true
+      options:
+        - Web app (desktop browser)
+        - Web app (phone)
+        - Desktop app (macOS)
+        - Desktop app (Windows)
+        - Desktop app (Linux)
+        - Server / Docker
+        - Capture channel (Telegram, API, extension)
+        - Agents (MCP, CLI)

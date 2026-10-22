@@ -1,0 +1,17 @@
+import { chromium } from 'playwright'
+const base = 'http://127.0.0.1:5184'
+const browser = await chromium.launch()
+const context = await browser.newContext({ serviceWorkers: 'block' })
+const page = await context.newPage()
+await page.goto(base)
+await page.fill('#login-username', 'tester')
+await page.fill('#login-password', 'test-password')
+await page.click('button[type=submit]')
+await page.waitForSelector('nav', { timeout: 30000 })
+await new Promise((r) => setTimeout(r, 1000))
+console.log('banner before:', await page.locator('text=A new version of Vasta is out').count())
+await context.route(`${base}/`, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<script type="module" crossorigin src="/assets/index-NEWBUILD.js"></script>' }))
+await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+await page.waitForSelector('text=A new version of Vasta is out', { timeout: 5000 })
+console.log('banner after a new build: shown')
+await browser.close()

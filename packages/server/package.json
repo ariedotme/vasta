@@ -1,0 +1,23 @@
+{
+  "name": "@vasta/server",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --no-warnings --env-file-if-exists=../../.env --watch src/main.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.5",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@mozilla/readability": "0.6.0",
+    "@vasta/core": "workspace:*",
+    "@vasta/editor-schema": "workspace:*",
+    "hono": "4.13.13",
+    "linkedom": "0.18.13",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@sqlite.org/sqlite-wasm": "3.53.4-build2"
+  }
+}
