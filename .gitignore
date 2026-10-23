@@ -14,6 +14,8 @@ data-prod/
 !.env.example
 packages/desktop/src-tauri/target/
 packages/desktop/src-tauri/gen/
+packages/desktop/src-tauri/server/
+packages/desktop/src-tauri/binaries/
 packages/desktop/dist-others/
 # Private to each checkout: your own deploy files and scripts (setup/), agent handoffs (handoffs/).
 setup/

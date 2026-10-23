@@ -31,6 +31,11 @@ export interface AccountOptions {
   legacyCaptureToken?: string
 }
 
+export interface CreateOptions {
+  /** Make no space for a user who has none. */
+  noSpace?: boolean
+}
+
 export const SESSION_DAYS = 30
 const DAY = 86_400_000
 const MIN_PASSWORD = 8
@@ -148,19 +153,30 @@ export class AccountService {
   }
 
   /** Create the first account, given the setup code from the server's log. */
-  async setUp(code: string, input: { username: string; name?: string; password: string; timeZone?: string }): Promise<User> {
+  async setUp(code: string, input: { username: string; name?: string; password: string; timeZone?: string }, options: CreateOptions = {}): Promise<User> {
     const expected = this.setupCode()
     if (!expected || this.settingUp) throw new AccountError('this server already has an account; log in instead')
     const normalize = (value: string) => Buffer.from(sha256(value.toUpperCase().replace(/[^A-Z0-9]/g, '')))
     if (!timingSafeEqual(normalize(code), normalize(expected))) throw new AccountError('wrong setup code; it is in the server’s log')
     this.settingUp = true
     try {
-      const user = await this.createUser(input)
+      const user = await this.createUser(input, options)
       this.setupCodeValue = undefined
       return user
     } finally {
       this.settingUp = false
     }
+  }
+
+  /**
+   * The desktop app's own server (VASTA_LOCAL_KEY): its first account, made on first use with a
+   * random password, since the app logs in for its user (docs/desktop.md).
+   */
+  async localUser(input: { username: string; name?: string; timeZone?: string }): Promise<User> {
+    const first = this.store.listUsers()[0]
+    if (first) return first
+    const username = input.username.replace(/[^\p{L}\p{N}._-]/gu, '').slice(0, 40)
+    return this.createUser({ ...input, username: username.length >= 2 ? username : 'me', password: randomBytes(24).toString('base64url') })
   }
 
   // Invites: the server's first account (who set it up) makes links that let someone make their own
@@ -204,14 +220,14 @@ export class AccountService {
   }
 
   /** Make an account with an invite: the invite is used up, and the account joins its space. */
-  async join(code: string, input: { username: string; name?: string; password: string; timeZone?: string }): Promise<User> {
+  async join(code: string, input: { username: string; name?: string; password: string; timeZone?: string }, options: CreateOptions = {}): Promise<User> {
     const invite = this.invite(code)
     if (!invite) throw new AccountError('this invite is not valid any more; ask for a new one')
     // Used up before the slow part, so a second request with the same code fails.
     this.store.deleteInvite(invite.id)
     let user: User
     try {
-      user = await this.createUser(input)
+      user = await this.createUser(input, options)
     } catch (error) {
       this.store.putInvite(invite, sha256(code))
       throw error
@@ -223,9 +239,10 @@ export class AccountService {
 
   /**
    * Create a user. The first user becomes the owner of every space that has no members yet (the
-   * spaces imported before accounts existed); a user left without spaces gets a new one.
+   * spaces imported before accounts existed); a user left without spaces gets a new one, unless
+   * `noSpace` (their notes are on their way: transfer.ts).
    */
-  async createUser(input: { username: string; name?: string; password: string; timeZone?: string }): Promise<User> {
+  async createUser(input: { username: string; name?: string; password: string; timeZone?: string }, options: CreateOptions = {}): Promise<User> {
     const username = input.username.trim()
     if (!/^[\p{L}\p{N}._-]{2,40}$/u.test(username)) throw new AccountError('a username has 2-40 letters, digits, dots, dashes or underscores')
     if (this.store.findUserByUsername(username)) throw new AccountError(`the username ${username} is taken`)
@@ -243,7 +260,7 @@ export class AccountService {
       const first = !this.hasUsers()
       this.store.putUser(user, hash)
       if (first) for (const space of this.store.spacesWithoutMembers()) this.share(space.id, user.id, 'owner')
-      if (!this.store.listUserSpaces(user.id).length) this.createSpace(user.name, user.id)
+      if (!options.noSpace && !this.store.listUserSpaces(user.id).length) this.createSpace(user.name, user.id)
     })
     return user
   }

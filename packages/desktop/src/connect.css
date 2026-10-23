@@ -4,8 +4,10 @@
   --muted: #6f6c66;
   --line: #dddad3;
   --field: #ffffff;
+  --card: #fbfaf8;
   --accent: #1f1e1c;
   --accent-ink: #f7f6f3;
+  --good: #2f7d4f;
   --error: #b42318;
   color-scheme: light dark;
 }
@@ -16,18 +18,21 @@
     --muted: #a19d95;
     --line: #3a3834;
     --field: #2a2926;
+    --card: #252422;
     --accent: #f2f0eb;
     --accent-ink: #1f1e1c;
+    --good: #6cc391;
     --error: #f97066;
   }
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body { min-height: 100%; margin: 0; }
 body {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 56px 0 48px;
   background: var(--bg);
   color: var(--ink);
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -36,11 +41,15 @@ body {
 }
 .titlebar { position: fixed; inset: 0 0 auto; height: 48px; }
 main { width: min(360px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* Choosing where the notes live: two cards side by side, stacked on a narrow window. */
+main:has(#choose:not([hidden])) { width: min(780px, calc(100% - 32px)); }
+header { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; }
 form, #unreachable { width: 100%; display: flex; flex-direction: column; gap: 8px; }
 label { font-size: 13px; color: var(--muted); }
 input {
   width: 100%;
+  min-width: 0;
   padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -52,6 +61,7 @@ input {
 }
 input:focus { outline: 2px solid color-mix(in srgb, var(--ink) 35%, transparent); outline-offset: 1px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.actions.center { justify-content: center; }
 button {
   padding: 7px 14px;
   border: 1px solid var(--line);
@@ -62,9 +72,72 @@ button {
   cursor: pointer;
 }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.wide { width: 100%; padding: 9px 14px; }
 button:disabled { opacity: 0.5; cursor: default; }
 .muted { color: var(--muted); }
 .error { color: var(--error); margin: 0; text-align: left; }
-#status { margin: 0; }
+#status { display: flex; align-items: center; gap: 10px; margin: 0; }
 footer { position: fixed; bottom: 12px; font-size: 12px; }
 [hidden] { display: none !important; }
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--muted);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#choose { width: 100%; display: flex; flex-direction: column; gap: 16px; }
+.lede { margin: -4px 0 4px; text-align: center; color: var(--muted); }
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+.option-head { display: flex; gap: 14px; align-items: flex-start; }
+.option-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.option-head p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.mark {
+  width: 40px;
+  height: 40px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+/* What running on this computer gives up, quietly: a hairline, a small heading, muted lines. */
+.tradeoffs { padding-top: 14px; border-top: 1px solid var(--line); }
+.tradeoffs h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tradeoffs ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.tradeoffs li { display: flex; gap: 10px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.tradeoffs li svg { width: 16px; height: 16px; margin-top: 1px; }
+.tradeoffs li strong { color: var(--ink); font-weight: 600; }
+.tradeoffs li.good svg { color: var(--good); }
+code {
+  font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.field { display: flex; gap: 8px; }
+.field button { flex: none; }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.hint a { color: var(--ink); text-underline-offset: 2px; }

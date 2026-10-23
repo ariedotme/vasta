@@ -4882,6 +4882,7 @@ dependencies = [
 name = "vasta-desktop"
 version = "0.3.0"
 dependencies = [
+ "getrandom 0.3.4",
  "reqwest",
  "rustls",
  "serde",

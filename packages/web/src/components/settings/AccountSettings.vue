@@ -2,6 +2,7 @@
 // The logged-in user's name, time zone and capture space; the password opens PasswordDialog.
 import { computed, ref } from 'vue'
 import { authApi } from '../../lib/api.ts'
+import { isLocalServer } from '../../lib/platform.ts'
 import { session } from '../../lib/session.ts'
 import { ui, workspace } from '../../lib/state.ts'
 import SettingsSection from './SettingsSection.vue'
@@ -72,7 +73,7 @@ async function save() {
       </label>
       <div class="flex items-center gap-2 sm:col-span-2">
         <button type="submit" :class="primary" :disabled="!dirty || busy">Save</button>
-        <button type="button" :class="secondary" @click="ui.passwordOpen = true">Change password…</button>
+        <button v-if="!isLocalServer()" type="button" :class="secondary" @click="ui.passwordOpen = true">Change password…</button>
         <span v-if="saved" class="text-sm text-ink-soft">Saved</span>
         <span v-if="error" :class="errorText">{{ error }}</span>
       </div>

@@ -9,5 +9,8 @@ const actors = new AsyncLocalStorage<Id>()
 /** Run `fn` (and everything it starts) as `userId`. */
 export const runAs = <T>(userId: Id, fn: () => T): T => actors.run(userId, fn)
 
+/** Run `fn` as nobody: its writes keep the authors they carry and record no activity (imports). */
+export const outsideActor = <T>(fn: () => T): T => actors.exit(fn)
+
 /** The user the current write is made for, if any. */
 export const currentActor = (): Id | undefined => actors.getStore()

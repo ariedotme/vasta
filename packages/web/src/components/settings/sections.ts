@@ -1,5 +1,5 @@
 // The settings page's sections, in order: the side navigation and each section's heading.
-import { isDesktop } from '../../lib/platform.ts'
+import { isDesktop, isLocalServer } from '../../lib/platform.ts'
 
 export const SECTIONS = [
   { id: 'device', label: 'This device', icon: 'ph:device-mobile' },
@@ -7,7 +7,8 @@ export const SECTIONS = [
   { id: 'appearance', label: 'Appearance', icon: 'ph:palette' },
   { id: 'account', label: 'Account', icon: 'ph:user-circle' },
   { id: 'space', label: 'Space', icon: 'ph:planet' },
-  { id: 'server', label: 'Server accounts', icon: 'ph:users-three' },
+  // On the desktop app's own server: no other accounts, and the way to a real server.
+  isLocalServer() ? { id: 'server', label: 'Server', icon: 'ph:hard-drives' } : { id: 'server', label: 'Server accounts', icon: 'ph:users-three' },
   { id: 'snippets', label: 'Snippets', icon: 'ph:brackets-curly' },
   { id: 'sprints', label: 'Sprints', icon: 'ph:flag-banner' },
   { id: 'inbox', label: 'Inbox', icon: 'ph:tray' },

@@ -6,9 +6,11 @@
 // answers to the capture panel; update_app, the web app's "Update"; set_notify_token, the token
 // the app hears reminders with; notify, a reminder from a page, for web apps of 0.1.10); everything else runs in Rust and talks to the page by dispatching DOM events (see
 // packages/web/src/lib/platform.ts). Closing the window or ⌘Q keeps the app in the menu bar; only
-// Quit Vasta ends it.
+// Quit Vasta ends it. Without a server of their own, people can run one on this computer instead
+// (local.rs): the window then shows that one, and the app logs its user in.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod local;
 mod notifications;
 mod settings;
 
@@ -42,6 +44,10 @@ struct AppState {
     settings: Mutex<Settings>,
     /// The menu-bar item showing the shortcut, relabelled when it changes.
     capture_item: Mutex<Option<MenuItem<tauri::Wry>>>,
+    /// The menu-bar item opening the folder of the server on this computer, enabled while it is used.
+    folder_item: Mutex<Option<MenuItem<tauri::Wry>>>,
+    /// Held while the server on this computer starts, so it starts once.
+    starting: Mutex<()>,
 }
 
 /// The bundled connect page.
@@ -56,6 +62,13 @@ fn state(app: &AppHandle) -> tauri::State<'_, AppState> {
 
 fn server(app: &AppHandle) -> Option<Url> {
     state(app).settings.lock().unwrap().server_url()
+}
+
+/// The port of the server on this computer, when the app uses it.
+fn local_port(app: &AppHandle) -> Option<u16> {
+    let app_state = state(app);
+    let settings = app_state.settings.lock().unwrap();
+    settings.local.then_some(settings.local_port).flatten()
 }
 
 fn main_window(app: &AppHandle) -> Option<WebviewWindow> {
@@ -99,8 +112,10 @@ fn open_local(app: &AppHandle, query: Option<&str>) {
 /// capture_suggestions (answers to the capture panel), update_app (the web app's "Update"),
 /// set_notify_token and notify (reminders as system notifications), move
 /// the window from their bars (data-tauri-drag-region; macOS has no title bar), and nothing else.
+/// The server on this computer also gets use_server: its notes moved, the app switches over.
 fn allow_server(app: &AppHandle, server: &Url) {
     let origin = server.origin().ascii_serialization();
+    let local = server.host_str() == Some("127.0.0.1");
     let capability = CapabilityBuilder::new(format!("server-{origin}"))
         .remote(format!("{origin}/*"))
         .local(false)
@@ -113,16 +128,20 @@ fn allow_server(app: &AppHandle, server: &Url) {
         .permission("allow-set-notify-token")
         .permission("core:window:allow-start-dragging")
         .permission("core:window:allow-internal-toggle-maximize");
+    let capability = if local { capability.permission("allow-use-server") } else { capability };
     if let Err(error) = app.add_capability(capability) {
         eprintln!("Could not allow {origin} to change the shortcut: {error}");
     }
 }
 
-/// A path of the web app (e.g. "o/<id>"), or its start page.
+/// A path of the web app (e.g. "o/<id>"), or its start page. On the server on this computer, through
+/// the page that logs its user in; while it is not running, the connect page, which starts it.
 fn open_path(app: &AppHandle, path: &str) {
-    match server(app) {
-        Some(server) => navigate(app, server.join(path).unwrap_or(server)),
-        None => open_local(app, Some("setup")),
+    match (local_port(app), server(app)) {
+        (Some(port), _) if local::running(app) => navigate(app, local::login_url(app, port, path)),
+        (Some(_), _) => open_local(app, None),
+        (None, Some(server)) => navigate(app, server.join(path).unwrap_or(server)),
+        (None, None) => open_local(app, Some("setup")),
     }
     show(app);
 }
@@ -151,6 +170,7 @@ fn desktop_info_script(app: &AppHandle) -> String {
         "notifyStream": true,
         "notifyToken": settings.notify_token.is_some(),
         "device": settings.device_name(),
+        "local": settings.local,
     });
     format!("window.__VASTA_DESKTOP__ = {info}; window.dispatchEvent(new CustomEvent('vasta:desktop'))")
 }
@@ -274,7 +294,12 @@ fn new_window_response(app: &AppHandle, url: Url) -> NewWindowResponse<tauri::Wr
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Startup {
+    /// The user's own server (also kept while they use the one on this computer).
     server: Option<String>,
+    /// The app runs the server on this computer and shows it.
+    local: bool,
+    /// Where that server keeps its data, to tell people what to back up.
+    data_dir: Option<String>,
     /// The server's web app loaded here before, so its service worker can start it offline.
     visited: bool,
     version: String,
@@ -283,7 +308,13 @@ struct Startup {
 #[tauri::command]
 fn startup(app: AppHandle) -> Startup {
     let settings = state(&app).settings.lock().unwrap().clone();
-    Startup { server: settings.server_url().map(|u| u.to_string()), visited: settings.visited, version: app.package_info().version.to_string() }
+    Startup {
+        server: settings.remote_url().map(|u| u.to_string()),
+        local: settings.local,
+        data_dir: local::data_dir(&app).map(|dir| local::short_path(&app, &dir)),
+        visited: settings.visited,
+        version: app.package_info().version.to_string(),
+    }
 }
 
 #[tauri::command]
@@ -292,9 +323,10 @@ fn connect(app: AppHandle, server: String) -> Result<String, String> {
     {
         let app_state = state(&app);
         let mut settings = app_state.settings.lock().unwrap();
-        if settings.server_url().as_ref() != Some(&url) {
+        if settings.local || settings.server_url().as_ref() != Some(&url) {
             allow_server(&app, &url);
             settings.server = Some(url.to_string());
+            settings.local = false;
             settings.visited = false;
             // The token was the old server's.
             settings.notify_token = None;
@@ -302,7 +334,72 @@ fn connect(app: AppHandle, server: String) -> Result<String, String> {
             app.state::<notifications::Notifications>().restart.notify_one();
         }
     }
+    // Its data stays where it is, for switching back.
+    local::stop(&app);
+    refresh_folder_item(&app);
     Ok(url.to_string())
+}
+
+/// The web app on the server on this computer, once its notes moved to `server` (Settings › Server
+/// accounts): use that server from now on and open it, where the user logs in with their new
+/// password. The notes on this computer stay where they are.
+#[tauri::command]
+fn use_server(app: AppHandle, server: String) -> Result<(), String> {
+    if local_port(&app).is_none() {
+        return Err("Vasta does not run on this computer.".into());
+    }
+    connect(app.clone(), server)?;
+    open_path(&app, "");
+    Ok(())
+}
+
+/// Use the server on this computer ("On this computer" on the connect page, and each launch after),
+/// starting it if needed; the page then calls open_server.
+#[tauri::command]
+async fn use_local(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || start_local(&app)).await.map_err(|error| error.to_string())?
+}
+
+/// Start the server on this computer and make it the app's. It keeps its port, unless something else
+/// took it since.
+fn start_local(app: &AppHandle) -> Result<(), String> {
+    let app_state = state(app);
+    let _starting = app_state.starting.lock().unwrap();
+    let saved = app_state.settings.lock().unwrap().local_port;
+    let port = match saved {
+        Some(port) if local::running(app) => port,
+        _ => local::free_port(saved)?,
+    };
+    let switched = {
+        let mut settings = app_state.settings.lock().unwrap();
+        let switched = !settings.local || settings.local_port != Some(port);
+        if switched {
+            if !settings.local {
+                settings.visited = false;
+                // The token was the old server's.
+                settings.notify_token = None;
+            }
+            settings.local = true;
+            settings.local_port = Some(port);
+            settings.save(app);
+        }
+        switched
+    };
+    if switched {
+        allow_server(app, &local::url(port));
+    }
+    local::start(app, port)?;
+    app.state::<notifications::Notifications>().restart.notify_one();
+    refresh_folder_item(app);
+    Ok(())
+}
+
+fn refresh_folder_item(app: &AppHandle) {
+    let local = local_port(app).is_some();
+    let item = state(app).folder_item.lock().unwrap().clone();
+    if let Some(item) = item {
+        let _ = item.set_enabled(local);
+    }
 }
 
 /// Change the quick capture shortcut (from the web app's Settings): the new one is registered
@@ -503,7 +600,11 @@ async fn check_for_update(app: AppHandle, asked: bool) -> bool {
             let text = format!("Vasta {} is available (this is {}). Install it now? The app restarts.", update.version, update.current_version);
             if ask(&app, text, MessageDialogKind::Info, MessageDialogButtons::OkCancelCustom("Install and Restart".into(), "Later".into())) {
                 match update.download_and_install(|_, _| {}, || {}).await {
-                    Ok(()) => app.restart(),
+                    Ok(()) => {
+                        // Before the new version starts its own, on the same port.
+                        local::stop(&app);
+                        app.restart()
+                    }
                     Err(error) => tell(&app, format!("The update failed: {error}"), MessageDialogKind::Error),
                 }
             }
@@ -540,11 +641,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let at_login = CheckMenuItem::with_id(app, "login", "Open at Login", true, app.autolaunch().is_enabled().unwrap_or(false), None::<&str>)?;
     let update = MenuItem::with_id(app, "update", "Check for Updates…", true, None::<&str>)?;
     let change = MenuItem::with_id(app, "server", "Change Server…", true, None::<&str>)?;
+    let folder = MenuItem::with_id(app, "folder", "Open Notes Folder", local_port(app).is_some(), None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+Comma"))?;
     let quit = MenuItem::with_id(app, "quit", "Quit Vasta", true, None::<&str>)?;
     let separator = || PredefinedMenuItem::separator(app);
-    let menu = Menu::with_items(app, &[&open, &capture, &today, &separator()?, &at_login, &settings, &update, &change, &separator()?, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &capture, &today, &separator()?, &at_login, &settings, &update, &change, &folder, &separator()?, &quit])?;
     *state(app).capture_item.lock().unwrap() = Some(capture.clone());
+    *state(app).folder_item.lock().unwrap() = Some(folder.clone());
 
     TrayIconBuilder::with_id("vasta")
         .icon(tauri::include_image!("icons/tray.png"))
@@ -575,6 +678,11 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 show(app);
             }
             "settings" => web_action(app, "settings"),
+            "folder" => {
+                if let Some(dir) = local::data_dir(app) {
+                    let _ = app.opener().open_path(dir.display().to_string(), None::<&str>);
+                }
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -651,7 +759,8 @@ fn build_window(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindow> 
     // starts it offline when the window opens on it, not after a navigation from the connect page.
     let settings = state(app).settings.lock().unwrap().clone();
     let start = match settings.server_url() {
-        Some(server) if settings.visited => WebviewUrl::External(server),
+        // The server on this computer starts from the connect page.
+        Some(server) if settings.visited && !settings.local => WebviewUrl::External(server),
         _ => WebviewUrl::App("index.html".into()),
     };
     let builder = WebviewWindowBuilder::new(app, MAIN, start);
@@ -730,10 +839,11 @@ fn main() {
             "app-quit" => app.exit(0),
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![startup, connect, set_shortcut, open_server, submit_capture, capture_result, close_capture, suggest_capture, capture_suggestions, fit_capture, update_app, notify, set_notify_token])
+        .invoke_handler(tauri::generate_handler![startup, connect, use_local, use_server, set_shortcut, open_server, submit_capture, capture_result, close_capture, suggest_capture, capture_suggestions, fit_capture, update_app, notify, set_notify_token])
         .setup(|app| {
             let handle = app.handle().clone();
-            app.manage(AppState { settings: Mutex::new(Settings::load(&handle)), capture_item: Mutex::new(None) });
+            app.manage(AppState { settings: Mutex::new(Settings::load(&handle)), capture_item: Mutex::new(None), folder_item: Mutex::new(None), starting: Mutex::new(()) });
+            app.manage(local::LocalServer::default());
             app.manage(notifications::Notifications::default());
             notifications::start(handle.clone(), notifications::Hooks { credentials: notify_credentials, refused: notify_token_refused });
             let clicks = handle.clone();
@@ -798,11 +908,14 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("could not start Vasta");
 
-    app.run(|_app, _event| {
+    app.run(|app, event| {
+        if let tauri::RunEvent::Exit = event {
+            local::stop(app);
+        }
         // macOS: clicking the Dock icon brings the window back.
         #[cfg(target_os = "macos")]
-        if let tauri::RunEvent::Reopen { .. } = _event {
-            show(_app);
+        if let tauri::RunEvent::Reopen { .. } = event {
+            show(app);
         }
     });
 }

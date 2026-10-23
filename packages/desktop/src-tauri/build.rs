@@ -5,6 +5,8 @@ fn main() {
     let manifest = tauri_build::AppManifest::new().commands(&[
         "startup",
         "connect",
+        "use_local",
+        "use_server",
         "open_server",
         "set_shortcut",
         "submit_capture",

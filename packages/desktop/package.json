@@ -7,10 +7,12 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
+    "bundle-server": "node scripts/bundle-server.mjs",
     "build": "tauri build",
     "icons": "tauri icon icons/app-icon.svg -o src-tauri/icons && tauri icon icons/tray-icon.svg -o src-tauri/icons/tray -p 44"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.12.1"
+    "@tauri-apps/cli": "2.12.1",
+    "esbuild": "0.28.2"
   }
 }

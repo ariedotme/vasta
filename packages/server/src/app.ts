@@ -1,7 +1,7 @@
 // HTTP API over a Vasta store, for any number of users. The web app logs in with a session cookie
 // (/api/auth); capture channels and scripts send bearer tokens. Every route checks that the user
 // is a member of the space it touches; see docs/accounts.md.
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import path from 'node:path'
 import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
@@ -41,10 +41,10 @@ import {
   SprintError,
 } from '@vasta/core'
 import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, type OccurrenceEdit } from '@vasta/core/calendar'
-import { checkMediaKey, RangeNotSatisfiableError, type MediaStore } from '@vasta/core/media'
+import { checkMediaKey, mediaKey, RangeNotSatisfiableError, type MediaStore } from '@vasta/core/media'
 import type { NodeStore } from '@vasta/core/node'
 import { AccountError, AccountService, type Auth } from './accounts.ts'
-import { currentActor, runAs } from './actor.ts'
+import { currentActor, outsideActor, runAs } from './actor.ts'
 import { AgentTools } from './agent.ts'
 import { CalendarService, CalendarSyncError, normalizeCalendarUrl } from './calendars.ts'
 import { CaptureError, CaptureService, mergeCaptures, type CaptureResult } from './capture.ts'
@@ -57,6 +57,7 @@ import { handleMcp } from './mcp.ts'
 import { NotificationService } from './notifications.ts'
 import { openApi } from './openapi.ts'
 import { MAX_PULL_LIMIT, MAX_PUSH_CHANGES, MAX_TEXT_OBJECTS, pull, push, textUpdates, type SyncChange } from './sync.ts'
+import { ImportError, MAX_IMPORT_BYTES, Migration, importRows, type ImportBatch, type MigrationInput } from './transfer.ts'
 import { WeblinkError, WeblinkService } from './weblinks.ts'
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -93,6 +94,11 @@ export interface AppOptions {
   replica?: boolean
   /** The web app's address (VASTA_WEB_URL), for links in agents' results; the request's own address when unset. */
   webUrl?: string
+  /**
+   * The desktop app's own server (VASTA_LOCAL_KEY): the app opens /api/auth/local?key=… to log its
+   * user in, making the first account if there is none (docs/desktop.md).
+   */
+  localKey?: string
 }
 
 type Env = { Variables: { auth: Auth } }
@@ -141,7 +147,7 @@ const MCP_VERSION = '1.0.0'
 /** At most a little over a year per calendar request, so a bad range cannot expand forever. */
 const MAX_CALENDAR_DAYS = 400
 
-export function createApp({ store, media, now = () => new Date().toISOString(), feed = new ChangeFeed(), capture, accounts, captureToken, calendars, weblinks, webDir, telegram, replica = true, webUrl, reminders, desktop }: AppOptions) {
+export function createApp({ store, media, now = () => new Date().toISOString(), feed = new ChangeFeed(), capture, accounts, captureToken, calendars, weblinks, webDir, telegram, replica = true, webUrl, reminders, desktop, localKey }: AppOptions) {
   const app = new Hono<Env>()
   // A write the store refuses (another member's comment) is the caller's mistake, not the server's.
   app.onError((error, c) => {
@@ -229,7 +235,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     const text = (key: string) => (typeof body[key] === 'string' ? (body[key] as string) : '')
     let user
     try {
-      user = await users.setUp(text('code'), { username: text('username'), name: text('name'), password: text('password'), ...(text('timeZone') ? { timeZone: text('timeZone') } : {}) })
+      user = await users.setUp(text('code'), { username: text('username'), name: text('name'), password: text('password'), ...(text('timeZone') ? { timeZone: text('timeZone') } : {}) }, { noSpace: body.noSpace === true })
     } catch (error) {
       if (error instanceof AccountError) return c.json({ error: error.message }, 400)
       throw error
@@ -284,7 +290,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     const text = (key: string) => (typeof body[key] === 'string' ? (body[key] as string) : '')
     let user
     try {
-      user = await users.join(text('code'), { username: text('username'), name: text('name'), password: text('password'), ...(text('timeZone') ? { timeZone: text('timeZone') } : {}) })
+      user = await users.join(text('code'), { username: text('username'), name: text('name'), password: text('password'), ...(text('timeZone') ? { timeZone: text('timeZone') } : {}) }, { noSpace: body.noSpace === true })
     } catch (error) {
       if (error instanceof AccountError) return c.json({ error: error.message }, 400)
       throw error
@@ -292,6 +298,21 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     const { secret, expiresAt } = users.startSession(user.id, c.req.header('user-agent'))
     setSessionCookie(c, secret, expiresAt)
     return c.json(user, 201)
+  })
+
+  /** The desktop app logs its user in on its own server, then sends them on to `next` (a path). */
+  authApi.get('/local', async (c) => {
+    const digest = (value: string) => createHash('sha256').update(value).digest()
+    if (!localKey || !timingSafeEqual(digest(c.req.query('key') ?? ''), digest(localKey))) return c.json({ error: 'not this server’s desktop app' }, 403)
+    const next = c.req.query('next') ?? '/'
+    const target = next.startsWith('/') && !next.startsWith('//') ? next : '/'
+    if (identify(c)?.sessionId) return c.redirect(target)
+    const name = c.req.query('name') ?? ''
+    const timeZone = c.req.query('timeZone')
+    const user = await users.localUser({ username: name, name, ...(timeZone && isValidTimeZone(timeZone) ? { timeZone } : {}) })
+    const { secret, expiresAt } = users.startSession(user.id, c.req.header('user-agent'))
+    setSessionCookie(c, secret, expiresAt)
+    return c.redirect(target)
   })
 
   authApi.post('/logout', (c) => {
@@ -483,6 +504,60 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   for (const [base, lookup] of guarded) {
     api.use(`${base}/:id`, guard(lookup))
     api.use(`${base}/:id/*`, guard(lookup))
+  }
+
+  // Notes moved here from another server (transfer.ts): rows into spaces the caller makes or owns,
+  // then the files they refer to. Writes made as nobody: they keep their authors and make no activity.
+  api.post('/import', bodyLimit({ maxSize: MAX_IMPORT_BYTES, onError: (c) => c.json({ error: 'the request is too large' }, 413) }), async (c) => {
+    const batch = await c.req.json<ImportBatch>().catch(() => undefined)
+    if (!batch || !Array.isArray(batch.rows)) return c.json({ error: 'send { rows }' }, 400)
+    try {
+      return c.json({ written: outsideActor(() => importRows(store, userOf(c).id, batch, now())) })
+    } catch (error) {
+      if (error instanceof ImportError || error instanceof WriteRefused) return c.json({ error: error.message }, 409)
+      throw error
+    }
+  })
+  const isMediaKey = (key: unknown): key is string => {
+    try {
+      return typeof key === 'string' && !!checkMediaKey(key)
+    } catch {
+      return false
+    }
+  }
+  /** Which of these files the server lacks. */
+  api.post('/import/media', async (c) => {
+    const body = await c.req.json<{ keys?: unknown }>().catch(() => ({}) as { keys?: unknown })
+    const keys = Array.isArray(body.keys) ? body.keys.filter(isMediaKey) : []
+    const missing: string[] = []
+    for (const key of keys) if (!(await media.has(key))) missing.push(key)
+    return c.json({ missing })
+  })
+  api.put('/import/media/:key', uploadLimit, async (c) => {
+    const key = c.req.param('key')
+    if (!isMediaKey(key)) return c.json({ error: 'not a media key' }, 400)
+    const data = new Uint8Array(await c.req.arrayBuffer())
+    if (mediaKey(data, key) !== key) return c.json({ error: 'the file does not match its key' }, 400)
+    await media.put(data, key)
+    return c.body(null, 204)
+  })
+
+  // The desktop app's own server: move its user's notes to another server, where they make an
+  // account with a setup code or an invite link (Settings › Server accounts; transfer.ts).
+  if (localKey) {
+    const migration = new Migration({ store, media })
+    api.get('/migrate', (c) => c.json(migration.state))
+    api.post('/migrate', async (c) => {
+      const body = await c.req.json<Partial<MigrationInput>>().catch(() => ({}) as Partial<MigrationInput>)
+      const text = (value: unknown) => (typeof value === 'string' ? value : '')
+      const input: MigrationInput = { server: text(body.server), code: text(body.code), username: text(body.username), name: text(body.name), password: text(body.password), ...(body.timeZone ? { timeZone: text(body.timeZone) } : {}) }
+      try {
+        return c.json(migration.start(userOf(c).id, input), 202)
+      } catch (error) {
+        if (error instanceof ImportError) return c.json({ error: error.message }, 400)
+        throw error
+      }
+    })
   }
 
   api.get('/spaces', (c) => c.json(users.spacesOf(userOf(c))))
@@ -1357,7 +1432,8 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   )
 
   // Order matters: login and capture answer before the session check that guards the rest.
-  app.get('/api/health', (c) => c.json({ ok: true }))
+  // `import`: the server takes notes moved from another (transfer.ts), checked before making an account there.
+  app.get('/api/health', (c) => c.json({ ok: true, import: 1 }))
   app.get('/api/openapi.json', (c) => c.json(openApi))
   // Agents: the MCP endpoint (docs/agents.md).
   app.all(

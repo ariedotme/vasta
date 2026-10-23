@@ -20,6 +20,9 @@
 //                         VASTA_S3_ENDPOINT, VASTA_S3_ACCESS_KEY_ID, VASTA_S3_SECRET_ACCESS_KEY,
 //                         VASTA_S3_REGION (default us-east-1), VASTA_S3_PATH_STYLE (0 puts the
 //                         bucket in the host name) and VASTA_S3_PREFIX (optional key prefix)
+//   VASTA_LOCAL_KEY       set by the desktop app running this server for its own user: the key it
+//                         logs in with (/api/auth/local); the server also stops when its stdin closes,
+//                         so it never outlives the app (docs/desktop.md)
 //   TELEGRAM_BOT_TOKEN    enables the Telegram channel (token from @BotFather)
 //   TELEGRAM_ALLOWED_CHAT_IDS  comma-separated chats the bot listens in (optional; only the first
 //                              value: Settings › Telegram changes the list, kept in the database)
@@ -75,6 +78,7 @@ const capture = new CaptureService({
   ...(env.VASTA_SPACE ? { defaultSpaceId: env.VASTA_SPACE } : {}),
 })
 const captureToken = env.VASTA_CAPTURE_TOKEN?.trim() || undefined
+const localKey = env.VASTA_LOCAL_KEY?.trim() || undefined
 const accounts = new AccountService({
   store,
   capture,
@@ -121,25 +125,28 @@ const reminders =
     : new ReminderService({ store, accounts, calendars, desktop, ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(bot ? { telegram: (chat: number, text: string) => bot!.send(chat, text) } : {}) })
 reminders?.start()
 
-const server = serve({ fetch: createApp({ store, media, feed, capture, accounts, calendars, weblinks, reminders, desktop, telegram: { username: () => bot?.username, running: !!bot, channels }, replica: process.env.VASTA_REPLICA !== '0', ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(webDir ? { webDir } : {}) }).fetch, port, hostname }, () => {
+const server = serve({ fetch: createApp({ store, media, feed, capture, accounts, calendars, weblinks, reminders, desktop, telegram: { username: () => bot?.username, running: !!bot, channels }, replica: process.env.VASTA_REPLICA !== '0', ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(webDir ? { webDir } : {}), ...(localKey ? { localKey } : {}) }).fetch, port, hostname }, () => {
   console.info(`Vasta server on http://${hostname}:${port} (data: ${dataDir}, time zone: ${timeZone})`)
   console.info(`Media: ${describeMediaStore(media)}`)
   if (webDir) console.info(`Serving the web app from ${webDir}`)
   const setupCode = accounts.setupCode()
-  if (setupCode) console.warn(`No accounts yet: open ${env.VASTA_WEB_URL ?? 'the web app'} and create the first one with the setup code ${setupCode} (or \`${inDocker ? 'docker exec -it vasta vasta' : 'pnpm vasta'} user add <username>\`)`)
+  if (setupCode && !localKey) console.warn(`No accounts yet: open ${env.VASTA_WEB_URL ?? 'the web app'} and create the first one with the setup code ${setupCode} (or \`${inDocker ? 'docker exec -it vasta vasta' : 'pnpm vasta'} user add <username>\`)`)
   if (captureToken) console.info('VASTA_CAPTURE_TOKEN is set: it captures as the oldest user (per-user tokens: `pnpm vasta token add`)')
 })
 
 // In Docker the server is PID 1, which gets no default signal handling: stop on SIGTERM ourselves,
 // closing the database so its write-ahead log is checkpointed.
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () => {
-    bot?.stop()
-    calendars.stop()
-    clearInterval(purgeTimer)
-    reminders?.stop()
-    server.close()
-    store.close()
-    process.exit(0)
-  })
+const stop = () => {
+  bot?.stop()
+  calendars.stop()
+  clearInterval(purgeTimer)
+  reminders?.stop()
+  server.close()
+  store.close()
+  process.exit(0)
+}
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, stop)
+// The desktop app holds the other end of stdin: when it quits (or crashes), stop with it.
+if (localKey) {
+  process.stdin.once('end', stop).once('close', stop).resume()
 }

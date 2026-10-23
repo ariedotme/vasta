@@ -3,8 +3,8 @@
 </h1>
 
 <p align="center">
-  <strong>Your notes, tasks and days in one app, on your own server.</strong><br/>
-  Local-first. Works offline. Self-hosted with one Docker container.
+  <strong>Your notes, tasks and days in one app, on your computer or your own server.</strong><br/>
+  Local-first. Works offline. No server needed to start; move to one whenever you want.
 </p>
 
 <p align="center">
@@ -15,6 +15,7 @@
 </p>
 
 <p align="center">
+  <a href="#get-started">Get started</a> ·
   <a href="#self-hosting">Self-hosting</a> ·
   <a href="#desktop-app">Desktop app</a> ·
   <a href="#documentation">Documentation</a> ·
@@ -36,6 +37,44 @@ devices in sync.
 > [!NOTE]
 > Vasta is in alpha. Its author uses it every day, but some parts are new. Make backups
 > ([docs/deploy.md](docs/deploy.md#upgrading-and-backups)).
+
+## Get started
+
+<table>
+<tr>
+<th width="50%">On your computer</th>
+<th width="50%">On your own server</th>
+</tr>
+<tr>
+<td valign="top">
+
+**No server, no Docker, nothing to set up.**
+
+1. [Download the desktop app](https://github.com/ariedotme/vasta/releases/latest)
+   for macOS, Windows or Linux.
+2. Choose **Start on this computer**.
+
+The app runs Vasta for you. Your notes stay on that computer.
+
+</td>
+<td valign="top">
+
+**Every device, your phone included, and shared spaces.**
+
+1. Run the server with Docker ([Self-hosting](#self-hosting)).
+2. Open it in a browser, on your phone or in the desktop app.
+
+Captures from Telegram, the browser extension and agents reach it from anywhere.
+
+</td>
+</tr>
+</table>
+
+> [!TIP]
+> **Start on your computer, move later.** When you want your phone or other people in, open
+> Settings › Server › **Move to a server…** in the desktop app. Paste the server's setup code
+> or an invite link, and Vasta moves your notes, their history and your files into a new account
+> there. [How it works →](docs/desktop.md#moving-to-a-server)
 
 ## Features
 
@@ -146,13 +185,21 @@ docker compose logs vasta
 3. Make the first account with the setup code.
 4. To add other people, make an invite link in Settings › Server accounts.
 
+Started with the desktop app on your computer? Skip step 3: in the app, open Settings › Server ›
+**Move to a server…** and paste the setup code there. Your notes come with the new account.
+
 For HTTPS, backups, upgrades and media buckets, read [docs/deploy.md](docs/deploy.md).
 
 ## Desktop app
 
 Download the app for macOS, Windows or Linux from the
-[releases](https://github.com/ariedotme/vasta/releases/latest). Then give it the address of your
-server.
+[releases](https://github.com/ariedotme/vasta/releases/latest). On first start, choose where your
+notes live:
+
+- **Start on this computer**: no server needed. The app runs Vasta itself, and your notes stay on
+  that computer ([docs/desktop.md](docs/desktop.md#on-this-computer)). Settings › Server ›
+  **Move to a server…** moves them to a server later.
+- **Your Vasta server**: type its address.
 
 Apple and Microsoft did not sign the app. Thus your system stops it the first time:
 

@@ -190,6 +190,23 @@ export const authApi = {
   revokeOtherSessions: () => request<void>('DELETE', '/api/auth/sessions'),
 }
 
+/** Moving the notes of the desktop app's own server to another server (server/src/transfer.ts). */
+export interface MigrationState {
+  phase: 'idle' | 'account' | 'notes' | 'media' | 'done' | 'failed'
+  server?: string
+  done: number
+  total: number
+  error?: string
+  /** Where a failed migration stopped. */
+  step?: 'account' | 'notes' | 'media'
+}
+
+export const migrationApi = {
+  state: () => request<MigrationState>('GET', '/api/migrate'),
+  /** `code`: the other server's setup code, or an invite link (which names its server). */
+  start: (input: { server: string; code: string; username: string; name: string; password: string; timeZone: string }) => request<MigrationState>('POST', '/api/migrate', input),
+}
+
 /** Settings › Server accounts: everything for the server's first account; who that is for the others. */
 export type ServerAccounts =
   | { admin: false; adminName: string }

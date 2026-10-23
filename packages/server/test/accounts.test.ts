@@ -13,7 +13,7 @@ import { ChangeFeed, DesktopListeners } from '../src/events.ts'
 const start = '2026-10-18T12:00:00.000Z'
 const APP = { 'x-requested-with': 'vasta', 'content-type': 'application/json' }
 
-function setup() {
+function setup(options: { localKey?: string } = {}) {
   const store = new NodeStore(':memory:')
   // A space imported before accounts existed.
   store.putSpace({ id: 'old', name: 'Imported', sidebar: [], createdAt: start })
@@ -25,7 +25,7 @@ function setup() {
   const capture = new CaptureService({ store, media, feed, now, timeZone: 'UTC' })
   const accounts = new AccountService({ store, now, capture })
   const desktop = new DesktopListeners()
-  const app = createApp({ store, media, feed, capture, accounts, now, desktop })
+  const app = createApp({ store, media, feed, capture, accounts, now, desktop, ...options })
   return { store, media, clock, feed, accounts, app, desktop }
 }
 
@@ -117,6 +117,27 @@ describe('accounts', () => {
 
     expect(accounts.setupCode()).toBeUndefined()
     expect(await (await browser(app).request('/api/auth/setup', { method: 'POST', body: JSON.stringify({ code, username: 'eve', password: PASSWORD }) })).json()).toEqual({ error: 'this server already has an account; log in instead' })
+  })
+
+  it('logs the desktop app’s user in on its own server, making the first account once', async () => {
+    const { app, store } = setup({ localKey: 'the-key' })
+    const b = browser(app)
+    expect((await b.request('/api/auth/local?key=wrong')).status).toBe(403)
+    expect((await setup().app.request('/api/auth/local?key=')).status).toBe(403)
+
+    const opened = await b.request('/api/auth/local?key=the-key&name=Arie%20L.&timeZone=America/Sao_Paulo&next=/o/1%3Fx')
+    expect(opened.status).toBe(302)
+    expect(opened.headers.get('location')).toBe('/o/1?x')
+    expect(((await (await b.request('/api/auth/me')).json()) as User)).toMatchObject({ username: 'ArieL.', name: 'Arie L.', timeZone: 'America/Sao_Paulo' })
+    // The first account owns the spaces that had no members.
+    expect(store.listUsers().length).toBe(1)
+    expect(store.listUserSpaces(store.listUsers()[0]!.id).map((s) => s.id)).toEqual(['old'])
+
+    // Later launches log in as the same account; `next` stays on this server.
+    const again = browser(app)
+    expect((await again.request('/api/auth/local?key=the-key&name=Someone&next=//evil.example')).headers.get('location')).toBe('/')
+    expect(((await (await again.request('/api/auth/me')).json()) as User).username).toBe('ArieL.')
+    expect(store.listUsers().length).toBe(1)
   })
 
   it('lets the first account invite people, who make their own account with the link, once', async () => {

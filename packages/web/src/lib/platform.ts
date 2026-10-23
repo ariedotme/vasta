@@ -37,6 +37,16 @@ export interface DesktopInfo {
   notifyToken?: boolean
   /** This install, as its token is named ("Mac 3f2a"). */
   device?: string
+  /** The app runs this server on its user's computer ("Start on this computer"): one account, logged in by the app. */
+  local?: boolean
+}
+
+/** This page is the desktop app's own server, on its user's computer. */
+export const isLocalServer = () => typeof window !== 'undefined' && !!window.__VASTA_DESKTOP__?.local
+
+/** The notes moved to `server`: the desktop app uses it from now on and opens it. */
+export async function switchToServer(server: string) {
+  await window.__TAURI_INTERNALS__?.invoke('use_server', { server })
 }
 
 /** A reminder the server sends to the desktop app (server/src/events.ts). */

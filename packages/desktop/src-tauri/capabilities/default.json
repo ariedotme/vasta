@@ -4,5 +4,5 @@
   "description": "Only the bundled connect page (index.html). The Vasta server's pages get one command, set_shortcut, through a capability added at run time for the chosen server (main.rs); everything else desktop-only runs in Rust.",
   "windows": ["main"],
   "local": true,
-  "permissions": ["core:default", "allow-startup", "allow-connect", "allow-open-server", "core:window:allow-start-dragging", "core:window:allow-internal-toggle-maximize"]
+  "permissions": ["core:default", "allow-startup", "allow-connect", "allow-use-local", "allow-open-server", "core:window:allow-start-dragging", "core:window:allow-internal-toggle-maximize"]
 }

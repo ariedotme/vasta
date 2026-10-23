@@ -57,5 +57,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/desktop/src-tauri
+      # The bundled server and Node.js (scripts/bundle-server.mjs) are only needed to bundle the app;
+      # placeholders satisfy tauri-build's check that they exist.
+      - run: mkdir -p server binaries && touch server/server.mjs binaries/node-x86_64-unknown-linux-gnu
+        working-directory: packages/desktop/src-tauri
       - run: cargo check --locked
         working-directory: packages/desktop/src-tauri

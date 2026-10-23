@@ -86,7 +86,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/desktop/src-tauri
-      - run: pnpm install --frozen-lockfile --filter @vasta/desktop
+      # Everything: the app bundles the server and the web app (scripts/bundle-server.mjs).
+      - run: pnpm install --frozen-lockfile
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

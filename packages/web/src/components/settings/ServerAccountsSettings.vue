@@ -1,16 +1,23 @@
 <script setup lang="ts">
 // The server's accounts and invite links. The server's first account (who set it up) sees who has
 // an account and makes links that let someone make their own, once, within a week, optionally
-// joining one of its spaces; everyone else learns whom to ask.
+// joining one of its spaces; everyone else learns whom to ask. On the desktop app's own server
+// (Start on this computer) there is one account: the section says so and moves the notes to a
+// server instead (MigrateDialog).
 import { onMounted, ref } from 'vue'
 import type { Id, SpaceRole } from '@vasta/core'
 import { authApi, type ServerAccounts } from '../../lib/api.ts'
 import { formatRelative } from '../../lib/format.ts'
 import { confirmDialog } from '../../lib/overlays.ts'
+import { isLocalServer } from '../../lib/platform.ts'
 import { workspace } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
+import MigrateDialog from './MigrateDialog.vue'
 import SettingsSection from './SettingsSection.vue'
-import { errorText, secondary } from './styles.ts'
+import { errorText, primary, secondary } from './styles.ts'
+
+const local = isLocalServer()
+const migrating = ref(false)
 
 const accounts = ref<ServerAccounts | null>(null)
 const spaceId = ref<Id | ''>('')
@@ -28,7 +35,9 @@ async function load() {
     error.value = (failure as Error).message
   }
 }
-onMounted(load)
+onMounted(() => {
+  if (!local) void load()
+})
 
 async function invite() {
   error.value = ''
@@ -64,7 +73,28 @@ async function copy() {
 </script>
 
 <template>
-  <SettingsSection id="server" title="Server accounts" description="Who has an account on this server. People join with an invite link and choose their own password.">
+  <SettingsSection v-if="local" id="server" title="Server">
+    <div class="rounded-xl border border-line bg-canvas p-4">
+      <div class="flex items-start gap-3">
+        <span class="grid size-9 shrink-0 place-items-center rounded-lg border border-line bg-surface text-ink-soft"><AppIcon fallback="ph:laptop" :size="18" /></span>
+        <div class="min-w-0 text-sm">
+          <p class="font-medium">Vasta runs on this computer</p>
+          <p class="mt-0.5 text-ink-soft">It is yours alone: there are no other accounts here, and no invite links. To share spaces with other people, or to open your notes on your phone, move them to a Vasta server.</p>
+        </div>
+      </div>
+      <ul class="mt-4 space-y-2 border-t border-line pt-4 text-sm text-ink-soft">
+        <li class="flex gap-2.5"><AppIcon fallback="ph:devices" :size="16" class="mt-0.5 shrink-0 text-ink-faint" /> Every device, your phone included, and captures from Telegram.</li>
+        <li class="flex gap-2.5"><AppIcon fallback="ph:users-three" :size="16" class="mt-0.5 shrink-0 text-ink-faint" /> Spaces shared with others, and their invite links.</li>
+        <li class="flex gap-2.5"><AppIcon fallback="ph:copy" :size="16" class="mt-0.5 shrink-0 text-ink-faint" /> Your notes stay on this computer too; nothing here is deleted.</li>
+      </ul>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" :class="primary" @click="migrating = true">Move to a server…</button>
+        <a href="https://github.com/ariedotme/vasta#self-hosting" target="_blank" rel="noreferrer" class="text-sm text-ink-soft underline underline-offset-2 hover:text-ink">How to run a server</a>
+      </div>
+    </div>
+    <MigrateDialog v-if="migrating" @close="migrating = false" />
+  </SettingsSection>
+  <SettingsSection v-else id="server" title="Server accounts" description="Who has an account on this server. People join with an invite link and choose their own password.">
     <p v-if="accounts && !accounts.admin" class="text-sm text-ink-soft">
       {{ accounts.adminName || 'The server’s first account' }} manages the accounts on this server. Ask them for an invite link for someone new.
     </p>

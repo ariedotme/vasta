@@ -9,8 +9,14 @@ pub const DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+Space";
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
-    /// The Vasta server, e.g. "https://notas.example.org/".
+    /// The Vasta server, e.g. "https://notas.example.org/" (kept while `local`, to switch back).
     pub server: Option<String>,
+    /// Run Vasta's server on this computer instead (local.rs).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub local: bool,
+    /// Its port, kept between launches: the web app's replica and login belong to its address.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_port: Option<u16>,
     /// The global shortcut for quick capture (Tauri's accelerator syntax), when not the default.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shortcut: Option<String>,
@@ -58,7 +64,15 @@ impl Settings {
         }
     }
 
+    /// The server the window shows: the one on this computer, or the user's.
     pub fn server_url(&self) -> Option<Url> {
+        if self.local {
+            return self.local_port.map(crate::local::url);
+        }
+        self.remote_url()
+    }
+
+    pub fn remote_url(&self) -> Option<Url> {
         self.server.as_deref().and_then(|s| normalize_server(s).ok())
     }
 

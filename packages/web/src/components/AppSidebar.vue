@@ -23,7 +23,7 @@ import { displayTitle } from '../lib/format.ts'
 import { api } from '../lib/api.ts'
 import { openContextMenu, openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
 import { logOut, session } from '../lib/session.ts'
-import { trafficLights } from '../lib/platform.ts'
+import { isLocalServer, trafficLights } from '../lib/platform.ts'
 import { keysOf, toggleSidebar } from '../lib/shortcuts.ts'
 import { THEME_ICONS, THEME_LABELS, cycleTheme, theme } from '../lib/theme.ts'
 import { lastError, loadWorkspace, primeSummaries, summaryOf, systemType, typesById, ui, workspace } from '../lib/state.ts'
@@ -195,8 +195,13 @@ function spaceMenu(event: MouseEvent) {
     { kind: 'separator' },
     { kind: 'heading', label: session.user?.name ?? '' },
     { label: 'Settings', icon: 'ph:gear-six', run: () => router.push('/settings') },
-    { label: 'Change password…', icon: 'ph:key', run: () => (ui.passwordOpen = true) },
-    { label: 'Log out', icon: 'ph:sign-out', run: logOut },
+    // The desktop app logs its own server's one account in itself: no password to know, no logging out.
+    ...(isLocalServer()
+      ? []
+      : [
+          { label: 'Change password…', icon: 'ph:key', run: () => (ui.passwordOpen = true) },
+          { label: 'Log out', icon: 'ph:sign-out', run: logOut },
+        ]),
   ])
 }
 
