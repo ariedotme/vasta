@@ -84,7 +84,7 @@ describe('sprints', () => {
     expect(nextSprint(sprints, later)).toBeUndefined()
     expect(followingSprintDays(later, today)).toEqual({ start: addDays(today, 22), end: addDays(today, 35) })
 
-    const inCurrent = await call<ObjectRecord>('/api/objects', json({ typeId: TASK, line: 'Ship it sprint:atual' }))
+    const inCurrent = await call<ObjectRecord>('/api/objects', json({ typeId: TASK, line: 'Ship it sprint:current' }))
     expect(inCurrent.props[SPRINT_PROPERTY_ID]).toEqual({ kind: 'relation', value: [now.id] })
     await call<ObjectRecord>('/api/objects', json({ typeId: TASK, line: 'Later sprint:"Sprint 3"' }))
     await call<ObjectRecord>('/api/objects', json({ typeId: TASK, title: 'Someday' }))

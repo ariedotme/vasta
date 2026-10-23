@@ -79,27 +79,26 @@ The bot long-polls Telegram, so the server needs no public address. What it unde
 local replica, so it works offline too):
 
 ```
-/task Comprar café due:sexta 15h priority:alta
-/new Livro Duna autor:"Frank Herbert" nota:4,5 lido:sim genero:ficção,clássico
+/task Buy coffee due:fri 15h priority:high
+/new Book Dune author:"Frank Herbert" rating:4,5 read:yes genre:sci-fi,classic
 ```
 
 - The name is a property of the type, ignoring case and accents; a prefix is enough when only one
-  property starts with it (`prio:alta`). Task fields also answer to `prazo`, `prioridade`,
-  `estado`. Words that name no property stay in the title, so `Re: meeting` or a URL is left
+  property starts with it (`prio:high`). A task's due date also answers to `when` and `date`. Words that name no property stay in the title, so `Re: meeting` or a URL is left
   alone. Quotes allow spaces in a value.
-- **Dates**: `hoje`/`today`, `amanhã`/`tomorrow`, `ontem`, weekday names in Portuguese or English
-  (the next one: `sexta` on a Friday is a week later), `25/10` (next year once it has passed),
+- **Dates**: `today`, `tomorrow`, `yesterday`, weekday names, whole or short (the next one:
+  `friday` on a Friday is a week later), `25/10` (next year once it has passed),
   `25/10/2026`, `2026-10-25`, each with an optional time after it (`15h`, `15h30`, `9:30`, `3pm`);
   a time alone means today.
-- **Select**: the option's label (`alta`, `média`, `baixa`, `feito`… also work for tasks), or a
+- **Select**: the option's label (`normal`, `to do`, `in progress` also work for tasks), or a
   unique prefix; an unknown option is added to the property. Multi-selects take a comma list.
 - **Relation**: object titles (comma list when multiple); an object that does not exist yet is
   created with that title, as the first allowed target type (or a page).
 - **Person**: a member of the space by username (`@` optional), full name or first name, ignoring
-  case and accents; `me`/`eu` is whoever captures (`assignee:ana`, `assignee:me`). Someone who is
+  case and accents; `me` is whoever captures (`assignee:ana`, `assignee:me`). Someone who is
   not a member makes the value unreadable.
-- **A task's sprint**: a sprint's title, or `atual`/`current` for the sprint whose dates hold today.
-- **Number** (`4,5` or `4.5`), **checkbox** (`sim`/`não`/`yes`/`no`), **text** and **URL** as is.
+- **A task's sprint**: a sprint's title, or `current` for the sprint whose dates hold today.
+- **Number** (`4,5` or `4.5`), **checkbox** (`yes`/`no`), **text** and **URL** as is.
 - A value that cannot be read (`due:31/02`) stays in the title and the reply says so.
 
 Saved messages get a 👍 reaction. The polling position is stored in the database, so a restart
@@ -174,7 +173,7 @@ For plain text instead of links, post `text` to `/api/capture/note` the same way
 A **quick task** shortcut (Siri or the Action button) works the same: **Dictate Text** or **Ask
 for Input**, then **Get Contents of URL** to `/api/capture/task` with JSON `line` = the text and
 `channel` = `shortcuts`, then **Show Notification** with the answer's `summary`. Typed text can
-carry properties as above (`Comprar café due:amanhã 15h`).
+carry properties as above (`Buy coffee due:tomorrow 15h`).
 
 ### Reaching it from the phone
 
@@ -196,8 +195,8 @@ the item itself (`ClientStore.capture`, links stay links) and it syncs later. Bo
 type instead, and the note embeds it, as Telegram's `/new` does:
 
 ```
-/Livro Duna autor:"Frank Herbert" nota:4,5
-/task Comprar café due:sexta 15h priority:alta
+/Book Dune author:"Frank Herbert" rating:4,5
+/task Buy coffee due:fri 15h priority:high
 ```
 
 The first line after the type is the title and its properties (above), the other lines the body.
@@ -211,10 +210,10 @@ request adds `typeId` (the server reads the line with the user's zone); offline
 targets and new select options there.
 
 **Values at the cursor**: after a relation's `name:` the list offers objects of its types (the
-latest ones, then those whose title has what is typed, spaces included: `autor:frank her`); picking
+latest ones, then those whose title has what is typed, spaces included: `author:frank her`); picking
 one writes its title, quoted when it has spaces. A relation to daily notes offers days instead,
-since daily notes have no title: picking one writes `2026-10-19`, and a typed day (`hoje`, `amanhã`,
-`sexta`, `19/10`) is that day's note, made when missing; the same works in Telegram, the API and for
+since daily notes have no title: picking one writes `2026-10-19`, and a typed day (`today`, `tomorrow`,
+`fri`, `19/10`) is that day's note, made when missing; the same works in Telegram, the API and for
 agents. A select offers its options, a person the space's members (picking one writes the
 username; offline the replica reads names from the members the app last loaded, `setPeople`). A
 multiple relation, select or person keeps the values before a comma.

@@ -25,15 +25,15 @@ const book: ObjectType = {
 }
 
 describe('capture line', () => {
-  it('reads task properties in Portuguese and English, leaving other words in the title', () => {
-    const parsed = parseCaptureLine('Comprar café due:sexta priority:alta', task, context)
-    expect(parsed).toMatchObject({ title: 'Comprar café', errors: [], newOptions: [] })
+  it('reads task properties, leaving other words in the title', () => {
+    const parsed = parseCaptureLine('Buy coffee due:fri priority:high', task, context)
+    expect(parsed).toMatchObject({ title: 'Buy coffee', errors: [], newOptions: [] })
     expect(parsed.props).toEqual({
       due: { kind: 'date', value: { start: '2026-10-23T00:00:00.000Z', resolution: 'day' } },
       priority: { kind: 'select', value: ['high'] },
     })
     // A time after the date, aliases for keys and options, a unique prefix.
-    expect(parseCaptureLine('Call Ana prazo:amanhã 15h30 prio:low status:feito', task, context).props).toEqual({
+    expect(parseCaptureLine('Call Ana when:tomorrow 15h30 prio:low status:done', task, context).props).toEqual({
       due: { kind: 'date', value: { start: '2026-10-19T18:30:00.000Z', resolution: 'time' } },
       priority: { kind: 'select', value: ['low'] },
       status: { kind: 'select', value: ['done'] },
@@ -42,22 +42,25 @@ describe('capture line', () => {
   })
 
   it('reads days', () => {
-    expect(parseDay('hoje', context.today)).toBe('2026-10-18')
-    expect(parseDay('Domingo', context.today)).toBe('2026-10-25') // the next one, not today
+    expect(parseDay('today', context.today)).toBe('2026-10-18')
+    expect(parseDay('Sunday', context.today)).toBe('2026-10-25') // the next one, not today
     expect(parseDay('monday', context.today)).toBe('2026-10-19')
-    expect(parseDay('terça-feira', context.today)).toBe('2026-10-20')
+    expect(parseDay('tue', context.today)).toBe('2026-10-20')
+    // Only English words.
+    expect(parseDay('amanhã', context.today)).toBeUndefined()
+    expect(parseCaptureLine('Ship it priority:alta status:feito', task, context).newOptions.map((n) => n.option.label)).toEqual(['alta', 'feito'])
     expect(parseDay('25/10', context.today)).toBe('2026-10-25')
     expect(parseDay('10/10', context.today)).toBe('2027-10-10') // passed this year
     expect(parseDay('1/2/27', context.today)).toBe('2027-02-01')
     expect(parseDay('2026-12-01', context.today)).toBe('2026-12-01')
     expect(parseDay('31/02', context.today)).toBeUndefined()
     expect(parseCaptureLine('Pay rent due:31/02', task, context)).toMatchObject({ title: 'Pay rent due:31/02', props: {}, errors: ['Due: “31/02”'] })
-    expect(parseCaptureLine('Standup due:"segunda 9:30"', task, context).props.due).toEqual({ kind: 'date', value: { start: '2026-10-19T12:30:00.000Z', resolution: 'time' } })
+    expect(parseCaptureLine('Standup due:"monday 9:30"', task, context).props.due).toEqual({ kind: 'date', value: { start: '2026-10-19T12:30:00.000Z', resolution: 'time' } })
     expect(parseCaptureLine('Lunch due:1pm', task, context).props.due).toEqual({ kind: 'date', value: { start: '2026-10-18T16:00:00.000Z', resolution: 'time' } })
   })
 
   it('reads every kind of property, with quotes, lists and new options', () => {
-    const parsed = parseCaptureLine('Duna autor:"Frank Herbert" nota:4,5 lido:sim genero:"ficção científica,Clássico" site:https://dune.example', book, context)
+    const parsed = parseCaptureLine('Duna autor:"Frank Herbert" nota:4,5 lido:yes genero:"ficção científica,Clássico" site:https://dune.example', book, context)
     expect(parsed.title).toBe('Duna')
     expect(parsed.props).toMatchObject({
       rating: { kind: 'number', value: 4.5 },
@@ -112,12 +115,12 @@ describe('capture with a line', () => {
 
     // A relation to daily notes takes a day: that day's note, made when missing.
     store.putType({ ...book, id: 'reading', name: 'Leitura', pluralName: 'Leituras', properties: [{ id: 'day', kind: 'relation', name: 'Dia', targetTypeIds: [builtinTypeId('s', 'daily-note')], multiple: true }] })
-    const reading = await capture.object({ type: 'leitura', line: 'Capítulo 3 dia:hoje,amanhã' })
+    const reading = await capture.object({ type: 'leitura', line: 'Capítulo 3 dia:today,tomorrow' })
     const days = (store.getObject(reading.objects[0]!.id)!.props.day as { value: string[] }).value.map((id) => store.getObject(id)?.date?.start.slice(0, 10))
     expect(days).toEqual(['2026-10-18', '2026-10-19'])
 
-    const todo = await capture.task({ line: 'Comprar café due:sexta priority:alta', priority: 'low' })
-    expect(todo.summary).toBe('Task “Comprar café”, due Fri 23 Oct, priority Low')
+    const todo = await capture.task({ line: 'Buy coffee due:fri priority:high', priority: 'low' })
+    expect(todo.summary).toBe('Task “Buy coffee”, due Fri 23 Oct, priority Low')
     expect(store.listObjects(builtinTypeId('s', 'task'))[0]!.props.status).toEqual({ kind: 'select', value: ['todo'] })
   })
 })

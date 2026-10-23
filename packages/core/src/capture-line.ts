@@ -1,5 +1,5 @@
-// Properties written into a capture's first line, e.g. `/task Comprar café due:sexta priority:alta`
-// or `/new Livro Duna autor:"Frank Herbert" nota:5`. A `key:value` word whose key names a property
+// Properties written into a capture's first line, e.g. `/task Buy coffee due:fri priority:high`
+// or `/new Book Dune author:"Frank Herbert" rating:5`. A `key:value` word whose key names a property
 // of the type (case and accents ignored, a prefix is enough when only one property starts with it)
 // sets that property; every other word stays in the title, so "Re: meeting" is left alone. Quotes
 // allow spaces in a value. Used by the Telegram bot, the capture API (`line`), agents, and the app's
@@ -23,8 +23,7 @@ export interface LineContext {
   me?: Id
 }
 
-const ME_WORDS = new Set(['me', 'eu', 'mim'])
-const CURRENT_WORDS = new Set(['atual', 'current', 'corrente', 'now', 'agora'])
+const ME_WORDS = new Set(['me'])
 
 /** A member named by username (with or without "@"), full name or first name, ignoring case and accents. */
 export function findPerson(people: Person[], text: string, me?: Id): Person | undefined {
@@ -52,48 +51,44 @@ export interface ParsedLine {
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
 const keyOf = (text: string) => fold(text).replace(/[^a-z0-9]/g, '')
 
-/** Other names for the built-in task fields, so Portuguese works too. */
+/** Other names for the built-in task fields. */
 const TASK_KEY_ALIASES: Record<Id, string[]> = {
-  due: ['prazo', 'vencimento', 'data', 'quando', 'when', 'date'],
-  priority: ['prioridade', 'prio'],
-  status: ['estado', 'situacao'],
+  due: ['when', 'date'],
+  priority: ['prio'],
 }
 
 /** Other names for the built-in task options. */
 const OPTION_ALIASES: Record<Id, string[]> = {
-  high: ['alta', 'alto', 'urgente'],
-  medium: ['media', 'medio', 'normal'],
-  low: ['baixa', 'baixo'],
-  todo: ['a fazer', 'afazer', 'pendente', 'to do'],
-  doing: ['fazendo', 'em andamento', 'andamento', 'in progress'],
-  done: ['feito', 'feita', 'concluido', 'concluida', 'pronto', 'pronta'],
+  medium: ['normal'],
+  todo: ['to do'],
+  doing: ['in progress'],
 }
 
 const WEEKDAYS: [number, string[]][] = [
-  [0, ['domingo', 'dom', 'sunday', 'sun']],
-  [1, ['segunda', 'segundafeira', 'seg', 'monday', 'mon']],
-  [2, ['terca', 'tercafeira', 'ter', 'tuesday', 'tue', 'tues']],
-  [3, ['quarta', 'quartafeira', 'qua', 'wednesday', 'wed']],
-  [4, ['quinta', 'quintafeira', 'qui', 'thursday', 'thu', 'thurs']],
-  [5, ['sexta', 'sextafeira', 'sex', 'friday', 'fri']],
-  [6, ['sabado', 'sab', 'saturday', 'sat']],
+  [0, ['sunday', 'sun']],
+  [1, ['monday', 'mon']],
+  [2, ['tuesday', 'tue', 'tues']],
+  [3, ['wednesday', 'wed']],
+  [4, ['thursday', 'thu', 'thurs']],
+  [5, ['friday', 'fri']],
+  [6, ['saturday', 'sat']],
 ]
 
-const RELATIVE_DAYS: Record<string, number> = { hoje: 0, today: 0, amanha: 1, tomorrow: 1, ontem: -1, yesterday: -1, depoisdeamanha: 2 }
+const RELATIVE_DAYS: Record<string, number> = { today: 0, tomorrow: 1, yesterday: -1 }
 
 const TIME = /^(\d{1,2})(?:(?:h|:)(\d{2})?|(?=am|pm))(am|pm)?$/
 
-const YES = new Set(['sim', 's', 'yes', 'y', 'true', '1', 'x', 'feito'])
-const NO = new Set(['nao', 'n', 'no', 'false', '0'])
+const YES = new Set(['yes', 'y', 'true', '1', 'x'])
+const NO = new Set(['no', 'n', 'false', '0'])
 
-/** A day ("YYYY-MM-DD") from a word: hoje, amanhã, sexta, friday, 25/10, 25/10/2026, 2026-10-25. */
+/** A day ("YYYY-MM-DD") from a word: today, tomorrow, friday, fri, 25/10, 25/10/2026, 2026-10-25. */
 export function parseDay(text: string, today: string): string | undefined {
   const word = keyOf(text)
   if (word in RELATIVE_DAYS) return addDays(today, RELATIVE_DAYS[word]!)
   const weekday = WEEKDAYS.find(([, names]) => names.includes(word))?.[0]
   if (weekday !== undefined) {
     const current = new Date(`${today}T00:00:00.000Z`).getUTCDay()
-    // The next one: "sexta" on a Friday is a week later ("hoje" is today).
+    // The next one: "friday" on a Friday is a week later ("today" is today).
     return addDays(today, (weekday - current + 7) % 7 || 7)
   }
   if (isValidDay(text)) return text
@@ -120,7 +115,7 @@ export function parseTime(text: string): { hour: number; minute: number } | unde
   return hour < 24 && minute < 60 ? { hour, minute } : undefined
 }
 
-/** A date property value from "sexta", "sexta 15h", "25/10 9:30", "15h" (today), "2026-10-25". */
+/** A date property value from "friday", "fri 15h", "25/10 9:30", "15h" (today), "2026-10-25". */
 export function parseDateValue(text: string, context: LineContext): DateValue | undefined {
   const words = text.trim().split(/\s+/).filter(Boolean)
   const time = words.length ? parseTime(words.at(-1)!) : undefined
@@ -186,7 +181,7 @@ export function parseCaptureLine(line: string, type: ObjectType, context: LineCo
       continue
     }
     let text = token.value.trim()
-    // "due:sexta 15h": a time right after a date belongs to it.
+    // "due:fri 15h": a time right after a date belongs to it.
     const next = tokens[i + 1]
     if (def.kind === 'date' && next && next.key === undefined && parseTime(next.raw) && !parseTime(text)) {
       text = `${text} ${next.raw}`
@@ -353,7 +348,7 @@ export function isCapturable(type: ObjectType): boolean {
  * Make what a parsed line needs: new select options go into a copy of the type (returned as
  * `type`, for the caller to write), relation titles become the matching objects of the space or
  * new ones (returned in `related`, to be written). Where the relation takes daily notes, a day
- * ("hoje", "19/10", "2026-10-19") is that day's note, made now when missing (daily notes have no
+ * ("today", "19/10", "2026-10-19") is that day's note, made now when missing (daily notes have no
  * title to match).
  */
 export function applyCaptureLine(store: Store, spaceId: Id, type: ObjectType, parsed: ParsedLine, at: IsoDateTime, context: LineContext): { props: Record<Id, PropertyValue>; related: ObjectRecord[]; type?: ObjectType } {
@@ -375,8 +370,8 @@ export function applyCaptureLine(store: Store, spaceId: Id, type: ObjectType, pa
     const ids = titles.map((title) => {
       const day = takesDays ? parseDay(title, context.today) : undefined
       if (day) return findOrCreateDailyNote(store, spaceId, day, at).note.id
-      // "sprint:atual": the sprint whose dates hold today.
-      if (def.targetTypeIds.includes(sprintType) && CURRENT_WORDS.has(fold(title))) {
+      // "sprint:current": the sprint whose dates hold today.
+      if (def.targetTypeIds.includes(sprintType) && fold(title) === 'current') {
         const current = currentSprint(store.listObjects(sprintType), context.today, context.timeZone)
         if (current) return current.id
       }

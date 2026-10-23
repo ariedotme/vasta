@@ -221,7 +221,7 @@ describe('Telegram bot', () => {
     const { capture, store } = setup()
     const telegram = fakeTelegram([
       message(1, { text: 'bold idea https://example.com/x', entities: [{ type: 'bold', offset: 0, length: 4 }, { type: 'url', offset: 10, length: 21 }] }),
-      message(2, { text: '/task Water the plants prioridade:alta prazo:amanhã\nthe ones on the balcony' }),
+      message(2, { text: '/task Water the plants priority:high due:tomorrow\nthe ones on the balcony' }),
       message(3, { text: '/new page Trip plan' }),
       message(4, { photo: [{ file_id: 'small', width: 1, height: 1 }, { file_id: 'big', width: 9, height: 9 }], caption: 'view' }),
       message(5, { text: 'hello' }, 666),

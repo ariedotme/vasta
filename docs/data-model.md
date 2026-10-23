@@ -106,7 +106,7 @@ not bring back what the user deleted.
 
 The **current sprint** is the one whose `dates` hold today (the latest to start when they overlap;
 `currentSprint`): `QueryContext.currentSprint`, filled by `querySpace` and the app (`lib/sprints.ts`
-keeps the space's sprints loaded), and `sprint:atual` / `sprint:current` in a typed line. A sprint's
+keeps the space's sprints loaded), and `sprint:current` in a typed line. A sprint's
 page shows its tasks by status, the days left, **Finish** (unfinished tasks move to the next sprint,
 `nextSprint`, else back to the backlog; done ones stay) and **Next sprint** when there is none
 (numbered after the last, the same length, starting the day after it ends: `followingSprintDays`).

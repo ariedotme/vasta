@@ -144,7 +144,7 @@ export async function complete(text: string, cursor: number, source: CompletionS
   const daily = source.types.find((t) => t.system === 'daily-note' && def.targetTypeIds.includes(t.id))
   const items: Completion[] = []
   if (daily) {
-    // Daily notes have no title: they are named by their day ("hoje", "19/10", "2026-10-19").
+    // Daily notes have no title: they are named by their day ("today", "19/10", "2026-10-19").
     const day = partial ? parseDay(partial, source.today) : undefined
     const days = new Set<string>(day ? [day] : [])
     const notes = (await source.objects([daily.id], '')).sort((x, y) => (y.date?.start ?? '').localeCompare(x.date?.start ?? ''))

@@ -55,7 +55,7 @@ describe('completions of a typed line', () => {
 
   it('offers days for a relation to daily notes, latest first, and reads one typed', async () => {
     expect((await at_end('/Livro Duna lido:')).map((c) => c.text.split('lido:')[1])).toEqual(['2026-10-19 ', '2026-10-17 '])
-    expect((await at_end('/Livro Duna lido:amanhã'))[0]!.text).toBe('/Livro Duna lido:2026-10-20 ')
+    expect((await at_end('/Livro Duna lido:tomorrow'))[0]!.text).toBe('/Livro Duna lido:2026-10-20 ')
   })
 
   it('offers the options of a select not chosen yet, keeping the ones before a comma', async () => {
