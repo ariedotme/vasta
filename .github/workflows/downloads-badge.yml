@@ -1,11 +1,11 @@
-# Once a day and after each release: the README's downloads badge (scripts/downloads-badge.mjs:
+# Every hour and after each release: the README's downloads badge (scripts/downloads-badge.mjs:
 # release files without latest.json, plus the server image's pulls). The shields.io endpoint file
 # goes to the `badges` branch, a single commit replaced each time, which the README's badge reads.
 name: Downloads badge
 
 on:
   schedule:
-    - cron: '17 6 * * *'
+    - cron: '17 * * * *'
   workflow_run:
     workflows: [Release]
     types: [completed]
