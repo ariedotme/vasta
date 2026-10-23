@@ -1,6 +1,7 @@
 // The desktop app's capture panel page (packages/desktop/src/capture.html) in a browser, with the
 // app's commands faked: typing asks for suggestions, the answer shows as a list and a preview,
-// arrows and Enter pick one, Esc puts the list away, and the panel asks to grow and shrink back.
+// arrows and Enter pick one, Esc puts the list away, the panel asks to grow and shrink back, and
+// Ctrl+Enter saves asking to open what it made.
 // No server needed; the web app's side of it is in capture.mjs.
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
@@ -62,6 +63,20 @@ const value = await field.inputValue()
 console.log('tab picked:', JSON.stringify(value), 'cursor:', await field.evaluate((f) => f.selectionStart), 'fit:', await fits())
 if (value !== '/Livro Duna autor:"Frank Herbert" ') throw new Error('the pick did not land')
 await page.keyboard.press('Enter')
-const submitted = await page.evaluate(() => window.calls.find(([c]) => c === 'submit_capture')?.[1].text)
+const submitted = await page.evaluate(() => window.calls.find(([c]) => c === 'submit_capture')?.[1])
 console.log('submitted:', JSON.stringify(submitted))
+if (submitted?.open !== false) throw new Error('Enter asked to open')
+
+// Ctrl+Enter (on macOS too) saves and asks to open; a line with a preview says so.
+await page.evaluate(() => window.dispatchEvent(new Event('vasta:capture-saved')))
+console.log('hint:', await page.locator('#hint').textContent())
+await field.pressSequentially('/Livro Hyperion')
+await page.waitForTimeout(100)
+const openHint = await page.locator('#open-hint').isVisible()
+console.log('preview:', await page.locator('#preview').textContent(), '| open hint shown:', openHint)
+if (!openHint) throw new Error('no Ctrl+Enter hint beside the preview')
+await page.keyboard.press('Control+Enter')
+const opened = await page.evaluate(() => window.calls.filter(([c]) => c === 'submit_capture').at(-1)?.[1])
+console.log('Ctrl+Enter submitted:', JSON.stringify(opened))
+if (opened?.open !== true || opened.text !== '/Livro Hyperion') throw new Error('Ctrl+Enter did not ask to open')
 await browser.close()

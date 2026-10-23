@@ -62,7 +62,7 @@ export function completionSource(spaceId: Id, types: ObjectType[]): CompletionSo
  * A text that starts with a type, "/Book Dune author:x", makes an object of it from the first
  * line (the other lines are its body), and the note embeds it.
  */
-export async function captureText(text: string, channel: string): Promise<{ space: Space; answer: CaptureAnswer; food?: FoodLineAnswer }> {
+export async function captureText(text: string, channel: string): Promise<{ space: Space; answer: CaptureAnswer; food?: FoodLineAnswer; made?: Id }> {
   const space = captureSpace()
   if (!space) throw new Error('There is no space to capture into.')
   // "/food …" logs what was eaten instead (core's nutrition.ts).
@@ -73,7 +73,15 @@ export async function captureText(text: string, channel: string): Promise<{ spac
   }
   const typed = text.startsWith('/') ? typedLine(await typesOf(space), text) : undefined
   const answer = await api.capture(space.id, typed ? typed.rest : text, channel, dayKey(), typed?.type.id)
-  return { space, answer }
+  return { space, answer, ...(typed && answer.objects?.[0] ? { made: answer.objects[0].id } : {}) }
+}
+
+/** Open what a capture made (Ctrl+Enter): the object of a "/Type …" line, else the day's note, in the capture space. */
+export async function openCapture(space: Space, answer: CaptureAnswer, made?: Id) {
+  const id = made ?? answer.dailyNoteId
+  if (!id) return
+  if (workspace.space?.id !== space.id) await loadWorkspace(space.id)
+  await router.push(`/o/${id}`)
 }
 
 /**

@@ -6,6 +6,12 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Ctrl+Enter in Quick Capture** (on macOS too) saves and opens what it made: the new object
+  for a `/Type …` line, else today's note. Both the desktop app's floating panel and the app's
+  own Quick capture dialog say so under the text.
+
 ### Fixed
 
 - macOS: Quick Capture from another app no longer brings Vasta's window to the front from its

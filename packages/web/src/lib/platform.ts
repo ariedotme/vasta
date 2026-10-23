@@ -7,7 +7,7 @@
 import { computed, ref } from 'vue'
 import { foodCommand, type ObjectSummary } from '@vasta/core'
 import { router } from '../router.ts'
-import { captureSpace, captureText, completionSource, dayKey, openToday, typesOf } from './actions.ts'
+import { captureSpace, captureText, completionSource, dayKey, openCapture, openToday, typesOf } from './actions.ts'
 import { authApi } from './api.ts'
 import { foodSourcesOf, previewFoodLine } from './nutrition.ts'
 import { meId, people } from './people.ts'
@@ -179,11 +179,13 @@ function browserKeys(event: KeyboardEvent) {
 let panelFoods: ObjectSummary[] | undefined
 
 /** The floating capture panel's text: captured here (online or on the replica), answered to the app. */
-async function captureFromPanel(text: string) {
+async function captureFromPanel(text: string, open: boolean) {
   panelFoods = undefined
   const answer = (ok: boolean, message: string | null = null) => window.__TAURI_INTERNALS__?.invoke('capture_result', { ok, message })
   try {
-    await captureText(text, 'desktop')
+    const { space, answer: captured, made } = await captureText(text, 'desktop')
+    // Ctrl+Enter (desktop 0.3.2): open what was made; the app then brings the window forward.
+    if (open) await openCapture(space, captured, made).catch(() => {})
     await answer(true)
   } catch (failure) {
     await answer(false, failure instanceof Error ? failure.message : String(failure))
@@ -232,7 +234,7 @@ export function listenToDesktop() {
   for (const [name, run] of Object.entries(ACTIONS)) window.addEventListener(`vasta:${name}`, () => void run())
   // Desktop 0.1.3 sends this instead of vasta:capture whenever the window shows /settings.
   window.addEventListener('vasta:current-shortcut', () => void ACTIONS.capture!())
-  window.addEventListener('vasta:capture-text', (event) => void captureFromPanel((event as CustomEvent<string>).detail))
+  window.addEventListener('vasta:capture-text', (event) => void captureFromPanel((event as CustomEvent<string>).detail, (event as CustomEvent<string> & { open?: boolean }).open === true))
   window.addEventListener('vasta:capture-suggest', (event) => void suggestForPanel((event as CustomEvent<{ text: string; cursor: number; seq: number }>).detail).catch(() => {}))
   const params = new URLSearchParams(location.search)
   const asked = Object.keys(ACTIONS).find((name) => params.has(name))

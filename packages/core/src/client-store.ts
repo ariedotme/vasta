@@ -81,6 +81,8 @@ export interface CaptureAnswer {
   summary?: string
   /** Properties in the line whose values could not be read (they stayed in the title). */
   unreadable?: string[]
+  /** Objects the capture made: for an object capture, that object first, then relation targets. */
+  objects?: { id: Id; typeId: Id; title: string }[]
 }
 
 export class NotFoundError extends Error {}
@@ -790,7 +792,8 @@ export class ClientStore extends Store {
     })
     const names = new Map(this.people(spaceId).map((p) => [p.id, p.name]))
     const summary = describeCapture(made.type ?? type, made.object, made.parsed, timeZone, (id) => this.getObject(id)?.title ?? '?', (id) => names.get(id) ?? '?')
-    return { dailyNoteId: note.id, blockId: capture.id, summary, ...(made.parsed?.errors.length ? { unreadable: made.parsed.errors } : {}) }
+    const objects = [made.object, ...made.related].map((o) => ({ id: o.id, typeId: o.typeId, title: o.title }))
+    return { dailyNoteId: note.id, blockId: capture.id, summary, objects, ...(made.parsed?.errors.length ? { unreadable: made.parsed.errors } : {}) }
   }
 
   private writeLineObject(made: LineObject): ObjectRecord {

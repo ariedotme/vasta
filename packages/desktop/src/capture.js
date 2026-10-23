@@ -1,7 +1,7 @@
 // The floating quick capture panel (main.rs, open_capture): the text goes to the web app in the
 // main window, hidden or not, which captures it as its own Quick capture dialog does (capture
 // space, offline through the replica) and reports back; the app then hides this panel. Esc hides
-// it and keeps the draft. While typing, the web app also says what to offer at the cursor ("/"
+// it and keeps the draft; Ctrl+Enter (on macOS too) saves and opens what it made in the main window. While typing, the web app also says what to offer at the cursor ("/"
 // lists the types, a relation's `name:` its objects; suggest_capture → capture_suggestions) and
 // what a "/Type …" line will make; the panel grows to show the list.
 const invoke = (command, args) => window.__TAURI_INTERNALS__.invoke(command, args)
@@ -10,6 +10,7 @@ const error = document.getElementById('error')
 const list = document.getElementById('list')
 const preview = document.getElementById('preview')
 const hint = document.getElementById('hint')
+const openHint = document.getElementById('open-hint')
 const BASE_HEIGHT = 168
 let waiting = null
 let items = []
@@ -74,6 +75,7 @@ function showPreview(text, problem) {
   preview.className = problem ? 'problem' : ''
   preview.hidden = !preview.textContent
   hint.hidden = !preview.hidden
+  openHint.hidden = preview.hidden
 }
 
 function pick(item) {
@@ -105,20 +107,25 @@ function fail(message) {
   field.focus()
 }
 
-async function save() {
+async function save(open = false) {
   const text = field.value
   if (!text.trim() || waiting) return
   error.hidden = true
   field.disabled = true
   waiting = setTimeout(() => fail('Vasta did not answer. Open it and try again.'), 8000)
   try {
-    await invoke('submit_capture', { text })
+    await invoke('submit_capture', { text, open })
   } catch (failure) {
     fail(String(failure?.message ?? failure))
   }
 }
 
 field.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && event.ctrlKey && !event.isComposing) {
+    event.preventDefault()
+    void save(true)
+    return
+  }
   if (items.length && !event.isComposing) {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()

@@ -8,7 +8,7 @@
 // eaten on today's note instead, offering the foods at the cursor.
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { foodCommand, type ObjectSummary, type ObjectType } from '@vasta/core'
-import { captureSpace, captureText, completionSource, dayKey, typesOf } from '../lib/actions.ts'
+import { captureSpace, captureText, completionSource, dayKey, openCapture, typesOf } from '../lib/actions.ts'
 import { foodSourcesOf, previewFoodLine } from '../lib/nutrition.ts'
 import { isDesktop } from '../lib/platform.ts'
 import { meId, people } from '../lib/people.ts'
@@ -62,12 +62,18 @@ async function pick(item: Completion) {
   cursor.value = item.cursor
 }
 
-async function save() {
+/** Save; with `open` (Ctrl+Enter), then open what it made: the new object, else today's note. */
+async function save(open = false) {
   if (!text.value.trim() || !space.value || saving.value) return
   saving.value = true
   error.value = ''
   try {
-    const { space: saved, answer, food } = await captureText(text.value, isDesktop ? 'desktop' : 'app')
+    const { space: saved, answer, food, made } = await captureText(text.value, isDesktop ? 'desktop' : 'app')
+    if (open) {
+      close()
+      await openCapture(saved, answer, made)
+      return
+    }
     if (food) {
       notice.value = { message: food.summary.replace(/\n/g, ' ') }
       close()
@@ -84,6 +90,11 @@ async function save() {
 }
 
 function onKey(event: KeyboardEvent) {
+  if (event.key === 'Enter' && event.ctrlKey && !event.isComposing) {
+    event.preventDefault()
+    void save(true)
+    return
+  }
   if (shown.value.length) {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
@@ -102,7 +113,7 @@ function onKey(event: KeyboardEvent) {
       return
     }
   }
-  // Enter saves; Shift+Enter starts a new line.
+  // Enter saves; Ctrl+Enter saves and opens; Shift+Enter starts a new line.
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     void save()
@@ -151,14 +162,15 @@ function onKey(event: KeyboardEvent) {
         <template v-if="preview.template"> · from {{ preview.template }}</template>
         <template v-if="preview.parts.length"> · {{ preview.parts.join(', ') }}</template>
         <span>, in today’s note in {{ space?.name }}.</span>
+        <span> Ctrl+Enter saves and opens it.</span>
       </p>
       <p v-if="preview.errors.length" class="text-amber-700 dark:text-amber-400">Cannot read {{ preview.errors.join('; ') }}; it stays in the title.</p>
       <p v-else-if="!preview.parts.length && preview.properties.length">name:value sets {{ preview.properties.join(', ') }}.</p>
     </div>
-    <p v-else class="mt-2 text-xs text-ink-faint">Goes to today’s note in {{ space?.name }}. Enter saves, Shift+Enter adds a line.</p>
+    <p v-else class="mt-2 text-xs text-ink-faint">Goes to today’s note in {{ space?.name }}. Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</p>
     <template #footer>
       <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="close">Cancel</button>
-      <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-50" :disabled="!text.trim() || saving" @click="save">Capture</button>
+      <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-50" :disabled="!text.trim() || saving" @click="save()">Capture</button>
     </template>
   </ModalDialog>
 </template>

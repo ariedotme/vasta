@@ -219,6 +219,7 @@ describe('local replica', () => {
     const note = await serverObject(user.request, today.dailyNoteId)
     const embed = note.content.body!.content.find((n) => n.type === 'callout')!.content![0]!
     expect(embed.attrs).toMatchObject({ display: 'inline' })
+    expect(result.objects?.[0]?.id).toBe(embed.attrs!.objectId)
     const dune = await serverObject(user.request, embed.attrs!.objectId as string)
     expect(dune).toMatchObject({ typeId: 'book', title: 'Duna', props: { rating: { kind: 'number', value: 4.5 } } })
     expect(texts(dune.content.body!)).toEqual(['A classic'])

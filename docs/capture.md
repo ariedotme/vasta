@@ -196,6 +196,10 @@ runs the same note capture as the API (links become weblinks). Offline the local
 the item itself (`ClientStore.capture`, links stay links) and it syncs later. Both use
 `appendCapture` in core.
 
+**Ctrl+Enter** (on macOS too) saves and then opens what the capture made, in the capture space:
+the object of a `/Type …` line (the answer's `objects`, first the one made), else today's note
+(`openCapture` in `lib/actions.ts`). Enter only saves.
+
 **An object of a type**: a text that starts with `/` and a type's name makes an object of that
 type instead, and the note embeds it, as Telegram's `/new` does:
 

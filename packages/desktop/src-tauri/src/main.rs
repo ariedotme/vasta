@@ -50,6 +50,9 @@ struct AppState {
     folder_item: Mutex<Option<MenuItem<tauri::Wry>>>,
     /// Held while the server on this computer starts, so it starts once.
     starting: Mutex<()>,
+    /// The panel's capture was sent with Ctrl+Enter: once saved, the window comes forward (the web
+    /// app has opened what it made).
+    open_capture: Mutex<bool>,
 }
 
 /// The bundled connect page.
@@ -443,15 +446,18 @@ fn set_shortcut(app: AppHandle, shortcut: String) -> Result<String, String> {
 // The capture panel's commands (capabilities/capture.json), and the web app's answer.
 
 /// Hand the panel's text to the web app in the main window, which answers with capture_result.
+/// With `open` (Ctrl+Enter) the web app also opens what it made, and the window comes forward.
 #[tauri::command]
-fn submit_capture(app: AppHandle, text: String) -> Result<(), String> {
+fn submit_capture(app: AppHandle, text: String, open: Option<bool>) -> Result<(), String> {
     if !on_server(&app) {
         return Err("Vasta is not connected to its server yet. Open it first.".into());
     }
+    let open = open.unwrap_or(false);
+    *state(&app).open_capture.lock().unwrap() = open;
     let detail = serde_json::to_string(&text).unwrap();
     main_window(&app)
         .ok_or("Vasta has no window.")?
-        .eval(format!("window.dispatchEvent(new CustomEvent('vasta:capture-text', {{ detail: {detail} }}))"))
+        .eval(format!("window.dispatchEvent(Object.assign(new CustomEvent('vasta:capture-text', {{ detail: {detail} }}), {{ open: {open} }}))"))
         .map_err(|error| error.to_string())
 }
 
@@ -461,6 +467,9 @@ fn capture_result(app: AppHandle, ok: bool, message: Option<String>) {
     if ok {
         let _ = panel.eval("window.dispatchEvent(new Event('vasta:capture-saved'))");
         hide_panel(&app);
+        if std::mem::take(&mut *state(&app).open_capture.lock().unwrap()) {
+            show(&app);
+        }
     } else {
         let detail = serde_json::to_string(&message.unwrap_or_default()).unwrap();
         let _ = panel.eval(format!("window.dispatchEvent(new CustomEvent('vasta:capture-failed', {{ detail: {detail} }}))"));
@@ -847,7 +856,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![startup, connect, use_local, use_server, set_shortcut, open_server, submit_capture, capture_result, close_capture, suggest_capture, capture_suggestions, fit_capture, update_app, notify, set_notify_token])
         .setup(|app| {
             let handle = app.handle().clone();
-            app.manage(AppState { settings: Mutex::new(Settings::load(&handle)), capture_item: Mutex::new(None), folder_item: Mutex::new(None), starting: Mutex::new(()) });
+            app.manage(AppState { settings: Mutex::new(Settings::load(&handle)), capture_item: Mutex::new(None), folder_item: Mutex::new(None), starting: Mutex::new(()), open_capture: Mutex::new(false) });
             app.manage(local::LocalServer::default());
             app.manage(notifications::Notifications::default());
             notifications::start(handle.clone(), notifications::Hooks { credentials: notify_credentials, refused: notify_token_refused });

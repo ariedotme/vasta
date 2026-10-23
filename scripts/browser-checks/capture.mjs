@@ -1,7 +1,8 @@
 // "/Type" in quick capture and ⌘K (test env only): "/liv" lists the types, Enter picks one, a
 // relation's `name:` lists its objects, the line's properties show before saving; quick capture
 // embeds the new object in today's note, ⌘K creates and opens it; the desktop capture panel's
-// questions (vasta:capture-suggest) get the same list. As the desktop app (its globals faked),
+// questions (vasta:capture-suggest) get the same list; Ctrl+Enter, in the dialog or from the panel,
+// opens what it made. As the desktop app (its globals faked),
 // since only it opens quick capture.
 //   node capture.mjs [base]      MODE=json: with the replica turned off (HTTP mode)
 import { chromium } from 'playwright'
@@ -14,7 +15,8 @@ await context.addInitScript((json) => {
   if (json) localStorage.setItem('vasta.replica', 'off')
   window.__VASTA_DESKTOP__ = { version: '0.1.6', shortcut: 'CommandOrControl+Shift+Space', updates: '', setShortcut: true }
   window.panelAnswers = []
-  window.__TAURI_INTERNALS__ = { invoke: async (command, args) => (command === 'capture_suggestions' && window.panelAnswers.push(args.answer), null) }
+  window.panelCalls = []
+  window.__TAURI_INTERNALS__ = { invoke: async (command, args) => (window.panelCalls.push([command, args]), command === 'capture_suggestions' && window.panelAnswers.push(args.answer), null) }
 }, process.env.MODE === 'json')
 const page = await context.newPage()
 await page.goto(base)
@@ -114,4 +116,25 @@ await page.waitForTimeout(1500)
 const created = await get(`/api/objects/${new URL(page.url()).pathname.split('/').pop()}`)
 console.log('⌘K created:', created.title, JSON.stringify(created.props))
 if (created.title !== 'Hyperion' || created.props.rating?.value !== 4) throw new Error('⌘K did not read the line')
+
+// Ctrl+Enter in quick capture saves and opens the object it made.
+await page.evaluate(() => window.dispatchEvent(new Event('vasta:capture')))
+await field.waitFor()
+await field.fill(`/${name} Endymion nota:3`)
+await page.keyboard.press('Control+Enter')
+await field.waitFor({ state: 'detached' })
+await page.waitForURL((url) => url.pathname !== `/o/${created.id}` && url.pathname.startsWith('/o/'))
+await page.waitForTimeout(800)
+const endymion = await get(`/api/objects/${new URL(page.url()).pathname.split('/').pop()}`)
+console.log('Ctrl+Enter opened:', endymion.title, JSON.stringify(endymion.props))
+if (endymion.title !== 'Endymion' || endymion.props.rating?.value !== 3) throw new Error('Ctrl+Enter did not open the new object')
+
+// The panel's Ctrl+Enter: a plain text opens today's note, and the app is told it saved.
+await page.evaluate(() => window.dispatchEvent(Object.assign(new CustomEvent('vasta:capture-text', { detail: 'Ctrl+Enter from the panel' }), { open: true })))
+await page.waitForURL((url) => url.pathname !== `/o/${endymion.id}` && url.pathname.startsWith('/o/'))
+await page.waitForTimeout(800)
+const note = await get(`/api/objects/${new URL(page.url()).pathname.split('/').pop()}`)
+const saved = await page.evaluate(() => window.panelCalls.filter(([c]) => c === 'capture_result').at(-1)?.[1])
+console.log('panel Ctrl+Enter opened:', note.typeId, note.date?.start, '| answered:', JSON.stringify(saved))
+if (!note.typeId.startsWith('daily-note') || !JSON.stringify(note.content).includes('Ctrl+Enter from the panel') || saved?.ok !== true) throw new Error('the panel capture did not open today’s note')
 await browser.close()

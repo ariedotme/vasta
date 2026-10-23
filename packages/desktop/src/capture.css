@@ -50,7 +50,7 @@ textarea {
 textarea::placeholder { color: var(--muted); }
 textarea:disabled { opacity: 0.6; }
 footer { display: flex; gap: 12px; padding: 6px 16px 10px; font-size: 12px; color: var(--muted); -webkit-user-select: none; user-select: none; }
-#hint { margin-left: auto; white-space: nowrap; }
+#hint, #open-hint { margin-left: auto; white-space: nowrap; }
 #preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #preview.problem { color: var(--warning); }
 /* Suggestions at the cursor: types after "/", a relation's objects, a select's options. */
