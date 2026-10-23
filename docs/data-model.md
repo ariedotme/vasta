@@ -264,6 +264,51 @@ it, for the server (queries, agents) and the app (tables, cards, the object page
 - Captures and agents can't set a formula; `get_object` shows its value and `list_types` its
   expression with names.
 
+## Templates and snippets
+
+A **template** is an object of its type kept apart from the others: `ObjectRecord.template` (a
+synced field, the `template` column) holds `{ kind: 'template', name, default?, fills? }`. Making an
+object from it copies its title, properties, tags, icon and rich text with placeholders replaced and
+conditional blocks decided, and new block ids; editing the template later never changes what was
+made from it. A **snippet** is the same for a piece of text inserted where the cursor is:
+`{ kind: 'snippet', name, trigger?, scope? }`, an object of the Page type whose body is the text.
+Both belong to one space. [`packages/core/src/templates.ts`](../packages/core/src/templates.ts)
+resolves them, so the server (typed lines from Telegram and agents, daily notes), the replica and
+the app make the same object from the same template.
+
+- **Kept apart.** The store leaves templates and snippets out of every listing: a type's objects,
+  the space's, counts, search, queries, the calendar, backlinks (they get no `links` rows and no
+  search rows), the trash, activity and notifications. `Store.listTemplates` is the only way they
+  are listed (`GET /api/spaces/:id/templates`, the MCP tool `list_templates`). A test runs every
+  listing on a space that has some (`server/test/templates.test.ts`).
+- **Placeholders**, `{{name:argument|format}}`: `date` (the object's date, a daily note's day,
+  else today; `date:+7d`, `date:-1w`, `date:next monday`, `date|D MMM YYYY`), `time`, `title`
+  (the title typed), `me`, `yesterday`/`tomorrow` (a mention of that day's note, whose id is
+  derived, so it may not exist yet: opening it makes it), `ask:With whom?` and
+  `choose:Kind|Bug|Feature` (asked when the object is made, one dialog for all; the same question
+  twice is asked once), `selection`, `cursor` (where the cursor goes) and `formula:…`. In rich
+  text a placeholder is a `templatePlaceholder` node (a chip, `attrs.value` is what is between the
+  braces); in the title and text properties it is written as text. Properties a value cannot hold
+  take one from `fills` (property id → placeholder): Due = `date:+7d`, Assignee = `me`, a select by
+  an answer's label. No code runs: templates also apply on the server and in shared spaces.
+- **Conditions** are formulas with the template's variables `date`, `me`, `type` and `title`, and
+  `ask("…")`, `has("Due")` (the type has that property) and `prop("Status")` (a value by property
+  name). Blocks: a `templateIf` node holds `templateBranch` nodes (`attrs.condition`, none for the
+  Else); the first branch that holds keeps its blocks and the container goes. Inline:
+  `{{formula:if(ask("Kind") = "Bug", "🐞", "✨")}}`.
+- **Defaults.** One template per type may be the default: the type page's New and typed lines use
+  it. The Daily note type's default fills each new day's note.
+- **Snippets** apply where their scope says (`SnippetScope`): of some types, whose type has some
+  properties by name and kind (optionally with a value), and when a formula holds on the object's
+  values. A snippet of one paragraph goes inline; otherwise its blocks go after the current one.
+  `prop()` reads the object it goes into, at insertion. Snippets never set properties.
+- **Daily notes offline.** Two devices that make the same day's note offline both apply its
+  template. `seededText` writes that text as Yjs items under a client id derived from the note's id
+  and the update itself, so both devices make the same items and Yjs merges them into one copy; a
+  daily template resolves only what is the same on every device (no time, no `me`, no answers). If
+  the template differs between the two (edited offline on one), the client ids differ and both
+  copies show, which is better than merging items that are not the same.
+
 ## Nutrition
 
 A food diary inside a space ([`packages/core/src/nutrition.ts`](../packages/core/src/nutrition.ts)).

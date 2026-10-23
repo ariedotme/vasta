@@ -3,7 +3,8 @@
 // A new `doc` from outside (e.g. an item captured from Telegram) replaces the content in place.
 // With `text` it edits a field of the object's Y.Doc instead (the local replica keeps it in step,
 // merging other devices' edits as they arrive); the emitted document is then only a copy to show.
-// `reveal` scrolls to a block (a link to it, #b-<id>) once the text has it.
+// `reveal` scrolls to a block (a link to it, #b-<id>) once the text has it; `cursor` puts the
+// cursor in one (where a template says). `template`: the text of a template or snippet.
 import { EditorContent, useEditor, type Editor } from '@tiptap/vue-3'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import type { Doc } from '@vasta/core'
@@ -15,10 +16,20 @@ import AppIcon from '../components/AppIcon.vue'
 import { api } from '../lib/api.ts'
 import { promptDialog } from '../lib/overlays.ts'
 import { lastError, notice, primeFromObject, refreshCounts } from '../lib/state.ts'
+import { saveAsSnippet, selectedBlocks } from '../lib/templates.ts'
 import { flashBlock } from './block-attributes.ts'
 import { createExtensions } from './extensions.ts'
 
-const props = defineProps<{ doc: Doc | undefined; text?: { doc: Y.Doc; field: string }; objectId?: string; reveal?: string; placeholder?: string; autofocus?: boolean }>()
+const props = defineProps<{
+  doc: Doc | undefined
+  text?: { doc: Y.Doc; field: string }
+  objectId?: string
+  reveal?: string
+  cursor?: { blockId: string; offset: number }
+  template?: boolean
+  placeholder?: string
+  autofocus?: boolean
+}>()
 const emit = defineEmits<{ change: [doc: Doc] }>()
 const router = useRouter()
 
@@ -32,7 +43,7 @@ function appPath(href: string): string | undefined {
 
 const editor = useEditor({
   ...(props.text ? {} : { content: props.doc ?? { type: 'doc', content: [{ type: 'paragraph' }] } }),
-  extensions: createExtensions(props.placeholder ?? 'Type / for blocks, @ to link an object…', props.text, props.objectId),
+  extensions: createExtensions(props.placeholder ?? (props.template ? 'Type / for blocks, {{ for placeholders…' : 'Type / for blocks, @ to link an object…'), props.text, props.objectId, props.template),
   autofocus: props.autofocus ? 'end' : false,
   editorProps: {
     attributes: { class: 'vasta-doc' },
@@ -77,8 +88,11 @@ watch(
 
 let stopRevealing = () => {}
 
-/** Scroll to the block with this id and flash it; the text may still be loading (or syncing), so keep looking for a while. */
-function revealBlock(current: Editor, id: string) {
+/**
+ * Scroll to the block with this id and flash it, or with `offset` put the cursor there; the text
+ * may still be loading (or syncing), so keep looking for a while.
+ */
+function revealBlock(current: Editor, id: string, offset?: number) {
   stopRevealing()
   let tries = 0
   const timer = setInterval(() => {
@@ -90,6 +104,11 @@ function revealBlock(current: Editor, id: string) {
     const dom = found >= 0 ? current.view.nodeDOM(found) : null
     if (dom instanceof HTMLElement && dom.isConnected) {
       stopRevealing()
+      if (offset !== undefined) {
+        const end = found + current.state.doc.nodeAt(found)!.nodeSize - 1
+        current.chain().focus().setTextSelection(Math.min(found + 1 + offset, end)).scrollIntoView().run()
+        return
+      }
       dom.scrollIntoView({ block: 'center', behavior: 'smooth' })
       flashBlock(current.view, id)
     } else if (++tries > 50) stopRevealing()
@@ -101,6 +120,14 @@ watch(
   () => [props.reveal, editor.value] as const,
   ([id, current]) => {
     if (id && current) revealBlock(current, id)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => [props.cursor, editor.value] as const,
+  ([cursor, current]) => {
+    if (cursor && current) revealBlock(current, cursor.blockId, cursor.offset)
   },
   { immediate: true }
 )
@@ -146,6 +173,13 @@ async function quote() {
   }
 }
 
+/** The selected text becomes a snippet's (Settings › Snippets edits where it applies). */
+async function snippet() {
+  const current = editor.value
+  const blocks = current ? selectedBlocks(current) : undefined
+  if (blocks) await saveAsSnippet(blocks)
+}
+
 function removeLink() {
   editor.value?.chain().focus().extendMarkRange('link').unsetLink().run()
 }
@@ -158,6 +192,7 @@ const marks: { name: string; title: string; icon: string; run: () => unknown }[]
   { name: 'highlight', title: 'Highlight', icon: 'ph:highlighter', run: () => editor.value?.chain().focus().toggleHighlight({ color: 'yellow' }).run() },
   { name: 'link', title: 'Link', icon: 'ph:link', run: setLink },
   ...(props.objectId ? [{ name: 'quote', title: 'Save as quote', icon: 'ph:quotes', run: quote }] : []),
+  { name: 'snippet', title: 'Save as snippet', icon: 'ph:brackets-curly', run: snippet },
 ]
 </script>
 

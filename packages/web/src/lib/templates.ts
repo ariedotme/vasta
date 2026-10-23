@@ -6,7 +6,7 @@ import {
   BODY_PROPERTY_ID, applySnippet, applyTemplate, scopeHolds, templateAsks, templateFromObject, typeTemplates,
   type AppliedTemplate, type DocNode, type Id, type ObjectRecord, type ObjectType, type SnippetScope, type TemplateContext,
 } from '@vasta/core'
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
 import { onChange } from './events.ts'
@@ -38,6 +38,18 @@ export function loadTemplates(): Promise<void> {
   return loading
 }
 
+/** The list, loaded for the open space first when it is not yet. */
+export async function currentTemplates(): Promise<ObjectRecord[]> {
+  if (templates.spaceId !== workspace.space?.id) await loadTemplates()
+  return current()
+}
+
+watch(
+  () => workspace.space?.id,
+  (id) => id && void loadTemplates(),
+  { immediate: true }
+)
+
 // One of them changed elsewhere (another device, another tab).
 onChange((event) => {
   if (event.kind === 'object' && event.spaceId === templates.spaceId && templates.list.some((t) => t.id === event.id)) void loadTemplates()
@@ -48,6 +60,9 @@ const current = () => (templates.spaceId === workspace.space?.id ? templates.lis
 /** A type's templates, the default first. */
 export const templatesOf = (typeId: Id) => typeTemplates(current(), typeId)
 export const snippets = computed(() => current().filter((t) => t.template?.kind === 'snippet'))
+
+/** Keep the list in step after a template is saved from its page. */
+export const rememberTemplate = (template: ObjectRecord) => remember(template)
 
 function remember(template: ObjectRecord) {
   const list = templates.list.filter((t) => t.id !== template.id)
@@ -104,22 +119,29 @@ export async function createFromTemplate(type: ObjectType, template: ObjectRecor
 }
 
 /**
- * Fill an empty object from a template ("Start from a template" on a new object): what the user
+ * What an empty object gets from a template ("Start from a template" on a new object), its
+ * questions asked; the page writes it (its text through the editor's document). What the user
  * typed in the title stays.
  */
-export async function fillFromTemplate(object: ObjectRecord, type: ObjectType, template: ObjectRecord): Promise<ObjectRecord | undefined> {
+export async function templateFill(object: ObjectRecord, type: ObjectType, template: ObjectRecord): Promise<AppliedTemplate | undefined> {
   const answers = await askFor(template)
   if (!answers) return undefined
-  const made = applyTemplate(template, type, templateContext({ answers, ...(object.title ? { title: object.title } : {}) }))
-  const filled: ObjectRecord = {
-    ...object,
-    title: made.title,
-    props: { ...made.props, ...object.props },
-    content: { ...object.content, ...made.content },
-    tagIds: [...new Set([...object.tagIds, ...template.tagIds])],
-    ...(template.icon && !object.icon ? { icon: template.icon } : {}),
+  return applyTemplate(template, type, templateContext({ answers, ...(object.title ? { title: object.title } : {}) }))
+}
+
+/** A template resolved for now, with its questions answered by their own labels (Preview). */
+export function previewTemplate(template: ObjectRecord, type: ObjectType): AppliedTemplate {
+  const answers = Object.fromEntries(templateAsks(template).map((a) => [a.label, a.options?.[0] ?? `‹${a.label}›`]))
+  return applyTemplate(template, type, templateContext({ answers }))
+}
+
+/** Unmark the type's other default templates (this one becomes it on its page). */
+export async function clearOtherDefaults(template: ObjectRecord) {
+  for (const other of templatesOf(template.typeId)) {
+    if (other.id === template.id || other.template?.kind !== 'template' || !other.template.default) continue
+    const { default: _default, ...info } = other.template
+    remember(await api.saveObject({ ...other, template: info }, other))
   }
-  return api.saveObject(filled, object)
 }
 
 /** "Save as template": a copy of the object as a template of its type, opened to edit. */
@@ -209,7 +231,7 @@ export function snippetsFor(objectId: Id | undefined): ObjectRecord[] {
 }
 
 /** The selection's blocks (whole blocks when it spans several, its text in one otherwise). */
-function selectedBlocks(editor: Editor): DocNode[] | undefined {
+export function selectedBlocks(editor: Editor): DocNode[] | undefined {
   const { from, to, empty } = editor.state.selection
   if (empty) return undefined
   const slice = editor.state.doc.slice(from, to).content.toJSON() as DocNode[] | null

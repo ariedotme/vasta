@@ -20,6 +20,8 @@ import { imageOf } from '../lib/media.ts'
 import type { ColorName } from '@vasta/core'
 import { openMenuAt, type MenuItem } from '../lib/overlays.ts'
 import { cachedSummary, lastError, notice, typesById } from '../lib/state.ts'
+import { saveAsSnippet } from '../lib/templates.ts'
+import type { DocNode } from '@vasta/core'
 import { fixBlockIds } from './block-attributes.ts'
 import { slashCommands } from './commands.ts'
 
@@ -315,6 +317,7 @@ function openBlockMenu(editor: Editor, x: number, y: number, objectId: string | 
     { label: 'Move up', icon: 'ph:arrow-up', hint: `${MOD}⇧↑`, disabled: !selection.$from.nodeBefore, run: () => move(view, -1) },
     { label: 'Move down', icon: 'ph:arrow-down', hint: `${MOD}⇧↓`, disabled: !selection.$to.nodeAfter, run: () => move(view, 1) },
     { label: 'Copy', icon: 'ph:clipboard-text', hint: `${MOD}C`, run: () => copy(view, current()) },
+    { label: 'Save as snippet…', icon: 'ph:brackets-curly', run: () => saveAsSnippet(current().blocks.map((node) => node.toJSON() as DocNode)) },
     { kind: 'separator' },
     { label: count > 1 ? `Delete ${count} blocks` : 'Delete', icon: 'ph:trash', danger: true, hint: '⌫', run: () => remove(view, current()) }
   )

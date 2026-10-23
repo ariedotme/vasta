@@ -3,7 +3,7 @@
 // options for a select, members for a person), and what the line will set, in words. The line is read by core's
 // capture-line.ts, on the server or the replica. "/food" logs food instead (core's nutrition.ts):
 // after it the foods and recipes are offered.
-import { describeValue, findProperty, foodCommand, foodPortions, isCapturable, leadingType, parseCaptureLine, parseDay, readQuickEntry, type Icon, type Id, type ObjectSummary, type ObjectType, type Person, type PropertyDef } from '@vasta/core'
+import { defaultTemplate, describeValue, findProperty, findTemplate, foodCommand, foodPortions, isCapturable, leadingTemplate, leadingType, lineAnswers, parseCaptureLine, parseDay, readQuickEntry, templateAsks, typeTemplates, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type Person, type PropertyDef } from '@vasta/core'
 import { formatLongDay } from './format.ts'
 
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
@@ -44,11 +44,23 @@ export interface LinePreview {
   errors: string[]
   /** The properties a line can set, for a hint: "autor, nota, gênero". */
   properties: string[]
+  /** The template it starts from (the type's default, or the one named after "/Type:"). */
+  template?: string
+  /** A template named that the type does not have. */
+  unknownTemplate?: string
 }
 
-/** What the first line of `text` makes for objects of `type`; `people` are the space's members (`me`: the user). */
-export function previewLine(type: ObjectType, text: string, today: string, people: Person[] = [], me?: Id): LinePreview {
-  const line = text.split('\n')[0] ?? ''
+/**
+ * What the first line of `text` makes for objects of `type`; `people` are the space's members
+ * (`me`: the user), `templates` the space's templates (the line's ":Name", else the default).
+ */
+export function previewLine(type: ObjectType, text: string, today: string, people: Person[] = [], me?: Id, templates: ObjectRecord[] = []): LinePreview {
+  let line = text.split('\n')[0] ?? ''
+  const named = leadingTemplate(line)
+  if (named) line = named.rest
+  const template = named ? findTemplate(templates, type.id, named.name) : defaultTemplate(templates, type.id)
+  if (template) line = lineAnswers(line, type, templateAsks(template)).rest
+  const which = template ? { template: template.template!.name } : named ? { unknownTemplate: named.name } : {}
   const zone = deviceZone()
   const parsed = parseCaptureLine(line, type, { today, timeZone: zone, people, ...(me ? { me } : {}) })
   const nameOf = (id: Id) => people.find((p) => p.id === id)?.name ?? '?'
@@ -63,7 +75,7 @@ export function previewLine(type: ObjectType, text: string, today: string, peopl
     const withAdded: PropertyDef = def.kind === 'select' ? { ...def, options: [...def.options, ...added] } : def
     return [`${def.name.toLowerCase()} ${describeValue(withAdded, value, zone, () => '', nameOf)}`]
   })
-  return { title: parsed.title, parts, errors: parsed.errors, properties: settable.map((p) => p.name.toLowerCase()) }
+  return { title: parsed.title, parts, errors: parsed.errors, properties: settable.map((p) => p.name.toLowerCase()), ...which }
 }
 
 export interface Completion {
@@ -83,6 +95,8 @@ export interface CompletionSource {
   today: string
   /** The space's members, for person values. */
   people?: Person[]
+  /** The space's templates, for "/Task:" (lib/templates.ts). */
+  templates?: () => ObjectRecord[]
 }
 
 const LIMIT = 8
@@ -90,6 +104,22 @@ const LIMIT = 8
 /** What to offer at `cursor`: types while "/" and a name are typed, then values for a `name:` of the type. */
 export async function complete(text: string, cursor: number, source: CompletionSource): Promise<Completion[]> {
   const before = text.slice(0, cursor)
+  // "/Task:Bu": the type's templates.
+  const named = /^\/([^\s:]+):(\S*)$/.exec(before)
+  const namedType = named ? leadingType(source.types.filter(offered), `/${named[1]}`) : undefined
+  if (named && namedType && !namedType.rest) {
+    const end = cursor + /^\S*/.exec(text.slice(cursor))![0].length
+    const rest = text.slice(end).replace(/^[ \t]+/, '')
+    const wanted = fold(named[2]!)
+    return typeTemplates(source.templates?.() ?? [], namedType.type.id)
+      .filter((t) => fold(t.template!.name).startsWith(wanted))
+      .slice(0, LIMIT)
+      .map((t) => {
+        const name = /\s/.test(t.template!.name) ? `"${t.template!.name}"` : t.template!.name
+        const head = `/${named[1]}:${name} `
+        return { label: t.template!.name, detail: `${namedType.type.name} template`, icon: { kind: 'icon', value: 'ph:copy-simple' } as Icon, text: head + rest, cursor: head.length }
+      })
+  }
   if (/^\/\S*$/.test(before)) {
     const end = cursor + /^\S*/.exec(text.slice(cursor))![0].length
     const rest = text.slice(end).replace(/^[ \t]+/, '')

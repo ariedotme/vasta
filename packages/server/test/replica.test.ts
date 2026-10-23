@@ -297,7 +297,7 @@ describe('local replica', () => {
     const body: DocNode[] = [
       { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Plan for {{date|dddd}}' }] },
       { type: 'templateIf', content: [{ type: 'templateBranch', attrs: { condition: 'weekday(date) = 1' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Weekly review' }] }] }] },
-      { type: 'paragraph', content: [{ type: 'text', text: 'Yesterday: ' }, { type: 'placeholder', attrs: { value: 'yesterday' } }] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Yesterday: ' }, { type: 'templatePlaceholder', attrs: { value: 'yesterday' } }] },
     ]
     const made = await user.request('/api/objects', json({ typeId: builtinTypeId('s', 'daily-note'), title: '', content: { body: { type: 'doc', content: body } }, template: { kind: 'template', name: 'Day', default: true } }))
     expect(made.status).toBe(201)

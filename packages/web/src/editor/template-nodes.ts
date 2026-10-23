@@ -47,7 +47,7 @@ const ARGUMENTS: Record<string, { title: string; message: string; placeholder: s
 }
 
 export function insertPlaceholder(editor: Editor, range: Range, value: string) {
-  editor.chain().focus().deleteRange(range).insertContent([{ type: 'placeholder', attrs: { value } }, { type: 'text', text: ' ' }]).run()
+  editor.chain().focus().deleteRange(range).insertContent([{ type: 'templatePlaceholder', attrs: { value } }, { type: 'text', text: ' ' }]).run()
 }
 
 /** A conditional block with one branch around the current block's place. */

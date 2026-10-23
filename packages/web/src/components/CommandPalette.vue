@@ -16,6 +16,7 @@ import { meId, people } from '../lib/people.ts'
 import { lastError, notice, primeFromObject, primeSummaries, refreshCounts, systemType, typesById, ui, workspace } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import { previewLine, typedLine, type Completion, type LinePreview } from '../lib/typed-line.ts'
+import { templates } from '../lib/templates.ts'
 import { useCompletions } from '../lib/use-completions.ts'
 import { GO, keysOf, toggleSidebar } from '../lib/shortcuts.ts'
 import { cycleTheme } from '../lib/theme.ts'
@@ -87,7 +88,7 @@ const results = computed<Result[]>(() => {
     const eaten = foodCommand(query.value)
     if (eaten !== undefined && workspace.space) return [{ kind: 'food', line: eaten, preview: previewFoodLine(eaten, workspace.space, foods.value ?? [], dayKey()) }]
     const typed = typedLine(workspace.types, query.value)
-    return typed ? [{ kind: 'typed', type: typed.type, line: typed.rest, preview: previewLine(typed.type, typed.rest, dayKey(), people.list, meId()) }] : []
+    return typed ? [{ kind: 'typed', type: typed.type, line: typed.rest, preview: previewLine(typed.type, typed.rest, dayKey(), people.list, meId(), templates.list) }] : []
   }
   const q = query.value.trim().toLowerCase()
   const types: Result[] = q
@@ -275,8 +276,9 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
               <AppIcon :icon="result.type.icon" fallback="ph:plus-circle" :size="18" class="text-accent" />
               <div class="min-w-0 flex-1">
                 <div class="truncate text-sm">Create {{ result.preview.title ? `“${result.preview.title}”` : `a ${result.type.name}` }}</div>
-                <div v-if="result.preview.errors.length" class="truncate text-xs text-amber-700 dark:text-amber-400">Cannot read {{ result.preview.errors.join('; ') }}</div>
-                <div v-else-if="result.preview.parts.length" class="truncate text-xs text-ink-faint">{{ result.preview.parts.join(', ') }}</div>
+                <div v-if="result.preview.unknownTemplate" class="truncate text-xs text-amber-700 dark:text-amber-400">{{ result.type.name }} has no template “{{ result.preview.unknownTemplate }}”</div>
+                <div v-else-if="result.preview.errors.length" class="truncate text-xs text-amber-700 dark:text-amber-400">Cannot read {{ result.preview.errors.join('; ') }}</div>
+                <div v-else-if="result.preview.parts.length || result.preview.template" class="truncate text-xs text-ink-faint">{{ [...(result.preview.template ? [`from ${result.preview.template}`] : []), ...result.preview.parts].join(', ') }}</div>
                 <div v-else-if="result.preview.properties.length" class="truncate text-xs text-ink-faint">name:value sets {{ result.preview.properties.join(', ') }}</div>
               </div>
               <span class="shrink-0 text-xs text-ink-faint">{{ result.type.name }}</span>

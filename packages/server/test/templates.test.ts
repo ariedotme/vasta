@@ -85,7 +85,7 @@ describe('templates', () => {
 
   it('makes the day’s note from the daily note type’s default template', async () => {
     const { user } = setup()
-    const body = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Top 3 for ' }, { type: 'placeholder', attrs: { value: 'date|dddd' } }] }] }
+    const body = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Top 3 for ' }, { type: 'templatePlaceholder', attrs: { value: 'date|dddd' } }] }] }
     await user.request('/api/objects', json({ typeId: builtinTypeId('s', 'daily-note'), title: '', content: { body }, template: { kind: 'template', name: 'Day', default: true } }))
     const note = (await (await user.request('/api/spaces/s/daily-notes/2026-10-23', { method: 'POST' })).json()) as ObjectRecord
     expect(note.template).toBeUndefined()
@@ -107,6 +107,32 @@ describe('templates', () => {
     // The type and the template in one word, as ⌘K and Telegram read "/Task:Bug …".
     const { leadingType } = await import('@vasta/core')
     expect(leadingType(store.listTypes('s'), '/Task:Bug Login breaks')).toMatchObject({ type: { id: task }, rest: ':Bug Login breaks' })
+  })
+
+  it('lets agents list templates and make objects from them', async () => {
+    const { user, agent } = setup()
+    const task = builtinTypeId('s', 'task')
+    const create = (data: unknown) => user.request('/api/objects', json(data))
+    await create({ typeId: task, title: 'Bug: {{title}}', content: { body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Seen by {{ask:Who saw it?}}' }] }] } }, template: { kind: 'template', name: 'Bug', default: true } })
+    expect(agent.templates()).toEqual([expect.objectContaining({ name: 'Bug', kind: 'template', type: 'Task', default: true, asks: [{ label: 'Who saw it?' }] })])
+    const made = agent.createObject({ type: 'Task', title: 'Login breaks', answers: { 'Who saw it?': 'Lena' }, markdown: 'More' }) as { title: string; text: Record<string, string> }
+    expect(made.title).toBe('Bug: Login breaks')
+    expect(made.text.Notes).toContain('Seen by Lena')
+    expect(made.text.Notes).toContain('More')
+    const blank = agent.createObject({ type: 'Task', title: 'Plain', template: 'blank' }) as { title: string }
+    expect(blank.title).toBe('Plain')
+    expect(() => agent.createObject({ type: 'Task', title: 'x', template: 'Nope' })).toThrow(/no template “Nope” \(it has Bug\)/)
+  })
+
+  it('goes to the trash and comes back with its type', async () => {
+    const { user, store } = setup()
+    const type = (await (await user.request('/api/types', json({ spaceId: 's', name: 'Recipe' }))).json()) as { id: string }
+    await user.request('/api/objects', json({ typeId: type.id, title: '', template: { kind: 'template', name: 'Soup', default: true } }))
+    expect(store.listTemplates('s')).toHaveLength(1)
+    expect((await user.request(`/api/types/${type.id}`, { method: 'DELETE' })).status).toBe(204)
+    expect(store.listTemplates('s')).toEqual([])
+    expect((await user.request(`/api/types/${type.id}/restore`, { method: 'POST' })).status).toBe(200)
+    expect(store.listTemplates('s').map((t) => t.template!.name)).toEqual(['Soup'])
   })
 })
 

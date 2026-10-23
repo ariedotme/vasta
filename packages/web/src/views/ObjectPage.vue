@@ -42,6 +42,10 @@ import { PROPERTY_KINDS, formulaValue, kindIcon, newPropertyDef } from '../lib/p
 import { lastError, primeFromObject, replaceType, systemType, typesById, workspace } from '../lib/state.ts'
 import { personName, sharedSpace } from '../lib/people.ts'
 import { openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
+import { clearOtherDefaults, deleteTemplate, loadTemplates, previewTemplate, rememberTemplate, saveAsTemplate, templateFill, templatesOf } from '../lib/templates.ts'
+import DocPreview from '../components/DocPreview.ts'
+import ModalDialog from '../components/ModalDialog.vue'
+import { writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
 
 /** `embedded`: only the text and what links here, inside another page (the calendar's day). */
 const props = defineProps<{ id: string; embedded?: boolean; backlinksTitle?: string }>()
@@ -103,6 +107,7 @@ async function save() {
     const saved = await (text.value ? api : serverApi).saveObject(object.value, base)
     base = clone(saved)
     primeFromObject(saved)
+    if (saved.template) rememberTemplate(saved)
     // The saved copy has what changed elsewhere meanwhile (fields, items captured into the text);
     // show it, keeping what was typed during the save.
     if (object.value) assignChanged(object.value, afterSave(object.value, sent, saved))
@@ -172,6 +177,13 @@ onMounted(async () => {
   await nextTick()
   autosize()
   if (typeof route.query.capture === 'string') revealCapture(route.query.capture)
+  // Made from a template that says where the cursor goes.
+  const at = typeof route.query.cursor === 'string' ? /^(.+):(\d+)$/.exec(route.query.cursor) : null
+  if (at) {
+    cursorTarget.value = { blockId: at[1]!, offset: Number(at[2]) }
+    return
+  }
+  if (!object.value.template) void loadTemplates()
   // A new weblink starts with its address field (WeblinkPanel focuses it).
   if (isNew.value && !(isWeblink.value && !object.value.media?.url)) titleInput.value?.focus()
 })
@@ -476,7 +488,99 @@ function stepDay(delta: number) {
   void openDay(date.toISOString().slice(0, 10))
 }
 
-const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object.value, title: '' }, type.value) : ''))
+const titlePlaceholder = computed(() => {
+  if (!object.value) return ''
+  if (object.value.template?.kind === 'template') return `Title of new ${type.value?.pluralName.toLowerCase() ?? 'objects'}, may use {{title}}`
+  return displayTitle({ ...object.value, title: '' }, type.value)
+})
+
+// Templates and snippets (lib/templates.ts) --------------------------------
+// A template opens here like any object, with a banner, its placeholders as chips and the
+// properties a value cannot fill ("Due in a week") as placeholders of their own.
+const info = computed(() => object.value?.template)
+/** Where the cursor goes once the text is there (an object made from a template that says so). */
+const cursorTarget = ref<{ blockId: string; offset: number } | undefined>()
+const previewOpen = ref(false)
+const preview = computed(() => (previewOpen.value && object.value && type.value ? previewTemplate(object.value, type.value) : undefined))
+const previewProps = computed(() => (preview.value && type.value ? type.value.properties.filter((p) => p.kind !== 'rich-text' && preview.value!.props[p.id]) : []))
+
+/** Kinds whose value can come from a placeholder of its own (text holds `{{…}}` itself). */
+const FILLABLE = ['date', 'person', 'select', 'number', 'checkbox']
+const fills = computed(() => (info.value?.kind === 'template' ? (info.value.fills ?? {}) : {}))
+/** A placeholder as written, `{{date:+7d}}` (the template cannot spell braces itself). */
+const braced = (value: string) => `{{${value}}}`
+const fillable = (def: PropertyDef) => info.value?.kind === 'template' && FILLABLE.includes(def.kind)
+
+async function setFill(def: PropertyDef) {
+  if (!object.value || object.value.template?.kind !== 'template') return
+  const hints: Record<string, string> = { date: 'date:+7d, date:next monday', person: 'me', select: 'choose:Priority|High|Low, or ask:…', number: 'ask:How many?', checkbox: 'formula:weekday(date) = 1' }
+  const value = await promptDialog({ title: `${def.name} from a placeholder`, message: `What goes between the braces, e.g. ${hints[def.kind] ?? 'ask:…'}.`, value: fills.value[def.id] ?? '', confirmLabel: 'Save' })
+  if (value === null || object.value.template?.kind !== 'template') return
+  object.value.template = { ...object.value.template, fills: { ...object.value.template.fills, [def.id]: value } }
+  changed()
+}
+
+function clearFill(def: PropertyDef) {
+  if (object.value?.template?.kind !== 'template') return
+  const { [def.id]: _gone, ...rest } = object.value.template.fills ?? {}
+  const { fills: _fills, ...template } = object.value.template
+  object.value.template = Object.keys(rest).length ? { ...template, fills: rest } : template
+  changed()
+}
+
+async function renameTemplate() {
+  if (!object.value?.template) return
+  const name = await promptDialog({ title: 'Rename', value: object.value.template.name, confirmLabel: 'Rename' })
+  if (!name || !object.value?.template) return
+  object.value.template = { ...object.value.template, name }
+  if (object.value.template.kind === 'snippet') object.value.title = name
+  changed()
+}
+
+async function toggleDefault() {
+  if (object.value?.template?.kind !== 'template') return
+  const { default: isDefault, ...rest } = object.value.template
+  if (!isDefault) await clearOtherDefaults(object.value)
+  if (object.value?.template?.kind !== 'template') return
+  object.value.template = isDefault ? rest : { ...rest, default: true }
+  changed()
+}
+
+async function removeTemplate() {
+  if (!object.value?.template) return
+  const kind = object.value.template.kind
+  const typeId = object.value.typeId
+  clearTimeout(timer)
+  if (await deleteTemplate(object.value)) await router.push(kind === 'snippet' ? '/settings#snippets' : `/t/${typeId}?settings=1`)
+}
+
+async function saveTemplateFrom() {
+  menuOpen.value = false
+  if (!object.value || !type.value) return
+  if (status.value === 'unsaved') await save()
+  await saveAsTemplate(object.value, type.value)
+}
+
+/** Offered on an object of a type with templates while its text is empty. */
+const offeredTemplates = computed(() => (type.value && !info.value && !props.embedded && !object.value?.deletedAt ? templatesOf(type.value.id) : []))
+const bodyEmpty = computed(() => Object.values(object.value?.content ?? {}).every((doc) => doc.content.every((n) => n.type === 'paragraph' && !n.content?.length)))
+
+async function startFrom(template: ObjectRecord) {
+  if (!object.value || !type.value) return
+  const made = await templateFill(object.value, type.value, template)
+  if (!made || !object.value) return
+  object.value.title = made.title
+  object.value.props = { ...made.props, ...object.value.props }
+  object.value.tagIds = [...new Set([...object.value.tagIds, ...template.tagIds])]
+  if (template.icon && !object.value.icon) object.value.icon = template.icon
+  const fields = Object.keys(made.content)
+  // With a text session the editors edit the object's Y.Doc: the text goes there.
+  if (text.value) writeContent(text.value.doc, made.content as unknown as Record<string, JsonDoc>, undefined, fields)
+  for (const field of fields) object.value.content[field] = made.content[field]!
+  changed()
+  autosize()
+  if (made.cursor) cursorTarget.value = { blockId: made.cursor.blockId, offset: made.cursor.offset }
+}
 </script>
 
 <template>
@@ -489,6 +593,30 @@ const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object
       <button class="rounded-lg bg-surface px-2.5 py-1 font-medium text-ink shadow-sm ring-1 ring-line hover:bg-hover max-md:py-2" @click="restore">Restore</button>
       <button class="rounded-lg px-2.5 py-1 font-medium hover:bg-red-100 dark:hover:bg-red-900/40 max-md:py-2" @click="deleteForever">Delete forever</button>
     </div>
+    <div v-if="info && !embedded" class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-200" data-template-banner>
+      <AppIcon :fallback="info.kind === 'snippet' ? 'ph:brackets-curly' : 'ph:copy-simple'" class="shrink-0" />
+      <span class="min-w-0 flex-1 max-sm:min-w-[70%]">
+        <template v-if="info.kind === 'template'">Template <button class="font-semibold hover:underline" title="Rename" @click="renameTemplate">{{ info.name }}</button> of {{ type?.name }}<template v-if="info.default"> · default</template></template>
+        <template v-else>Snippet <button class="font-semibold hover:underline" title="Rename" @click="renameTemplate">{{ info.name }}</button><template v-if="info.trigger"> · /{{ info.trigger }}</template></template>
+        <span class="text-violet-700/80 dark:text-violet-300/70 max-md:hidden" v-text="' — type {{ for placeholders'" />
+      </span>
+      <button v-if="info.kind === 'template'" class="rounded-lg px-2.5 py-1 font-medium hover:bg-violet-100 dark:hover:bg-violet-900/40 max-md:py-2" @click="toggleDefault">{{ info.default ? 'Not the default' : 'Make default' }}</button>
+      <button class="rounded-lg bg-surface px-2.5 py-1 font-medium text-ink shadow-sm ring-1 ring-line hover:bg-hover max-md:py-2" @click="previewOpen = true">Preview</button>
+      <RouterLink :to="info.kind === 'snippet' ? '/settings#snippets' : `/t/${object.typeId}?settings=1`" class="rounded-lg px-2.5 py-1 font-medium hover:bg-violet-100 dark:hover:bg-violet-900/40 max-md:py-2">{{ info.kind === 'snippet' ? 'All snippets' : 'All templates' }}</RouterLink>
+    </div>
+    <ModalDialog v-if="previewOpen && preview" :title="`Preview of ${info?.name ?? ''}`" @close="previewOpen = false">
+      <div class="space-y-4 p-5">
+        <h1 v-if="info?.kind === 'template'" class="text-2xl font-bold">{{ preview.title || titlePlaceholder }}</h1>
+        <dl v-if="previewProps.length" class="space-y-1 text-sm">
+          <div v-for="def in previewProps" :key="def.id" class="flex gap-3">
+            <dt class="w-32 shrink-0 text-ink-soft">{{ def.name }}</dt>
+            <dd class="min-w-0 flex-1"><PropertyDisplay :def="def" :value="preview.props[def.id]" :object="{ ...object, props: preview.props }" wrap /></dd>
+          </div>
+        </dl>
+        <DocPreview v-for="(doc, field) in preview.content" :key="field" :content="doc.content" />
+        <p class="text-xs text-ink-faint">As made now. Questions show their own words; a daily note's template leaves out the time, you and the answers.</p>
+      </div>
+    </ModalDialog>
     <div v-if="object.coverUrl && !embedded" class="group/cover relative h-56 w-full overflow-hidden bg-hover max-md:h-40">
       <img :src="object.coverUrl" alt="" class="h-full w-full object-cover" />
       <button
@@ -542,7 +670,10 @@ const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object
             <RouterLink :to="`/t/${object.typeId}`" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover">
               <AppIcon fallback="ph:cube" /> Open type
             </RouterLink>
-            <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="pinFrom">
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="saveTemplateFrom">
+              <AppIcon fallback="ph:copy-simple" /> Save as template…
+            </button>
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="pinFrom">
               <AppIcon fallback="ph:push-pin" /> {{ isInSidebar(object.id) ? 'Pinned in sidebar' : 'Pin to sidebar' }}
               <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
             </button>
@@ -557,6 +688,9 @@ const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object
                 <AppIcon fallback="ph:trash" /> Delete forever…
               </button>
             </template>
+            <button v-else-if="info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-red-600 hover:bg-hover" @click="menuOpen = false, removeTemplate()">
+              <AppIcon fallback="ph:trash" /> Delete {{ info.kind }}…
+            </button>
             <button v-else class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-red-600 hover:bg-hover" @click="remove">
               <AppIcon fallback="ph:trash" /> Move to trash
             </button>
@@ -565,6 +699,7 @@ const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object
       </div>
 
       <textarea
+        v-if="info?.kind !== 'snippet'"
         ref="titleInput"
         v-model="object.title"
         data-large-text
@@ -575,7 +710,16 @@ const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object
         @keydown.enter.prevent="focusBody"
       />
 
-      <div class="mt-2 flex flex-wrap items-center gap-1.5">
+      <div v-if="offeredTemplates.length && bodyEmpty" class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-faint" data-template-offer>
+        <AppIcon fallback="ph:copy-simple" :size="14" />
+        <span>Start from a template:</span>
+        <template v-for="(t, i) in offeredTemplates" :key="t.id">
+          <span v-if="i" aria-hidden="true">·</span>
+          <button class="rounded px-1 font-medium text-ink-soft hover:bg-hover hover:text-ink" @click="startFrom(t)">{{ t.template!.name }}</button>
+        </template>
+      </div>
+
+      <div v-if="info?.kind !== 'snippet'" class="mt-2 flex flex-wrap items-center gap-1.5">
         <AppIcon fallback="ph:tag" class="text-ink-faint" />
         <ObjectChip v-for="id in object.tagIds" :key="id" :id="id" tag removable @remove="removeTag(id)" />
         <button ref="tagAnchor" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="tagOpen = !tagOpen">
@@ -586,7 +730,7 @@ const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object
         </PopoverMenu>
       </div>
 
-      <div v-if="valueFields.length || type" class="mt-6">
+      <div v-if="(valueFields.length || type) && info?.kind !== 'snippet'" class="mt-6">
         <div v-if="showOwnDate" class="vasta-prop-row">
           <div class="vasta-prop-name">
             <AppIcon fallback="ph:calendar-blank" class="text-ink-faint" />
@@ -649,9 +793,17 @@ const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object
           <div v-else-if="def.kind === 'formula'" class="flex min-h-8 min-w-0 flex-1 items-center py-1 pl-3.5 pr-2" :title="formulaToNames(def.expression, type!, workspace.types)">
             <PropertyDisplay :def="def" :value="undefined" :object="object" wrap />
           </div>
+          <div v-else-if="fills[def.id] !== undefined" class="flex min-h-8 flex-1 items-center gap-1 pl-2">
+            <button class="rounded-md bg-violet-50 px-1.5 py-0.5 font-mono text-xs text-violet-700 ring-1 ring-violet-200 hover:brightness-95 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900" title="Edit placeholder" @click="setFill(def)" v-text="braced(fills[def.id]!)" />
+            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="A value instead" @click="clearFill(def)"><AppIcon fallback="ph:x" :size="13" /></button>
+          </div>
+          <div v-else-if="fillable(def)" class="group/fill flex min-w-0 flex-1 items-center">
+            <PropertyValueEditor :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
+            <button class="mr-1 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/fill:opacity-100 [@media(hover:none)]:opacity-100" title="Fill from a placeholder (date:+7d, me…)" @click="setFill(def)" v-text="braced(' ')" />
+          </div>
           <PropertyValueEditor v-else :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
         </div>
-        <ReverseRelations :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" />
+        <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" />
         <div class="mt-1 flex gap-3 text-xs text-ink-faint">
           <button v-if="hiddenCount" class="rounded px-1 py-1 hover:text-ink" @click="showAllFields = true">Show {{ hiddenCount }} empty properties</button>
           <button ref="addAnchor" class="flex items-center gap-1 rounded px-1 py-1 hover:text-ink" @click="addOpen = !addOpen">
@@ -721,16 +873,20 @@ const titlePlaceholder = computed(() => (object.value ? displayTitle({ ...object
           :text="textFields[field.id]"
           :object-id="object.id"
           :reveal="linkedBlock"
+          :template="!!info"
+          :cursor="cursorTarget"
           @change="setContent(field.id, $event)"
         />
       </div>
 
-      <ObjectComments v-if="!embedded && !day && !object.deletedAt && !isTagObject" :object="object" />
+      <ObjectComments v-if="!embedded && !day && !object.deletedAt && !isTagObject && !info" :object="object" />
 
       <TagPanel v-if="isTagObject && !embedded" :tag-id="object.id" />
 
-      <BacklinksPanel :object-id="object.id" :title="backlinksTitle" :hide-tagged="isTagObject" />
-      <ObjectActivity v-if="!embedded && !day" :object-id="object.id" :type="type" />
+      <template v-if="!info">
+        <BacklinksPanel :object-id="object.id" :title="backlinksTitle" :hide-tagged="isTagObject" />
+        <ObjectActivity v-if="!embedded && !day" :object-id="object.id" :type="type" />
+      </template>
     </div>
   </article>
 </template>

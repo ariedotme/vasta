@@ -15,7 +15,9 @@ export const USAGE = `vasta — your Vasta notes from the terminal (for you, scr
   vasta search <words…>             find objects
   vasta show <id|link>              an object, its text as Markdown
   vasta today [YYYY-MM-DD]          a day's note (today by default)
-  vasta new <type> <title…>         create an object; its text with --text (--text - reads stdin)
+  vasta new <type> <title…>         create an object; its text with --text (--text - reads stdin);
+                                    --template <name|blank> (the type's default otherwise)
+  vasta templates                   the space's templates and snippets, with their questions
   vasta append <id|today> [text…]   add Markdown to an object's text (or stdin)
   vasta set <id> name=value…        change properties (name= clears one); --title renames
   vasta capture <text…>             capture into today's note, like the quick capture
@@ -28,7 +30,7 @@ export const USAGE = `vasta — your Vasta notes from the terminal (for you, scr
   vasta tool <name> [json]          call any tool of the MCP endpoint
 
 Options: --space <name|id> (default: your capture space), --json, --limit N, --prop name=value
-(new), --field <text field>, --mode append|prepend|replace (append). Settings: $VASTA_URL and
+and --answer "Question=answer" (new), --field <text field>, --mode append|prepend|replace (append). Settings: $VASTA_URL and
 $VASTA_TOKEN, else ~/.config/vasta/cli.json (vasta login). Tokens: Settings › Capture tokens, scope api.`
 
 const OPERATORS = ['is', 'is-not', 'contains', 'not-contains', 'starts-with', 'is-empty', 'is-not-empty', 'is-checked', 'is-not-checked', 'gt', 'gte', 'lt', 'lte', 'before', 'after']
@@ -118,6 +120,8 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
       day: { type: 'string' },
       text: { type: 'string' },
       prop: { type: 'string', multiple: true },
+      template: { type: 'string' },
+      answer: { type: 'string', multiple: true },
       title: { type: 'string' },
       field: { type: 'string' },
       mode: { type: 'string' },
@@ -164,8 +168,20 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
         ...space,
         ...(values.prop?.length ? { properties: parseProps(values.prop) } : {}),
         ...(markdown.trim() ? { markdown } : {}),
+        ...(values.template ? { template: values.template } : {}),
+        ...(values.answer?.length ? { answers: Object.fromEntries(values.answer.map((a) => [a.slice(0, a.indexOf('=')).trim(), a.slice(a.indexOf('=') + 1).trim()])) } : {}),
       })
       return out(created, (o: Shown) => `Created ${o.title || o.type}: ${o.url}`)
+    }
+    case 'templates': {
+      type Listed = { name: string; kind: string; type?: string; default?: boolean; trigger?: string; asks: { label: string }[] }
+      return out(await call('list_templates', space), (list: Listed[]) =>
+        list.length
+          ? list
+              .map((t) => `${t.kind === 'snippet' ? 'snippet ' : `${t.type}: `}${t.name}${t.default ? ' (default)' : ''}${t.trigger ? ` /${t.trigger}` : ''}${t.asks.length ? ` — asks ${t.asks.map((a) => `“${a.label}”`).join(', ')}` : ''}`)
+              .join('\n')
+          : 'No templates.'
+      )
     }
     case 'append': {
       if (!rest[0]) throw new UsageError('vasta append <id|today> [text…]')

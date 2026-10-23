@@ -540,6 +540,8 @@ export class Store {
     if (!type || type.system || type.deletedAt) return false
     this.transaction(() => {
       for (const object of this.listObjects(id)) this.deleteObject(object.id, at)
+      // Its templates too, so restoring the type brings them back with its objects.
+      for (const template of this.listTemplates(type.spaceId)) if (template.typeId === id) this.deleteObject(template.id, at)
       this.putType({ ...type, deletedAt: at, updatedAt: at })
       const space = this.getSpace(type.spaceId)
       if (space) this.putSpace({ ...space, sidebar: space.sidebar.map((s) => ({ ...s, items: s.items.filter((i) => i !== id) })) })

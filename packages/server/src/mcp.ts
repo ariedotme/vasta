@@ -19,7 +19,9 @@ with nutrition_day, and fill in a food (from its label: nutrients per its base a
 with save_food. Person properties (kind "person", e.g. a task's Assignee) hold members of the
 space: set them by username or name, "me" for the user; get_object shows who made an object
 and who changed it last (createdBy, updatedBy). A space with sprints has a Sprint type (dates,
-goal) and tasks a Sprint field: set it by the sprint's title, or "current" for the one under way.`
+goal) and tasks a Sprint field: set it by the sprint's title, or "current" for the one under way.
+Types may have templates (list_templates): create_object starts from a type's default template,
+or the one named by "template", with its questions answered by "answers".`
 
 const space = z.string().optional().describe('Space id or name; the default space when omitted')
 const properties = z
@@ -51,6 +53,17 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'list_types',
     { title: 'List types', description: 'The types of objects in a space, with their properties (and select options) and how many objects each has.', inputSchema: { space }, annotations: READ },
     ({ space }) => run(() => tools.types(space))
+  )
+
+  server.registerTool(
+    'list_templates',
+    {
+      title: 'List templates',
+      description: "The space's templates (each of a type, the default marked) and snippets, with the questions they ask. create_object uses a type's default template unless told otherwise.",
+      inputSchema: { space },
+      annotations: READ,
+    },
+    ({ space }) => run(() => tools.templates(space))
   )
 
   server.registerTool(
@@ -219,8 +232,17 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'create_object',
     {
       title: 'Create object',
-      description: 'A new object of a type (name or id, e.g. "Page", "Task", "Book"), with a title, properties and text in Markdown. Returns it like get_object.',
-      inputSchema: { type: z.string(), title: z.string().optional(), space, properties, markdown: z.string().optional().describe('Its text, in Markdown') },
+      description:
+        'A new object of a type (name or id, e.g. "Page", "Task", "Book"), with a title, properties and text in Markdown. It starts from the type\'s default template, or the one "template" names ("blank" for none; list_templates lists them and their questions, answered by "answers"); what you give wins over the template. Returns it like get_object.',
+      inputSchema: {
+        type: z.string(),
+        title: z.string().optional(),
+        space,
+        properties,
+        markdown: z.string().optional().describe('Its text, in Markdown (after the template\'s)'),
+        template: z.string().optional().describe('A template of the type by name, or "blank"'),
+        answers: z.record(z.string(), z.string()).optional().describe("Answers to the template's questions, by question"),
+      },
       annotations: WRITE,
     },
     (input) => run(() => tools.createObject(strip(input)))

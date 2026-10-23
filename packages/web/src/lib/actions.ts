@@ -8,6 +8,7 @@ import { session } from './session.ts'
 import { forgetSummary, loadWorkspace, notice, primeFromObject, refreshCounts, replaceType, summaryOf, systemType, typesById, workspace } from './state.ts'
 import { typedLine, type CompletionSource } from './typed-line.ts'
 import { people } from './people.ts'
+import { loadTemplates, templates } from './templates.ts'
 import { router } from '../router.ts'
 
 /** With `line`, the title and properties are read from it, e.g. `Dune author:"Frank Herbert"`. */
@@ -38,10 +39,12 @@ export async function typesOf(space: Space): Promise<ObjectType[]> {
 
 /** Where completions of a typed line look (lib/typed-line.ts): a space's objects, on the replica or the server. */
 export function completionSource(spaceId: Id, types: ObjectType[]): CompletionSource {
+  if (spaceId === workspace.space?.id) void loadTemplates()
   return {
     types,
     today: dayKey(),
     people: spaceId === workspace.space?.id ? people.list : [],
+    templates: () => (spaceId === templates.spaceId ? templates.list : []),
     objects: async (typeIds, text) => {
       if (text.trim()) {
         const found = await api.search(spaceId, text, 50)

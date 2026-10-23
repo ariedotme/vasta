@@ -449,7 +449,7 @@ export type DocNodeType =
   | 'objectEmbed'    // block-level object; attrs: { objectId: Id, display: 'inline' | 'card' | 'wide-card' | 'embed' | 'image' }
   | 'unsupported'    // block we could not convert; attrs: { source: string, raw: unknown }
   // Only in templates and snippets (templates.ts):
-  | 'placeholder'    // inline `{{…}}`; attrs: { value: string }
+  | 'templatePlaceholder' // inline `{{…}}`; attrs: { value: string }
   | 'templateIf' | 'templateBranch' // blocks kept when a condition holds; branch attrs: { condition: string | null }
 
 /**

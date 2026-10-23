@@ -47,7 +47,8 @@ Code and Codex).
 | `get_daily_note` | A day's note (today by default, in the user's time zone), made if missing |
 | `query` | Objects of some types, filtered and sorted like a query in the app |
 | `list_inbox` | Items captured lately (Telegram, quick capture, agents…) |
-| `create_object` | A new object of a type, with properties and Markdown text |
+| `list_templates` | The space's templates (by type, the default marked) and snippets, with the questions they ask |
+| `create_object` | A new object of a type, with properties and Markdown text; it starts from the type's default template, or `template` by name (`"blank"`: none), its questions answered by `answers` |
 | `update_object` | Title, properties (null clears one) and text: append (default), prepend or replace |
 | `capture` | A note into today's daily note, like the quick capture (channel "agent") |
 | `list_habits` | The habits: done on a day (today by default; the amount for daily goals), weekdays, streaks, rates, the last days |
@@ -66,7 +67,8 @@ properties are computed: `get_object` shows their values, `query` filters and so
 setting one is refused. `get_object` also says who made the object and who changed it last
 (`createdBy`, `updatedBy`, "Name (username)"); `query` filters on them and on person properties
 ("Assignee contains me"). In a space with sprints, a task's sprint is set by the sprint's title,
-or "current" for the one whose dates hold today. `get_object` on a food adds `nutrition` (per 100 g, portions, brand), on a
+or "current" for the one whose dates hold today. Templates ([data-model.md](data-model.md#templates-and-snippets))
+never show in `search`, `query` or the other listings, only in `list_templates`. `get_object` on a food adds `nutrition` (per 100 g, portions, brand), on a
 recipe its ingredients and what it comes to; so an agent can log a plate from a photo with
 `log_food`, or fill a food from its label with `save_food`, without the app holding LLM keys. Results are
 JSON; objects carry a `url` to open them in the app (`VASTA_WEB_URL`, else the request's address).
@@ -106,6 +108,8 @@ vasta search dune
 vasta show <id or link>                    # properties and text as Markdown
 vasta today                                # today's note (vasta today 2026-10-18 for another day)
 vasta new Book Dune --prop author="Frank Herbert" --prop rating=5 --text "Spice."
+vasta new Task "Login breaks" --template Bug --answer "Who saw it?=Lena"
+vasta templates                            # templates and snippets, with their questions
 echo "- read chapter 3" | vasta append today
 vasta set <id> status=done --title "Done it"
 vasta capture "call the dentist"

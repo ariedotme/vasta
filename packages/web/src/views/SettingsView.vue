@@ -10,6 +10,7 @@ import DesktopSettings from '../components/settings/DesktopSettings.vue'
 import DeviceSettings from '../components/settings/DeviceSettings.vue'
 import InboxSettings from '../components/settings/InboxSettings.vue'
 import NutritionSettings from '../components/settings/NutritionSettings.vue'
+import SnippetSettings from '../components/settings/SnippetSettings.vue'
 import SprintSettings from '../components/settings/SprintSettings.vue'
 import ReminderSettings from '../components/settings/ReminderSettings.vue'
 import ServerAccountsSettings from '../components/settings/ServerAccountsSettings.vue'
@@ -84,6 +85,7 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
       <AccountSettings />
       <SpaceSettings />
       <ServerAccountsSettings />
+      <SnippetSettings />
       <SprintSettings />
       <InboxSettings />
       <NutritionSettings />

@@ -8,6 +8,7 @@ import { promptDialog } from '../lib/overlays.ts'
 const props = defineProps(nodeViewProps)
 const value = computed(() => String(props.node.attrs.value ?? ''))
 const known = computed(() => !!parsePlaceholder(value.value))
+const braced = computed(() => `{{${value.value}}}`)
 
 async function edit() {
   if (!props.editor.isEditable) return
@@ -30,5 +31,6 @@ async function edit() {
     :title="known ? 'Replaced when an object is made from this template' : 'Not a placeholder Vasta knows'"
     data-placeholder-chip
     @click="edit"
-  >{{ `{{${value}}}` }}</NodeViewWrapper>
+    >{{ braced }}</NodeViewWrapper
+  >
 </template>

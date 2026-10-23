@@ -15,6 +15,8 @@ import ColorPicker from './ColorPicker.vue'
 import IconPicker from './IconPicker.vue'
 import ModalDialog from './ModalDialog.vue'
 import PopoverMenu from './PopoverMenu.vue'
+import TypeTemplates from './TypeTemplates.vue'
+import { useRouter } from 'vue-router'
 
 const props = defineProps<{ type: ObjectType }>()
 const emit = defineEmits<{ close: [] }>()
@@ -172,6 +174,14 @@ async function close() {
   if (dirty.value && !(await confirmDialog({ title: 'Discard your changes to this type?', confirmLabel: 'Discard', danger: true }))) return
   emit('close')
 }
+
+const router = useRouter()
+/** Leave the settings for a template's page (or for a new one, `path` empty). */
+async function leave(path: string) {
+  if (dirty.value && !(await confirmDialog({ title: 'Discard your changes to this type?', confirmLabel: 'Discard', danger: true }))) return
+  emit('close')
+  if (path) await router.push(path)
+}
 </script>
 
 <template>
@@ -214,6 +224,8 @@ async function close() {
       <div class="mb-1.5 text-xs text-ink-faint">Color</div>
       <ColorPicker :color="draft.color" @pick="setColor" />
     </section>
+
+    <TypeTemplates :type="type" @leave="leave" />
 
     <!-- Properties -->
     <section class="mt-6">

@@ -14,6 +14,7 @@ import { isDesktop } from '../lib/platform.ts'
 import { meId, people } from '../lib/people.ts'
 import { notice, ui } from '../lib/state.ts'
 import { previewLine, typedLine, type Completion } from '../lib/typed-line.ts'
+import { templates } from '../lib/templates.ts'
 import { useCompletions } from '../lib/use-completions.ts'
 import AppIcon from './AppIcon.vue'
 import ModalDialog from './ModalDialog.vue'
@@ -41,7 +42,7 @@ const readCursor = () => (cursor.value = field.value?.selectionStart ?? text.val
 watch(text, () => nextTick(readCursor))
 
 const typed = computed(() => typedLine(types.value, text.value))
-const preview = computed(() => (typed.value ? previewLine(typed.value.type, typed.value.rest, dayKey(), people.list, meId()) : undefined))
+const preview = computed(() => (typed.value ? previewLine(typed.value.type, typed.value.rest, dayKey(), people.list, meId(), space.value?.id === templates.spaceId ? templates.list : []) : undefined))
 
 // A line of food: what it will log, against the space's foods (loaded once one is typed).
 const eaten = computed(() => foodCommand(text.value))
@@ -147,6 +148,7 @@ function onKey(event: KeyboardEvent) {
       <p>
         <span class="text-ink-soft">New {{ typed.type.name }}</span>
         <template v-if="preview.title"> “{{ preview.title }}”</template>
+        <template v-if="preview.template"> · from {{ preview.template }}</template>
         <template v-if="preview.parts.length"> · {{ preview.parts.join(', ') }}</template>
         <span>, in today’s note in {{ space?.name }}.</span>
       </p>

@@ -92,7 +92,7 @@ export function templateAsks(template: ObjectRecord): TemplateAsk[] {
   if (template.template?.kind === 'template') for (const fill of Object.values(template.template.fills ?? {})) fromPlaceholder(fill)
   const visit = (nodes: DocNode[] | undefined) => {
     for (const node of nodes ?? []) {
-      if (node.type === 'placeholder') fromPlaceholder(String(node.attrs?.value ?? ''))
+      if (node.type === 'templatePlaceholder') fromPlaceholder(String(node.attrs?.value ?? ''))
       if (node.type === 'templateBranch' && typeof node.attrs?.condition === 'string') for (const label of formulaAsks(node.attrs.condition)) add(label)
       if (node.type === 'text' && node.text) fromText(node.text)
       visit(node.content)
@@ -285,6 +285,9 @@ function resolver(context: TemplateContext, type: ObjectType, subject: () => For
   return { placeholder, text: (text) => text.replace(PLACEHOLDER_TEXT, (_, value: string) => asText(value)), formula }
 }
 
+/** A deep copy of JSON data (structuredClone refuses the app's reactive proxies). */
+const copyJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
 
 /** A property value from a fill (`date:+7d`, `me`, `ask:Kind`), for the kind of property it fills. */
@@ -360,7 +363,7 @@ function resolveInline(nodes: DocNode[], state: DocResolution, block: DocNode): 
   const out: DocNode[] = []
   let offset = 0
   for (const node of nodes) {
-    if (node.type === 'placeholder') {
+    if (node.type === 'templatePlaceholder') {
       const value = String(node.attrs?.value ?? '')
       const resolved = state.resolve.placeholder(value)
       const marks = node.marks?.length ? { marks: node.marks } : {}
@@ -416,8 +419,8 @@ function resolveBlocks(nodes: DocNode[], state: DocResolution): DocNode[] {
       continue
     }
     // `{{selection}}` alone in a paragraph takes the selected blocks whole.
-    if (node.type === 'paragraph' && node.content?.length === 1 && node.content[0]!.type === 'placeholder' && parsePlaceholder(String(node.content[0]!.attrs?.value ?? ''))?.name === 'selection') {
-      if (state.selection?.length) out.push(...resolveBlocks(structuredClone(state.selection), { ...state, resolve: { ...state.resolve, text: (t) => t } }))
+    if (node.type === 'paragraph' && node.content?.length === 1 && node.content[0]!.type === 'templatePlaceholder' && parsePlaceholder(String(node.content[0]!.attrs?.value ?? ''))?.name === 'selection') {
+      if (state.selection?.length) out.push(...resolveBlocks(copyJson(state.selection), { ...state, resolve: { ...state.resolve, text: (t) => t } }))
       continue
     }
     const copy: DocNode = { ...node }
@@ -427,7 +430,7 @@ function resolveBlocks(nodes: DocNode[], state: DocResolution): DocNode[] {
       if (!Object.keys(copy.attrs).length) delete copy.attrs
     }
     if (node.content) {
-      const inline = node.content.some((child) => child.type === 'text' || child.type === 'placeholder' || child.type === 'mention' || child.type === 'hardBreak')
+      const inline = node.content.some((child) => child.type === 'text' || child.type === 'templatePlaceholder' || child.type === 'mention' || child.type === 'hardBreak')
       copy.content = inline ? resolveInline(node.content, state, copy) : resolveBlocks(node.content, state)
       // A container left empty by its conditions still needs a block.
       if (!inline && !copy.content.length) copy.content = [{ type: 'paragraph' }]
@@ -440,7 +443,7 @@ function resolveBlocks(nodes: DocNode[], state: DocResolution): DocNode[] {
 /** The props of a template that are values of its type's properties (not comments or food entries). */
 function ownProps(template: ObjectRecord, type: ObjectType): Record<Id, PropertyValue> {
   const ids = new Set(type.properties.map((p) => p.id))
-  return Object.fromEntries(Object.entries(structuredClone(template.props)).filter(([id]) => ids.has(id)))
+  return Object.fromEntries(Object.entries(copyJson(template.props)).filter(([id]) => ids.has(id)))
 }
 
 /**
@@ -522,7 +525,7 @@ export function templateFromObject(source: ObjectRecord, type: ObjectType, name:
       if (node.content) copy.content = strip(node.content)
       return copy
     })
-  for (const [field, doc] of Object.entries(source.content)) content[field] = { type: 'doc', content: strip(structuredClone(doc.content)) }
+  for (const [field, doc] of Object.entries(source.content)) content[field] = { type: 'doc', content: strip(copyJson(doc.content)) }
   return {
     id,
     spaceId: source.spaceId,

@@ -7,6 +7,11 @@ import type { DateValue, Doc, Filter, FilterOperator, FormulaValue, Id, ObjectRe
 import {
   BODY_PROPERTY_ID,
   addDays,
+  applyTemplate,
+  defaultTemplate,
+  findTemplate,
+  templateAsks,
+  typeTemplates,
   builtinTypeId,
   CommentError,
   addComment,
@@ -335,13 +340,56 @@ export class AgentTools {
     return def.id
   }
 
-  createObject(input: { type: string; title?: string; space?: string; properties?: Record<string, unknown>; markdown?: string }) {
+  /** The space's templates (by type) and snippets, with the questions each asks. */
+  templates(spaceQuery?: string) {
+    const space = this.space(spaceQuery)
+    const typeNames = new Map(this.store.listTypes(space.id).map((t) => [t.id, t.name]))
+    return this.store.listTemplates(space.id).map((t) => ({
+      id: t.id,
+      name: t.template!.name,
+      kind: t.template!.kind,
+      ...(t.template!.kind === 'template' ? { type: typeNames.get(t.typeId) ?? '', ...(t.template!.default ? { default: true } : {}) } : {}),
+      ...(t.template!.kind === 'snippet' && t.template!.trigger ? { trigger: t.template!.trigger } : {}),
+      asks: templateAsks(t),
+    }))
+  }
+
+  /**
+   * A new object. It starts from the type's default template, or the one `template` names
+   * ("blank" for none), its questions answered by `answers`; the given title, properties and
+   * Markdown win over the template's (the Markdown goes after its text).
+   */
+  createObject(input: { type: string; title?: string; space?: string; properties?: Record<string, unknown>; markdown?: string; template?: string; answers?: Record<string, string> }) {
     const space = this.space(input.space)
     const type = this.type(space.id, input.type)
     if (type.system === 'daily-note') throw new AgentError('daily notes are made by get_daily_note')
-    const { props, related } = this.props(type, input.properties ?? {})
-    const content = input.markdown?.trim() ? { [this.textField(type)]: this.doc(input.markdown) } : {}
-    const object = newObject(type, { title: input.title?.trim() ?? '', props, content }, randomUUID(), this.options.now())
+    const { props: given, related } = this.props(type, input.properties ?? {})
+    const templates = this.store.listTemplates(space.id)
+    const wanted = input.template?.trim()
+    const template = wanted?.toLowerCase() === 'blank' ? undefined : wanted ? findTemplate(templates, type.id, wanted) : defaultTemplate(templates, type.id)
+    if (wanted && wanted.toLowerCase() !== 'blank' && !template) {
+      const names = typeTemplates(templates, type.id).map((t) => t.template!.name)
+      throw new AgentError(`${type.name} has no template “${wanted}”${names.length ? ` (it has ${names.join(', ')})` : ''}`)
+    }
+    const at = this.options.now()
+    const made = template
+      ? applyTemplate(template, type, {
+          at,
+          today: this.captures.today(),
+          timeZone: this.captures.timeZone,
+          ...(input.title?.trim() ? { title: input.title.trim() } : {}),
+          me: this.options.user.id,
+          people: this.store.people(space.id),
+          answers: input.answers ?? {},
+          types: new Map(this.store.listTypes(space.id).map((t) => [t.id, t])),
+        })
+      : undefined
+    const field = this.textField(type)
+    const content = { ...made?.content }
+    if (input.markdown?.trim()) content[field] = { type: 'doc' as const, content: [...(content[field]?.content ?? []), ...this.doc(input.markdown).content] }
+    const props = { ...made?.props, ...given }
+    const extra = template ? { tagIds: [...template.tagIds], ...(template.icon ? { icon: template.icon } : {}) } : {}
+    const object = newObject(type, { ...extra, title: made?.title ?? input.title?.trim() ?? '', props, content }, randomUUID(), at)
     const stored = this.store.transaction(() => {
       for (const other of related) this.store.putObject(other)
       return this.store.putObject(object)

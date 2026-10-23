@@ -138,14 +138,14 @@ export const Mention = Node.create({
  * one replaces them.
  */
 export const TemplatePlaceholder = Node.create({
-  name: 'placeholder',
+  name: 'templatePlaceholder',
   group: 'inline',
   inline: true,
   atom: true,
   selectable: true,
   addAttributes: () => ({ value: { default: '', parseHTML: (el) => el.getAttribute('data-value') ?? '', renderHTML: (a) => ({ 'data-value': a.value }) } }),
-  parseHTML: () => [{ tag: 'span[data-type="placeholder"]' }],
-  renderHTML: ({ node, HTMLAttributes }) => ['span', mergeAttributes(HTMLAttributes, { 'data-type': 'placeholder' }), `{{${node.attrs.value}}}`],
+  parseHTML: () => [{ tag: 'span[data-type="template-placeholder"]' }],
+  renderHTML: ({ node, HTMLAttributes }) => ['span', mergeAttributes(HTMLAttributes, { 'data-type': 'template-placeholder' }), `{{${node.attrs.value}}}`],
   renderText: ({ node }) => `{{${node.attrs.value}}}`,
 })
 

@@ -13,7 +13,7 @@ import HabitBoard from '../components/HabitBoard.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
-import { createObject, deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu } from '../lib/actions.ts'
+import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
@@ -24,6 +24,7 @@ import { groupOptions, queryContext } from '../lib/query.ts'
 import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
+import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -347,6 +348,36 @@ function setGroup(field: string) {
 }
 
 const currentLayout = computed(() => layouts.find((l) => l.layout === view.value.layout) ?? layouts[0]!)
+
+// New: from the type's default template (lib/templates.ts); the chevron picks another, or none.
+const typeTemplates = computed(() => (type.value ? templatesOf(type.value.id) : []))
+const defaultTemplate = computed(() => typeTemplates.value.find((t) => t.template?.kind === 'template' && t.template.default))
+
+async function createNew() {
+  const t = type.value
+  if (!t) return
+  await currentTemplates()
+  void createFromTemplate(t, defaultTemplate.value)
+}
+
+async function newMenu(event: MouseEvent) {
+  if (!type.value) return
+  const t = type.value
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  await loadTemplates()
+  openMenuAt(rect.right - 224, rect.bottom + 4, [
+    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: () => createFromTemplate(t, undefined) },
+    ...typeTemplates.value.map((template) => ({
+      label: template.template!.name,
+      icon: template === defaultTemplate.value ? 'ph:star-fill' : 'ph:copy-simple',
+      ...(template === defaultTemplate.value ? { hint: 'Default' } : {}),
+      run: () => createFromTemplate(t, template),
+    })),
+    { kind: 'separator' as const },
+    { label: 'New template…', icon: 'ph:plus', run: () => newTemplate(t) },
+    { label: 'Manage templates…', icon: 'ph:gear-six', run: () => (settingsOpen.value = true) },
+  ])
+}
 </script>
 
 <template>
@@ -360,9 +391,14 @@ const currentLayout = computed(() => layouts.find((l) => l.layout === view.value
       <button ref="menuAnchor" class="ml-auto rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink" title="More" @click="menuOpen = !menuOpen">
         <AppIcon fallback="ph:dots-three" :size="18" />
       </button>
-      <button class="flex shrink-0 items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90" :title="`New ${type.name}`" @click="createObject(type.id)">
-        <AppIcon fallback="ph:plus" /> <span class="max-sm:hidden">New {{ type.name }}</span>
-      </button>
+      <div class="flex shrink-0 items-stretch rounded-lg bg-ink text-sm font-medium text-surface" data-new-split>
+        <button class="flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 hover:opacity-90" :title="defaultTemplate ? `New ${type.name} from “${defaultTemplate.template!.name}”` : `New ${type.name}`" @click="createNew">
+          <AppIcon fallback="ph:plus" /> <span class="max-sm:hidden">New {{ type.name }}</span>
+        </button>
+        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90" title="Templates" aria-label="New from a template" @click="newMenu">
+          <AppIcon fallback="ph:caret-down" :size="13" />
+        </button>
+      </div>
     </header>
     <PopoverMenu v-model:open="menuOpen" :anchor="menuAnchor" placement="bottom-end" width="15rem">
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="(settingsOpen = true), (menuOpen = false)">

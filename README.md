@@ -119,6 +119,9 @@ calendars with their iCal links.
   notes with a token. Vasta keeps no AI keys. [Agents →](docs/agents.md)
 - **Block editor**: slash commands, `@` mentions, embeds, callouts, toggles, columns, tables and
   backlinks.
+- **Templates and snippets**: start a type's objects or each day's note from a template, with
+  placeholders (`{{date:+7d}}`, `{{ask:With whom?}}`) and blocks shown only when a condition
+  holds; insert snippets with `/`. [Templates →](docs/data-model.md#templates-and-snippets)
 - **Saved links** keep a preview, a readable copy of the page and embeds.
 - **Habits and reminders** through ntfy, Telegram and the desktop app. [Reminders →](docs/reminders.md)
 - **A food diary** with nutrition goals, if you turn it on.

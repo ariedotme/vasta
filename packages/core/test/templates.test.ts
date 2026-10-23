@@ -15,7 +15,7 @@ const task = types.find((t) => t.system === 'task')!
 const page = types.find((t) => t.system === 'page')!
 const daily = types.find((t) => t.system === 'daily-note')!
 const text = (value: string, marks?: DocNode['marks']): DocNode => ({ type: 'text', text: value, ...(marks ? { marks } : {}) })
-const chip = (value: string): DocNode => ({ type: 'placeholder', attrs: { value } })
+const chip = (value: string): DocNode => ({ type: 'templatePlaceholder', attrs: { value } })
 const paragraph = (...content: DocNode[]): DocNode => ({ type: 'paragraph', attrs: { id: 'p' + Math.random().toString(36).slice(2, 6) }, content })
 const doc = (...content: DocNode[]): Doc => ({ type: 'doc', content })
 const branch = (condition: string | null, ...content: DocNode[]): DocNode => ({ type: 'templateBranch', attrs: { condition }, content })

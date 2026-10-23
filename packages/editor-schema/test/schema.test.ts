@@ -47,7 +47,7 @@ const everything = normalizeDoc({
     { type: 'codeBlock', attrs: { language: 'ts' }, content: [text('let x = 1')] },
     { type: 'horizontalRule' },
     { type: 'unsupported', attrs: { source: 'capacities:chart', raw: { kind: 'chart', data: [1, 2] } } },
-    { type: 'templateIf', content: [{ type: 'templateBranch', attrs: { condition: 'weekday(date) = 1' }, content: [paragraph(text('Monday: '), { type: 'placeholder', attrs: { value: 'date:+7d' } })] }, { type: 'templateBranch', content: [paragraph()] }] },
+    { type: 'templateIf', content: [{ type: 'templateBranch', attrs: { condition: 'weekday(date) = 1' }, content: [paragraph(text('Monday: '), { type: 'templatePlaceholder', attrs: { value: 'date:+7d' } })] }, { type: 'templateBranch', content: [paragraph()] }] },
     paragraph(),
   ],
 })
@@ -58,6 +58,9 @@ describe('editor schema', () => {
     const web = '../../web/src/editor/extensions.ts'
     const { createExtensions } = (await import(/* @vite-ignore */ web)) as { createExtensions: (placeholder: string) => AnyExtension[] }
     expect(describeSchema(getSchema(createExtensions('placeholder')))).toEqual(describeSchema(vastaSchema()))
+    // Two extensions of one name: TipTap keeps one of them, and the other is gone without a word.
+    const names = createExtensions('placeholder').map((e) => e.name)
+    expect(names.filter((name, i) => names.indexOf(name) !== i)).toEqual([])
   })
 
   it('round-trips every node and mark through Yjs unchanged', () => {

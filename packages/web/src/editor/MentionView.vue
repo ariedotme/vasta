@@ -6,6 +6,7 @@ import AppIcon from '../components/AppIcon.vue'
 import { iconTextClasses } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
+import { openDay } from '../lib/actions.ts'
 
 const props = defineProps(nodeViewProps)
 const router = useRouter()
@@ -16,14 +17,19 @@ const label = computed(() => (summary.value ? displayTitle(summary.value, type.v
 /** A mention of one block opens the object at that block. */
 const blockId = computed(() => props.node.attrs.blockId as string | null)
 const blockLabel = computed(() => props.node.attrs.blockLabel as string | null)
-const open = () => router.push(blockId.value ? `/o/${objectId.value}#b-${blockId.value}` : `/o/${objectId.value}`)
+/** A day's note that may not exist yet (a template's {{yesterday}}): its id ends with the day. */
+const day = computed(() => (/^daily-.+-(\d{4}-\d{2}-\d{2})$/.exec(objectId.value) ?? [])[1])
+function open() {
+  if (!summary.value && day.value) return void openDay(day.value)
+  void router.push(blockId.value ? `/o/${objectId.value}#b-${blockId.value}` : `/o/${objectId.value}`)
+}
 </script>
 
 <template>
   <NodeViewWrapper
     as="span"
     class="mx-px inline-flex cursor-pointer items-baseline gap-1 rounded-md px-1 align-baseline font-medium underline decoration-line-strong decoration-1 underline-offset-[3px] hover:bg-hover"
-    :class="!summary ? 'text-ink-faint' : ''"
+    :class="!summary && !day ? 'text-ink-faint' : ''"
     contenteditable="false"
     @click="open"
   >

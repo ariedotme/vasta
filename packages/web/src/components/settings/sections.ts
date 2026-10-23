@@ -8,6 +8,7 @@ export const SECTIONS = [
   { id: 'account', label: 'Account', icon: 'ph:user-circle' },
   { id: 'space', label: 'Space', icon: 'ph:planet' },
   { id: 'server', label: 'Server accounts', icon: 'ph:users-three' },
+  { id: 'snippets', label: 'Snippets', icon: 'ph:brackets-curly' },
   { id: 'sprints', label: 'Sprints', icon: 'ph:flag-banner' },
   { id: 'inbox', label: 'Inbox', icon: 'ph:tray' },
   { id: 'nutrition', label: 'Food tracking', icon: 'ph:bowl-food' },

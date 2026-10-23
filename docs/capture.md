@@ -100,6 +100,11 @@ local replica, so it works offline too):
 - **A task's sprint**: a sprint's title, or `current` for the sprint whose dates hold today.
 - **Number** (`4,5` or `4.5`), **checkbox** (`yes`/`no`), **text** and **URL** as is.
 - A value that cannot be read (`due:31/02`) stays in the title and the reply says so.
+- **Templates** ([data-model.md](data-model.md#templates-and-snippets)): the type's default template
+  gives what the line does not (the line's properties win, its other lines go after the template's
+  text). `/task:Bug Login breaks` picks the template Bug instead (`:"Weekly review"` for a name with
+  spaces). A `key:value` whose key starts a template's question and names no property answers it:
+  `with:lena` answers "With whom?". Questions without an answer stay empty.
 
 Saved messages get a 👍 reaction. The polling position is stored in the database, so a restart
 does not save messages twice. Only one process can poll a bot: use a second bot (in
@@ -230,7 +235,8 @@ list.
 The palette takes the same syntax to create an object without a daily-note entry: `/` lists the
 types (and a relation's or select's `name:` its values, as above), and `/Livro Duna nota:5` shows
 "Create “Duna”" with what the line sets; Enter creates and opens it. It is `POST /api/objects` with `line` (or `ClientStore.createObject` with a line on the
-replica).
+replica). After `/Task:` it lists the type's templates (Tab picks one), and the preview says which
+template the object starts from.
 
 ## Food
 
