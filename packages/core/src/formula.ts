@@ -24,7 +24,23 @@ export type FormulaKind = 'number' | 'text' | 'checkbox' | 'date' | 'list'
 /** An object a formula runs on: summaries and full records both do. */
 export type FormulaSubject = Omit<ObjectSummary, 'preview'>
 
-export type FormulaContext = Pick<QueryContext, 'types' | 'related' | 'today' | 'timeZone' | 'personName'>
+export type FormulaContext = Pick<QueryContext, 'types' | 'related' | 'today' | 'timeZone' | 'personName'> & {
+  /** Set where a template is applied (templates.ts): its variables and the functions ask, has and prop. */
+  template?: TemplateScope
+}
+
+/**
+ * What formulas read in templates: `date` (the object's date, else today), `me`, `type` and
+ * `title` as variables, `ask("With whom?")` for an answer, `has("Due")` for whether the type has a
+ * property, and `prop("Status")` for a property's value by name.
+ */
+export interface TemplateScope {
+  variables: Record<string, FormulaValue>
+  answer: (label: string) => string
+}
+
+/** The variables of templates (TemplateScope). */
+export const TEMPLATE_VARIABLES = ['date', 'me', 'type', 'title']
 
 export class FormulaError extends Error {}
 
@@ -49,6 +65,8 @@ export type FormulaNode =
   | { kind: 'text'; value: string }
   | { kind: 'boolean'; value: boolean }
   | { kind: 'field'; field: string }
+  /** A template's variable (TEMPLATE_VARIABLES). */
+  | { kind: 'variable'; name: string }
   | { kind: 'call'; name: string; args: FormulaNode[] }
   | { kind: 'unary'; operator: '-' | 'not'; operand: FormulaNode }
   | { kind: 'binary'; operator: BinaryOperator; left: FormulaNode; right: FormulaNode }
@@ -150,6 +168,7 @@ export function parseFormula(source: string): FormulaNode {
       case 'name': {
         const name = token.value.toLowerCase()
         if (name === 'true' || name === 'false') return { kind: 'boolean', value: name === 'true' }
+        if (TEMPLATE_VARIABLES.includes(name) && !isSymbol('(')) return { kind: 'variable', name }
         const fn = FUNCTIONS[name]
         if (!fn) throw new FormulaError(isSymbol('(') ? `Unknown function “${token.value}”` : `Unexpected “${token.value}” (fields go in braces: {${token.value}})`)
         expect('(')
@@ -649,6 +668,10 @@ function evaluate(node: FormulaNode, object: FormulaSubject, scope: Scope): Form
       if (value.kind === 'error') throw new FormulaError(value.message)
       return value
     }
+    case 'variable': {
+      if (!context.template) throw new FormulaError(`“${node.name}” is only known in templates`)
+      return context.template.variables[node.name] ?? EMPTY
+    }
     case 'unary': {
       const value = evaluate(node.operand, object, scope)
       if (node.operator === 'not') return { kind: 'checkbox', value: !truthy(value) }
@@ -683,10 +706,23 @@ function evaluate(node: FormulaNode, object: FormulaSubject, scope: Scope): Form
     }
     case 'call': {
       const fn = FUNCTIONS[node.name]!
+      if (fn.template) {
+        if (!context.template) throw new FormulaError(`${node.name}() is only known in templates`)
+        const name = formulaText(single(evaluate(node.args[0]!, object, scope), `${node.name}()`), context.timeZone)
+        return fn.template(name, object, scope)
+      }
       if (fn.lazy) return fn.lazy(node.args, (arg) => evaluate(arg, object, scope))
       return fn.run!(node.args.map((arg) => evaluate(arg, object, scope)), context)
     }
   }
+}
+
+/** A property of the object's type by name (case and accents ignored), or a built-in field by its name. */
+function fieldByName(object: FormulaSubject, name: string, scope: Scope): string | undefined {
+  const wanted = fold(name)
+  const def = scope.context.types.get(object.typeId)?.properties.find((p) => p.kind !== 'rich-text' && fold(p.name) === wanted)
+  if (def) return def.id
+  return Object.entries(FORMULA_BUILTIN_FIELDS).find(([id, label]) => fold(label) === wanted || id === name)?.[0]
 }
 
 // ---------------------------------------------------------------------------
@@ -706,6 +742,8 @@ interface FormulaFunction {
   run?: (args: FormulaValue[], context: FormulaContext) => FormulaValue
   /** For functions that only compute some arguments (if). */
   lazy?: (args: FormulaNode[], evaluate: (node: FormulaNode) => FormulaValue) => FormulaValue
+  /** For template functions (TemplateScope), given their one argument as text. */
+  template?: (name: string, object: FormulaSubject, scope: Scope) => FormulaValue
 }
 
 const numeric = (name: string, op: (x: number) => number): FormulaFunction => ({
@@ -920,6 +958,33 @@ const FUNCTIONS: Record<string, FormulaFunction> = {
       return { kind: 'date', value: { start: date.end ?? date.start, resolution: date.resolution } }
     },
   },
+  ask: {
+    min: 1,
+    max: 1,
+    usage: 'ask("With whom?")',
+    description: 'In templates: the answer to a question asked when the object is made',
+    result: 'text',
+    template: (label, _object, scope) => text(scope.context.template!.answer(label)),
+  },
+  has: {
+    min: 1,
+    max: 1,
+    usage: 'has("Due")',
+    description: 'In templates: whether the object’s type has a property of that name',
+    result: 'checkbox',
+    template: (name, object, scope) => ({ kind: 'checkbox', value: fieldByName(object, name, scope) !== undefined }),
+  },
+  prop: {
+    min: 1,
+    max: 1,
+    usage: 'prop("Status")',
+    description: 'In templates: the value of a property, by its name',
+    result: 'text',
+    template: (name, object, scope) => {
+      const field = fieldByName(object, name, scope)
+      return field ? readField(object, field, scope) : EMPTY
+    },
+  },
 }
 
 /** The functions, for help in the app and for agents. */
@@ -990,6 +1055,8 @@ function kindOf(node: FormulaNode, type: ObjectType | undefined, types: ObjectTy
       const resolved = resolveId(node.field, type, types)
       return resolved ? kindOfResolved(resolved, types, visiting) : undefined
     }
+    case 'variable':
+      return node.name === 'date' ? 'date' : 'text'
     case 'unary':
       return node.operator === 'not' ? 'checkbox' : 'number'
     case 'binary': {

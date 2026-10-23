@@ -292,6 +292,45 @@ describe('local replica', () => {
     second.close()
   })
 
+  it('gives a day one copy of its template when two devices and the server make its note apart', async () => {
+    const { user, phone, laptop } = setup()
+    const body: DocNode[] = [
+      { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Plan for {{date|dddd}}' }] },
+      { type: 'templateIf', content: [{ type: 'templateBranch', attrs: { condition: 'weekday(date) = 1' }, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Weekly review' }] }] }] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Yesterday: ' }, { type: 'placeholder', attrs: { value: 'yesterday' } }] },
+    ]
+    const made = await user.request('/api/objects', json({ typeId: builtinTypeId('s', 'daily-note'), title: '', content: { body: { type: 'doc', content: body } }, template: { kind: 'template', name: 'Day', default: true } }))
+    expect(made.status).toBe(201)
+    await phone.sync.sync()
+    await laptop.sync.sync()
+    phone.online = laptop.online = false
+    const append = (device: Device, id: string, word: string) => {
+      const editor = device.edit(id)
+      const p = new Y.XmlElement('paragraph')
+      p.insert(0, [new Y.XmlText(word)])
+      editor.doc.getXmlFragment(BODY_PROPERTY_ID).push([p])
+      return editor
+    }
+    const a = append(phone, phone.store.dailyNote('s', '2026-11-02', now()).id, 'Phone')
+    const b = append(laptop, laptop.store.dailyNote('s', '2026-11-02', now()).id, 'Laptop')
+    expect(a.text().slice(0, 3)).toEqual(['Plan for Monday', 'Weekly review', 'Yesterday: '])
+    // Meanwhile the server makes it too (a capture, the web app without a replica).
+    expect((await user.request('/api/spaces/s/daily-notes/2026-11-02', { method: 'POST' })).status).toBe(201)
+    phone.online = laptop.online = true
+    await phone.sync.sync()
+    await laptop.sync.sync()
+    await phone.sync.sync()
+    const note = await serverObject(user.request, dailyNoteId('s', '2026-11-02'))
+    const lines = texts(note.content.body)
+    expect(lines.filter((l) => l === 'Plan for Monday')).toHaveLength(1)
+    expect(lines.filter((l) => l === 'Weekly review')).toHaveLength(1)
+    expect(lines).toContain('Phone')
+    expect(lines).toContain('Laptop')
+    expect(a.text()).toEqual(b.text())
+    a.close()
+    b.close()
+  })
+
   it('does not undo a pulled change when saving an older copy of the object', async () => {
     const { user, phone, page } = setup()
     const task = (await (await user.request('/api/objects', json({ typeId: page, title: 'Task' }))).json()) as ObjectRecord

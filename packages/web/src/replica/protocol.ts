@@ -6,6 +6,7 @@ import type { Id } from '@vasta/core'
 
 /** Store methods the app may call: reads, and writes that go to the outbox. */
 export const READ_METHODS = [
+  'listTemplates',
   'listSpaces',
   'spaceBundle',
   'search',

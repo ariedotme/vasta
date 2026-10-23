@@ -92,6 +92,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   collectionIds: isStringArray,
   date: optional((v) => isObject(v) && typeof (v as { start?: unknown }).start === 'string'),
   query: optional(isObject),
+  template: optional((v) => isObject(v) && ['template', 'snippet'].includes((v as { kind?: unknown }).kind as string) && isString((v as { name?: unknown }).name)),
   enabled: (v) => typeof v === 'boolean',
 }
 

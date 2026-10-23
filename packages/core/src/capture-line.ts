@@ -9,6 +9,7 @@ import type { DateValue, Doc, Id, IsoDateTime, ObjectRecord, ObjectType, Person,
 import { findOrCreateDailyNote, newObject } from './operations.ts'
 import { currentSprint } from './sprints.ts'
 import type { Store } from './store.ts'
+import { applyTemplate, defaultTemplate, findTemplate, templateAsks } from './templates.ts'
 import { textToBlocks } from './text-doc.ts'
 import { addDays, dayIn, instantOf, isValidDay } from './time.ts'
 
@@ -329,14 +330,45 @@ export function findType(types: ObjectType[], query: string): ObjectType | undef
 /**
  * The type a text starts with and the rest: "Book Dune author:x" or "/Book Dune" with a type
  * called Book. The longest leading run of words that names a type wins ("Reading list Dune").
+ * "/Task:Bug Login breaks" names a template of the type too: the rest then starts with ":Bug"
+ * (objectFromLine reads it).
  */
 export function leadingType(types: ObjectType[], text: string): { type: ObjectType; rest: string } | undefined {
   const words = text.replace(/^\//, '').trimStart().split(/(\s+)/)
   for (let i = words.length; i >= 1; i -= 2) {
-    const type = findType(types, words.slice(0, i).join('').replace(/:$/, ''))
+    const named = words.slice(0, i).join('')
+    const type = findType(types, named.replace(/:$/, ''))
     if (type) return { type, rest: words.slice(i).join('').replace(/^[ \t]+/, '') }
+    // "Task:Bug": the colon ends the type and starts a template's name.
+    const colon = named.lastIndexOf(':')
+    const before = colon > 0 ? findType(types, named.slice(0, colon)) : undefined
+    if (before && colon < named.length - 1 && !/\s/.test(named.slice(colon))) return { type: before, rest: `${named.slice(colon)}${words.slice(i).join('')}` }
   }
   return undefined
+}
+
+/** The template a line starts with (":Bug Login breaks", ':"Weekly review" …'), and the rest. */
+export function leadingTemplate(line: string): { name: string; rest: string } | undefined {
+  const match = /^:(?:"([^"]+)"|“([^”]+)”|(\S+))[ \t]*/u.exec(line)
+  return match ? { name: (match[1] ?? match[2] ?? match[3])!, rest: line.slice(match[0].length) } : undefined
+}
+
+/**
+ * Answers to a template's asks written in a line as `key:value`, where the key starts its question
+ * ("with:lena" answers "With whom?") and names no property of the type. Returns them and the line
+ * without them.
+ */
+export function lineAnswers(line: string, type: ObjectType, asks: { label: string }[]): { answers: Record<string, string>; rest: string } {
+  const answers: Record<string, string> = {}
+  if (!asks.length) return { answers, rest: line }
+  const kept: string[] = []
+  for (const token of tokenize(line)) {
+    const key = token.key !== undefined && token.value !== undefined ? keyOf(token.key) : ''
+    const ask = key.length >= 2 && !findProperty(type, token.key!) ? asks.find((a) => keyOf(a.label).startsWith(key) && !(a.label in answers)) : undefined
+    if (ask) answers[ask.label] = token.value!
+    else kept.push(token.raw)
+  }
+  return { answers, rest: kept.join(' ') }
 }
 
 /** Types the app's quick capture and ⌘K offer after "/": the ones made from a title and properties alone. */
@@ -399,6 +431,13 @@ export interface LineObjectInput {
   text?: string
   /** Values by property id; they win over the line. */
   props?: Record<Id, PropertyValue>
+  /**
+   * The template to start from, by name; the type's default when absent, none when null. A line
+   * may name one itself (":Bug Login breaks").
+   */
+  template?: string | null
+  /** Answers to the template's asks, by label (a line may answer them too, `with:lena`). */
+  answers?: Record<string, string>
   at: IsoDateTime
   context: LineContext
 }
@@ -410,18 +449,50 @@ export interface LineObject {
   /** The type with the select options the line added, when it added any. */
   type?: ObjectType
   parsed?: ParsedLine
+  /** The template it was made from. */
+  template?: ObjectRecord
 }
 
-/** A new object of a type from a title and properties written in a line; nothing is written yet. A task starts as "To do". */
+/**
+ * A new object of a type from a title and properties written in a line; nothing is written yet. A
+ * task starts as "To do". The type's default template (or the one the line or `template` names)
+ * gives what the line does not: the line's properties win over the template's, its body text goes
+ * after the template's text.
+ */
 export function objectFromLine(store: Store, input: LineObjectInput): LineObject {
   const { type } = input
-  const parsed = input.line ? parseCaptureLine(input.line, type, input.context) : undefined
+  let text = input.line ?? ''
+  const named = leadingTemplate(text)
+  if (named) text = named.rest
+  const templates = input.template === null ? [] : store.listTemplates(type.spaceId)
+  const wanted = named?.name ?? input.template
+  const template = wanted ? findTemplate(templates, type.id, wanted) : defaultTemplate(templates, type.id)
+  const asked = template ? lineAnswers(text, type, templateAsks(template)) : undefined
+  if (asked) text = asked.rest
+  const parsed = text.trim() ? parseCaptureLine(text, type, input.context) : undefined
   const line = parsed ? applyCaptureLine(store, type.spaceId, type, parsed, input.at, input.context) : { props: {}, related: [] }
   const status: Record<Id, PropertyValue> = type.system === 'task' ? { status: { kind: 'select', value: ['todo'] } } : {}
+  const typedTitle = (input.title ?? parsed?.title ?? '').trim()
+  const types = new Map(store.listTypes(type.spaceId).map((t) => [t.id, t]))
+  const made = template
+    ? applyTemplate(template, type, {
+        at: input.at,
+        today: input.context.today,
+        timeZone: input.context.timeZone,
+        ...(typedTitle ? { title: typedTitle } : {}),
+        ...(input.context.me ? { me: input.context.me } : {}),
+        ...(input.context.people ? { people: input.context.people } : {}),
+        answers: { ...asked?.answers, ...input.answers },
+        types,
+      })
+    : undefined
   const blocks = input.text?.trim() ? textToBlocks(input.text) : []
-  const content: Record<Id, Doc> = blocks.length ? { [BODY_PROPERTY_ID]: { type: 'doc', content: blocks } } : {}
-  const object = newObject(type, { title: (input.title ?? parsed?.title ?? '').trim(), props: { ...status, ...line.props, ...input.props }, content }, crypto.randomUUID(), input.at)
-  return { object, related: line.related, ...(line.type ? { type: line.type } : {}), ...(parsed ? { parsed } : {}) }
+  const content: Record<Id, Doc> = { ...made?.content }
+  if (blocks.length) content[BODY_PROPERTY_ID] = { type: 'doc', content: [...(content[BODY_PROPERTY_ID]?.content ?? []), ...blocks] }
+  const extra = template ? { tagIds: [...template.tagIds], ...(template.icon ? { icon: template.icon } : {}) } : {}
+  const props = { ...status, ...made?.props, ...line.props, ...input.props }
+  const object = newObject(type, { ...extra, title: made?.title ?? typedTitle, props, content }, crypto.randomUUID(), input.at)
+  return { object, related: line.related, ...(line.type ? { type: line.type } : {}), ...(parsed ? { parsed } : {}), ...(template ? { template } : {}) }
 }
 
 /** What a capture made, in words, for a reply or a notice: "Task “Buy coffee”, due Fri 24 Oct, priority High". */

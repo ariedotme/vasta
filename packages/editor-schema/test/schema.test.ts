@@ -16,6 +16,9 @@ vi.mock('../../web/src/lib/state.ts', () => ({ workspace: {}, typesById: { value
 vi.mock('../../web/src/lib/actions.ts', () => ({}))
 vi.mock('../../web/src/lib/overlays.ts', () => ({}))
 vi.mock('../../web/src/lib/media.ts', () => ({}))
+vi.mock('../../web/src/lib/templates.ts', () => ({}))
+vi.mock('../../web/src/editor/PlaceholderView.vue', () => ({ default: {} }))
+vi.mock('../../web/src/editor/TemplateBranchView.vue', () => ({ default: {} }))
 
 const text = (value: string, marks?: JsonNode['marks']): JsonNode => ({ type: 'text', text: value, ...(marks ? { marks } : {}) })
 const paragraph = (...content: JsonNode[]): JsonNode => ({ type: 'paragraph', ...(content.length ? { content } : {}) })
@@ -44,6 +47,7 @@ const everything = normalizeDoc({
     { type: 'codeBlock', attrs: { language: 'ts' }, content: [text('let x = 1')] },
     { type: 'horizontalRule' },
     { type: 'unsupported', attrs: { source: 'capacities:chart', raw: { kind: 'chart', data: [1, 2] } } },
+    { type: 'templateIf', content: [{ type: 'templateBranch', attrs: { condition: 'weekday(date) = 1' }, content: [paragraph(text('Monday: '), { type: 'placeholder', attrs: { value: 'date:+7d' } })] }, { type: 'templateBranch', content: [paragraph()] }] },
     paragraph(),
   ],
 })
@@ -57,7 +61,7 @@ describe('editor schema', () => {
   })
 
   it('round-trips every node and mark through Yjs unchanged', () => {
-    expect(everything.content).toHaveLength(14)
+    expect(everything.content).toHaveLength(15)
     expect(normalizeDoc(everything)).toEqual(everything)
     const ydoc = contentToYDoc({ body: everything, notes: normalizeDoc({ type: 'doc', content: [paragraph(text('second field'))] as never }) })
     const back = readContent(loadYDoc(Y.encodeStateAsUpdate(ydoc)))

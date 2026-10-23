@@ -34,13 +34,14 @@ import { createObject } from '../lib/actions.ts'
 import { BlockAttributesView } from './block-attributes.ts'
 import { BlockKeysWhileTyping, Blocks } from './blocks.ts'
 import CalloutView from './CalloutView.vue'
-import { filterCommands, type SlashCommand } from './commands.ts'
+import { filterCommands, type SlashCommand, type SlashContext } from './commands.ts'
 import MentionList, { type MentionItem } from './MentionList.vue'
 import MentionView from './MentionView.vue'
 import ObjectEmbedView from './ObjectEmbedView.vue'
 import { Uploads } from './uploads.ts'
 import SlashList from './SlashList.vue'
 import { suggestionPopup } from './suggestion-popup.ts'
+import { PlaceholderMenu, PlaceholderWithView, TemplateBranchWithView, TemplateIf } from './template-nodes.ts'
 
 const CalloutWithView = Callout.extend({
   addNodeView: () => VueNodeViewRenderer(CalloutView),
@@ -178,16 +179,18 @@ async function insertReference(editor: Editor, range: Range, item: MentionItem, 
   editor.chain().focus().deleteRange(range).insertContent(asEmbed ? [node] : [node, { type: 'text', text: ' ' }]).run()
 }
 
-const SlashMenu = Extension.create({
+const SlashMenu = Extension.create<SlashContext>({
   name: 'slashMenu',
+  addOptions: () => ({}),
   addProseMirrorPlugins() {
+    const context = this.options
     return [
       Suggestion<SlashCommand>({
         editor: this.editor,
         pluginKey: new PluginKey('slash-suggestion'),
         char: '/',
         startOfLine: false,
-        items: ({ query }) => filterCommands(query),
+        items: ({ query }) => filterCommands(query, context),
         command: ({ editor, range, props }) => props.run(editor, range),
         render: suggestionPopup<SlashCommand>(SlashList),
       }),
@@ -273,9 +276,10 @@ function offerWeblink(editor: Editor, url: string, from: number, to: number) {
 /**
  * The editor's extensions. With `text`, the editor edits that field of a Y.Doc (the object's text
  * in the local replica) instead of a JSON document, and undo follows Yjs (only this device's edits).
- * `objectId` (the object the text belongs to) makes links to its blocks.
+ * `objectId` (the object the text belongs to) makes links to its blocks. `template`: the text of a
+ * template or snippet, where "{{" opens the menu of placeholders.
  */
-export function createExtensions(placeholder: string, text?: { doc: Y.Doc; field: string }, objectId?: string) {
+export function createExtensions(placeholder: string, text?: { doc: Y.Doc; field: string }, objectId?: string, template = false) {
   return [
     text ? VastaStarterKit.configure({ undoRedo: false }) : VastaStarterKit,
     TaskList,
@@ -292,9 +296,13 @@ export function createExtensions(placeholder: string, text?: { doc: Y.Doc; field
     ObjectEmbedWithView,
     Unsupported,
     MentionWithSuggestion,
+    PlaceholderWithView,
+    TemplateIf,
+    TemplateBranchWithView,
     BlockAttributes,
     BlockAttributesView,
-    SlashMenu,
+    SlashMenu.configure({ ...(objectId ? { objectId } : {}), template }),
+    ...(template ? [PlaceholderMenu] : []),
     Uploads,
     UrlPaste,
     Blocks.configure({ objectId }),

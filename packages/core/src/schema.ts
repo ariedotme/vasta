@@ -34,6 +34,8 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   // Who made an object and who changed it last (user ids; ObjectRecord.createdBy, updatedBy).
   { table: 'objects', column: 'created_by', definition: 'TEXT' },
   { table: 'objects', column: 'updated_by', definition: 'TEXT' },
+  // JSON TemplateInfo: the object is a template or a snippet, kept out of every listing.
+  { table: 'objects', column: 'template', definition: 'TEXT' },
 ]
 
 /** Indexes on added columns; run after ADDED_COLUMNS, since an older table may lack them before. */
@@ -42,6 +44,11 @@ CREATE INDEX IF NOT EXISTS spaces_rev ON spaces(rev);
 CREATE INDEX IF NOT EXISTS types_rev ON types(space_id, rev);
 CREATE INDEX IF NOT EXISTS objects_rev ON objects(space_id, rev);
 CREATE INDEX IF NOT EXISTS calendar_sources_rev ON calendar_sources(space_id, rev);
+-- Search by title, counts per type and the trash's count, which skip templates (objects_titles
+-- before templates came).
+DROP INDEX IF EXISTS objects_titles;
+CREATE INDEX IF NOT EXISTS objects_listing ON objects(space_id, deleted_at, template, type_id, title, aliases);
+CREATE INDEX IF NOT EXISTS objects_templates ON objects(space_id) WHERE template IS NOT NULL;
 `
 
 export const SCHEMA_SQL = `
@@ -105,9 +112,8 @@ CREATE INDEX IF NOT EXISTS objects_date ON objects(date_start) WHERE date_start 
 CREATE INDEX IF NOT EXISTS objects_created ON objects(space_id, created_at);
 -- What reads many objects without needing their rows (search by title, counts per type, the
 -- trash's count) reads these instead: on a replica every page of the table is a read of OPFS, and
--- the rows carry the rich text.
+-- the rows carry the rich text. objects_listing (on a column added later) is in ADDED_INDEXES_SQL.
 CREATE INDEX IF NOT EXISTS objects_updated ON objects(space_id, updated_at) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS objects_titles ON objects(space_id, deleted_at, type_id, title, aliases);
 
 -- Derived from objects: every reference from one object to another, for backlinks.
 CREATE TABLE IF NOT EXISTS links (

@@ -125,6 +125,12 @@ body {
   font-size: 1rem;
 }
 .vasta-doc > * + * { margin-top: 0.25rem; }
+/* A template's conditional blocks (editor/TemplateBranchView.vue): a dashed box, one part per branch. */
+.vasta-doc div[data-type='template-if'] { margin: 0.5rem 0; border: 1px dashed rgb(167 139 250 / 0.7); border-radius: 0.75rem; }
+.vasta-doc .vasta-template-branch { padding: 0.4rem 0.75rem 0.5rem; }
+.vasta-doc .vasta-template-branch + .vasta-template-branch { border-top: 1px dashed rgb(167 139 250 / 0.5); }
+.vasta-doc .vasta-template-branch:first-child .vasta-branch-else-if,
+.vasta-doc .vasta-template-branch:not(:first-child) .vasta-branch-if { display: none; }
 .vasta-doc p.is-empty:first-child::before,
 .vasta-doc p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

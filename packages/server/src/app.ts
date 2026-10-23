@@ -662,6 +662,13 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     }
   })
 
+  /** The space's templates and snippets (core's templates.ts), whole: they are listed nowhere else. */
+  api.get('/spaces/:id/templates', (c) => {
+    const space = store.getSpace(c.req.param('id'))
+    if (!space) return c.json({ error: 'not found' }, 404)
+    return c.json(store.listTemplates(space.id))
+  })
+
   api.get('/spaces/:id/search', (c) => {
     const limit = Math.min(Number(c.req.query('limit') ?? 30) || 30, 100)
     return c.json(store.search(c.req.param('id'), c.req.query('q') ?? '', limit))

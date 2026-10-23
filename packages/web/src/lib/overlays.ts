@@ -37,14 +37,24 @@ interface ChoiceRequest {
   resolve: (value: string | null) => void
 }
 
-export type DialogRequest = PromptRequest | ConfirmRequest | ChoiceRequest
+/** A template's questions (core's TemplateAsk), all in one dialog; each may be left empty. */
+interface AsksRequest {
+  kind: 'asks'
+  title: string
+  message?: string
+  fields: { label: string; options?: string[] }[]
+  confirmLabel: string
+  resolve: (answers: Record<string, string> | null) => void
+}
+
+export type DialogRequest = PromptRequest | ConfirmRequest | ChoiceRequest | AsksRequest
 
 export const activeDialog = shallowRef<DialogRequest | null>(null)
 
 /** A new dialog replaces the open one, which counts as cancelled. */
 function cancelActiveDialog() {
   const current = activeDialog.value
-  if (current?.kind === 'prompt' || current?.kind === 'choice') current.resolve(null)
+  if (current?.kind === 'prompt' || current?.kind === 'choice' || current?.kind === 'asks') current.resolve(null)
   else if (current?.kind === 'confirm') current.resolve(false)
 }
 
@@ -98,6 +108,24 @@ export function choiceDialog<T extends string>(options: { title: string; message
       resolve: (value) => {
         activeDialog.value = null
         resolve(value as T | null)
+      },
+    }
+  })
+}
+
+/** Ask a template's questions, in order. Resolves to the answers by label (trimmed), or null when cancelled. */
+export function asksDialog(options: { title: string; message?: string; fields: { label: string; options?: string[] }[]; confirmLabel?: string }) {
+  return new Promise<Record<string, string> | null>((resolve) => {
+    cancelActiveDialog()
+    activeDialog.value = {
+      kind: 'asks',
+      title: options.title,
+      message: options.message,
+      fields: options.fields,
+      confirmLabel: options.confirmLabel ?? 'Create',
+      resolve: (answers) => {
+        activeDialog.value = null
+        resolve(answers && Object.fromEntries(Object.entries(answers).map(([label, value]) => [label, value.trim()])))
       },
     }
   })

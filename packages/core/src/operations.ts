@@ -9,6 +9,7 @@ import { queryRelations, relatedIds, runQuery, timeBounds } from './query.ts'
 import type { Store } from './store.ts'
 import { applyFields, canonicalJson, hlcAt, recordFields, stampChanges } from './sync.ts'
 import { currentSprint } from './sprints.ts'
+import { applyTemplate, defaultTemplate, seededText } from './templates.ts'
 import { textToBlocks } from './text-doc.ts'
 import { addDays, isValidDay } from './time.ts'
 
@@ -188,11 +189,19 @@ export function findOrCreateDailyNote(store: Store, spaceId: Id, day: string, at
   // The day's note in the trash keeps its id; a new one then gets a random id, as before.
   const derived = dailyNoteId(spaceId, day)
   const id = store.getObject(derived) ? crypto.randomUUID() : derived
-  const note = newObject(type, { date: { start: `${day}T00:00:00.000Z`, resolution: 'day' } }, id, at)
+  // The type's default template, with what every device resolves the same (seed: no time, no asks).
+  const template = defaultTemplate(store.listTemplates(spaceId), typeId)
+  const types = new Map(store.listTypes(spaceId).map((t) => [t.id, t]))
+  const made = template ? applyTemplate(template, type, { at, today: day, day, timeZone: 'UTC', types, seed: id }) : undefined
+  const data: Partial<ObjectRecord> = { date: { start: `${day}T00:00:00.000Z`, resolution: 'day' } }
+  if (made) Object.assign(data, { title: made.title, props: made.props, content: made.content, tagIds: [...template!.tagIds], ...(template!.icon ? { icon: template!.icon } : {}) })
+  const note = newObject(type, data, id, at)
   // Another device may have made the same row already and changed it since (a title, a tag): what
-  // a new note starts with is stamped as older than any change, so it never overrules one.
+  // a new note starts with is stamped as older than any change, so it never overrules one. Its
+  // text, the same way, is the same Yjs items on every device (seededText).
   const clock = id === derived ? stampChanges(undefined, recordFields('objects', note), {}, hlcAt(undefined, store.clock.node)) : undefined
-  return { note: store.putObject(note, clock), created: true }
+  const text = made && Object.keys(made.content).length ? seededText(id, made.content) : undefined
+  return { note: store.putObject(note, clock, text), created: true }
 }
 
 /** Run a query of a space. `parentId` is the object it is embedded in (the `parent` variable), never listed itself. */

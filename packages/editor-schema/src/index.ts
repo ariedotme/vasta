@@ -132,6 +132,50 @@ export const Mention = Node.create({
   renderText: ({ node }) => node.attrs.label,
 })
 
+/**
+ * A template's placeholder (`{{date}}`, `{{ask:With whom?}}`; core's templates.ts), drawn as a
+ * chip. `value` is what goes between the braces. Only templates and snippets hold them: applying
+ * one replaces them.
+ */
+export const TemplatePlaceholder = Node.create({
+  name: 'placeholder',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes: () => ({ value: { default: '', parseHTML: (el) => el.getAttribute('data-value') ?? '', renderHTML: (a) => ({ 'data-value': a.value }) } }),
+  parseHTML: () => [{ tag: 'span[data-type="placeholder"]' }],
+  renderHTML: ({ node, HTMLAttributes }) => ['span', mergeAttributes(HTMLAttributes, { 'data-type': 'placeholder' }), `{{${node.attrs.value}}}`],
+  renderText: ({ node }) => `{{${node.attrs.value}}}`,
+})
+
+/**
+ * Blocks of a template that are kept only when a condition holds: branches (If, Else if, Else),
+ * the first that holds is kept and the container goes. Only templates and snippets hold them.
+ */
+export const TemplateIf = Node.create({
+  name: 'templateIf',
+  group: 'block',
+  content: 'templateBranch+',
+  defining: true,
+  isolating: true,
+  parseHTML: () => [{ tag: 'div[data-type="template-if"]' }],
+  renderHTML: ({ HTMLAttributes }) => ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'template-if' }), 0],
+})
+
+/** A branch of a TemplateIf: `condition` is a formula; none is the Else. */
+export const TemplateBranch = Node.create({
+  name: 'templateBranch',
+  content: 'block+',
+  defining: true,
+  isolating: true,
+  addAttributes: () => ({
+    condition: { default: null, parseHTML: (el) => el.getAttribute('data-condition'), renderHTML: (a) => (a.condition === null ? {} : { 'data-condition': a.condition }) },
+  }),
+  parseHTML: () => [{ tag: 'div[data-type="template-branch"]' }],
+  renderHTML: ({ HTMLAttributes }) => ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'template-branch' }), 0],
+})
+
 /** Blocks that can be linked to: each gets a stable `id` (see blockIdFixes). */
 export const BLOCK_TYPES = [
   'paragraph', 'heading', 'blockquote', 'codeBlock', 'horizontalRule', 'bulletList', 'orderedList', 'taskList', 'listItem', 'taskItem',
@@ -237,6 +281,9 @@ export function schemaExtensions(): AnyExtension[] {
     ObjectEmbed,
     Unsupported,
     Mention,
+    TemplatePlaceholder,
+    TemplateIf,
+    TemplateBranch,
     BlockAttributes,
   ]
 }

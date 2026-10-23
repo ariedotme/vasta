@@ -435,9 +435,10 @@ memory 19.6 s → 12.9 s. The rest is OPFS writes
 **Reads that do not touch the rows.** On the replica, a query that reads the `objects` table
 whole costs 1–2 s at 50,000 objects (72 MB of rows with their JSON, read a page at a time from
 OPFS; the server's page cache hides it). Two indexes keep the common ones off the table:
-`objects_updated` (⌘K with nothing typed: the most recent) and `objects_titles` (space, trash,
-type, title, aliases: the title search finds its matches in the index and reads only the rows
-shown; counts per type and the trash's count for the sidebar). ⌘K's search 930 ms / 823 ms → 4 ms /
+`objects_updated` (⌘K with nothing typed: the most recent) and `objects_listing` (space, trash,
+template, type, title, aliases: the title search finds its matches in the index and reads only the rows
+shown; counts per type and the trash's count for the sidebar; templates are skipped in the index
+too). It was `objects_titles` before templates came. ⌘K's search 930 ms / 823 ms → 4 ms /
 72 ms; `spaceBundle` on every start 1.2–2.8 s → 70 ms.
 
 **Reading only what can match.** The calendar reads the objects that may have a date in the range

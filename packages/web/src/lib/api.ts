@@ -267,6 +267,8 @@ const http = {
     form.set('file', file)
     return request<ObjectRecord>('POST', `/api/spaces/${spaceId}/files`, form)
   },
+  /** The space's templates and snippets, whole (core's templates.ts): nothing else lists them. */
+  templates: (spaceId: Id) => request<ObjectRecord[]>('GET', `/api/spaces/${spaceId}/templates`),
   /** The daily note of a day ("YYYY-MM-DD"), created on first use. */
   dailyNote: (spaceId: Id, day: string) => request<ObjectRecord>('POST', `/api/spaces/${spaceId}/daily-notes/${day}`),
   /** Change one occurrence of a repeating date, the series from it on, or all of it; `created` is the copy "this and following" makes. */
@@ -426,6 +428,7 @@ const local: Partial<Api> = {
   deleteFoodEntry: (noteId, entryId) => callStore('deleteFoodEntry', noteId, entryId, now()),
   logFoodLine: (spaceId, text, today) => callStore('logFoodLine', spaceId, text, today, timeZone(), now()),
   dailyNote: (spaceId, day) => callStore('dailyNote', spaceId, day, now()),
+  templates: (spaceId) => callStore('listTemplates', spaceId),
   deleteObject: (id) => callStore('trashObject', id, now()),
   restoreObject: (id) => callStore('untrashObject', id, now()),
   type: pullingIfMissing((id) => callStore('requireType', id)),

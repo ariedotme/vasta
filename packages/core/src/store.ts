@@ -100,6 +100,7 @@ function rowToSummary(row: Row): ObjectSummary {
     ...(date ? { date } : {}),
     ...(row.query ? { query: parse(row.query) } : {}),
     ...(row.media ? { media: parse(row.media) } : {}),
+    ...(row.template ? { template: parse(row.template) } : {}),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     ...(row.deleted_at ? { deletedAt: row.deleted_at as string } : {}),
@@ -142,7 +143,7 @@ function rowToCalendarSource(row: Row): CalendarSource {
 }
 
 const SUMMARY_COLUMNS = `o.id, o.space_id, o.type_id, o.title, o.description, o.icon, o.cover_url, o.color, o.parent_id, o.aliases, o.tag_ids,
-  o.collection_ids, o.props, o.date_start, o.date_end, o.date_res, o.date_rrule, o.date_tz, o.date_exceptions, o.query, o.media, o.created_at, o.updated_at, o.deleted_at, o.created_by, o.updated_by,
+  o.collection_ids, o.props, o.date_start, o.date_end, o.date_res, o.date_rrule, o.date_tz, o.date_exceptions, o.query, o.media, o.template, o.created_at, o.updated_at, o.deleted_at, o.created_by, o.updated_by,
   substr(f.body, 1, 280) AS preview`
 const SUMMARY_FROM = 'objects o LEFT JOIN search_rows r ON r.object_id = o.id LEFT JOIN objects_fts f ON f.rowid = r.id'
 
@@ -565,7 +566,7 @@ export class Store {
       this.writeObjectRow(object, stamp)
       this.recordActivity(before?.record, object, JSON.parse(stamp.clock) as FieldClock)
       const actor = this.actor?.()
-      if (this.recordsActivity && actor) this.onObjectWrite?.(before?.record, object, actor)
+      if (this.recordsActivity && actor && !object.template) this.onObjectWrite?.(before?.record, object, actor)
       if (ydoc) this.saveText(object.id, ydoc, stamp.rev)
       else this.db.prepare('UPDATE object_docs SET rev = ? WHERE object_id = ?').run(stamp.rev, object.id)
       this.reindexObject(object)
@@ -621,7 +622,7 @@ export class Store {
 
   private recordActivity(before: ObjectRecord | undefined, after: ObjectRecord, clock: FieldClock) {
     const actor = this.actor?.()
-    if (!this.recordsActivity || !actor) return
+    if (!this.recordsActivity || !actor || after.template) return
     const now = new Date().toISOString()
     // When the field was written: its HLC (a push brings the device's time), never ahead of now.
     const timeOf = (field: string) => {
@@ -714,9 +715,9 @@ export class Store {
     this.db
       .prepare(
         `INSERT OR REPLACE INTO objects (id, space_id, type_id, title, description, icon, cover_url, color, parent_id, aliases, tag_ids,
-           collection_ids, props, content, date_start, date_end, date_res, date_rrule, date_tz, date_exceptions, query, media, created_at, updated_at, deleted_at,
+           collection_ids, props, content, date_start, date_end, date_res, date_rrule, date_tz, date_exceptions, query, media, template, created_at, updated_at, deleted_at,
            created_by, updated_by, rev, clock)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         object.id, object.spaceId, object.typeId, object.title, object.description ?? null, json(object.icon),
@@ -724,7 +725,7 @@ export class Store {
         json(object.content), object.date?.start ?? null, object.date?.end ?? null, object.date?.resolution ?? null,
         object.date?.rrule ?? null, object.date?.timeZone ?? null,
         object.date?.exceptions && Object.keys(object.date.exceptions).length ? JSON.stringify(object.date.exceptions) : null,
-        json(object.query), json(object.media), object.createdAt, object.updatedAt, object.deletedAt ?? null,
+        json(object.query), json(object.media), json(object.template), object.createdAt, object.updatedAt, object.deletedAt ?? null,
         object.createdBy ?? null, object.updatedBy ?? null, stamp.rev, stamp.clock
       )
     this.db.prepare("DELETE FROM sync_tombstones WHERE kind = 'objects' AND id = ?").run(object.id)
@@ -785,7 +786,8 @@ export class Store {
   /** Refresh the derived links and search rows of one object. */
   reindexObject(object: ObjectRecord) {
     this.db.prepare('DELETE FROM links WHERE from_id = ?').run(object.id)
-    if (object.deletedAt) {
+    // Templates and snippets link to nothing and are found by nothing (templates.ts).
+    if (object.deletedAt || object.template) {
       this.dropSearchRow(object.id)
       return
     }
@@ -890,7 +892,7 @@ export class Store {
   /** Object counts per type, for the sidebar and type pages. */
   typeCounts(spaceId: Id): Record<Id, number> {
     const rows = this.db
-      .prepare('SELECT type_id, count(*) n FROM objects WHERE space_id = ? AND deleted_at IS NULL GROUP BY type_id')
+      .prepare('SELECT type_id, count(*) n FROM objects WHERE space_id = ? AND deleted_at IS NULL AND template IS NULL GROUP BY type_id')
       .all(spaceId) as { type_id: string; n: number }[]
     return Object.fromEntries(rows.map((r) => [r.type_id, Number(r.n)]))
   }
@@ -898,7 +900,7 @@ export class Store {
   listObjects(typeId: Id): ObjectSummary[] {
     return (
       this.db
-        .prepare(`SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} WHERE o.type_id = ? AND o.deleted_at IS NULL ORDER BY o.updated_at DESC`)
+        .prepare(`SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} WHERE o.type_id = ? AND o.deleted_at IS NULL AND o.template IS NULL ORDER BY o.updated_at DESC`)
         .all(typeId) as Row[]
     ).map(rowToSummary)
   }
@@ -907,7 +909,7 @@ export class Store {
   listSpaceObjects(spaceId: Id): ObjectSummary[] {
     return (
       this.db
-        .prepare(`SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} WHERE o.space_id = ? AND o.deleted_at IS NULL ORDER BY o.updated_at DESC`)
+        .prepare(`SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} WHERE o.space_id = ? AND o.deleted_at IS NULL AND o.template IS NULL ORDER BY o.updated_at DESC`)
         .all(spaceId) as Row[]
     ).map(rowToSummary)
   }
@@ -926,7 +928,7 @@ export class Store {
           `SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} WHERE o.rowid IN (
              SELECT rowid FROM objects WHERE type_id IN (SELECT value FROM json_each(?)) AND deleted_at IS NULL
              UNION SELECT rowid FROM objects WHERE date_start IS NOT NULL AND date_start < ? AND (date_rrule IS NOT NULL OR coalesce(date_end, date_start) >= ?))
-           AND o.space_id = ? AND o.deleted_at IS NULL
+           AND o.space_id = ? AND o.deleted_at IS NULL AND o.template IS NULL
            ORDER BY o.updated_at DESC`
         )
         .all(JSON.stringify(dateTypeIds), addDays(range.to, 3), addDays(range.from, -2), spaceId) as Row[]
@@ -938,7 +940,7 @@ export class Store {
    * (instants or days, either end open: `from` included, `to` not).
    */
   listObjectsWithin(spaceId: Id, typeIds: Id[], bounds: { created?: Bounds; updated?: Bounds }): ObjectSummary[] {
-    const where = ['o.space_id = ?', 'o.deleted_at IS NULL']
+    const where = ['o.space_id = ?', 'o.deleted_at IS NULL', 'o.template IS NULL']
     const params: SqlValue[] = [spaceId]
     if (typeIds.length) {
       where.push('o.type_id IN (SELECT value FROM json_each(?))')
@@ -977,7 +979,7 @@ export class Store {
     const rows = this.db
       .prepare(
         `SELECT l.to_id, count(DISTINCT l.from_id) AS n FROM links l JOIN objects o ON o.id = l.from_id
-          WHERE l.to_id IN (SELECT value FROM json_each(?)) AND l.from_id != l.to_id AND o.deleted_at IS NULL
+          WHERE l.to_id IN (SELECT value FROM json_each(?)) AND l.from_id != l.to_id AND o.deleted_at IS NULL AND o.template IS NULL
           GROUP BY l.to_id`
       )
       .all(JSON.stringify(ids)) as Row[]
@@ -989,7 +991,7 @@ export class Store {
       .prepare(
         `SELECT ${SUMMARY_COLUMNS}, l.kind AS link_kind, l.via AS link_via
            FROM links l JOIN objects o ON o.id = l.from_id LEFT JOIN search_rows r ON r.object_id = o.id LEFT JOIN objects_fts f ON f.rowid = r.id
-          WHERE l.to_id = ? AND o.deleted_at IS NULL
+          WHERE l.to_id = ? AND o.deleted_at IS NULL AND o.template IS NULL
           ORDER BY o.updated_at DESC`
       )
       .all(id) as Row[]
@@ -1002,17 +1004,17 @@ export class Store {
     if (!trimmed) {
       return (
         this.db
-          .prepare(`SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} WHERE o.space_id = ? AND o.deleted_at IS NULL ORDER BY o.updated_at DESC LIMIT ?`)
+          .prepare(`SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} WHERE o.space_id = ? AND o.deleted_at IS NULL AND o.template IS NULL ORDER BY o.updated_at DESC LIMIT ?`)
           .all(spaceId, limit) as Row[]
       ).map(rowToSummary)
     }
-    // The matches come from objects_titles alone; only those shown are read from the table.
+    // The matches come from objects_listing alone; only those shown are read from the table.
     const like = escapeLike(trimmed)
     const byTitle = this.db
       .prepare(
         `SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM}
           WHERE o.rowid IN (
-            SELECT rowid FROM objects WHERE space_id = ? AND deleted_at IS NULL AND (title LIKE ? ESCAPE '\\' OR aliases LIKE ? ESCAPE '\\')
+            SELECT rowid FROM objects WHERE space_id = ? AND deleted_at IS NULL AND template IS NULL AND (title LIKE ? ESCAPE '\\' OR aliases LIKE ? ESCAPE '\\')
             ORDER BY CASE WHEN title LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, length(title) LIMIT ?)
           ORDER BY CASE WHEN o.title LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, length(o.title)`
       )
@@ -1024,7 +1026,7 @@ export class Store {
       const byBody = this.db
         .prepare(
           `SELECT ${SUMMARY_COLUMNS} FROM objects_fts f JOIN objects o ON o.id = f.object_id
-            WHERE objects_fts MATCH ? AND o.space_id = ? AND o.deleted_at IS NULL
+            WHERE objects_fts MATCH ? AND o.space_id = ? AND o.deleted_at IS NULL AND o.template IS NULL
             ORDER BY rank LIMIT ?`
         )
         .all(fts, spaceId, limit) as Row[]
@@ -1036,10 +1038,16 @@ export class Store {
     return results
   }
 
+  /** A space's live templates and snippets (templates.ts), the only way they are listed. */
+  listTemplates(spaceId: Id): ObjectRecord[] {
+    const rows = this.db.prepare('SELECT id FROM objects WHERE space_id = ? AND template IS NOT NULL AND deleted_at IS NULL').all(spaceId) as Row[]
+    return rows.flatMap((row) => this.getObject(row.id as string) ?? []).sort((a, b) => a.template!.name.localeCompare(b.template!.name))
+  }
+
   /** The live object of a type dated on a day ("YYYY-MM-DD"); used for daily notes. */
   findObjectOnDay(typeId: Id, day: string): ObjectRecord | undefined {
     const row = this.db
-      .prepare('SELECT id FROM objects WHERE type_id = ? AND deleted_at IS NULL AND substr(date_start, 1, 10) = ? ORDER BY created_at LIMIT 1')
+      .prepare('SELECT id FROM objects WHERE type_id = ? AND deleted_at IS NULL AND template IS NULL AND substr(date_start, 1, 10) = ? ORDER BY created_at LIMIT 1')
       .get(typeId, day) as Row | undefined
     return row ? this.getObject(row.id as string) : undefined
   }
@@ -1047,7 +1055,7 @@ export class Store {
   /** A live object of a type whose media points at a URL (e.g. a weblink saved before). */
   findObjectByMediaUrl(typeId: Id, url: string): ObjectRecord | undefined {
     const row = this.db
-      .prepare(`SELECT id FROM objects WHERE type_id = ? AND deleted_at IS NULL AND json_extract(media, '$.url') = ? ORDER BY created_at LIMIT 1`)
+      .prepare(`SELECT id FROM objects WHERE type_id = ? AND deleted_at IS NULL AND template IS NULL AND json_extract(media, '$.url') = ? ORDER BY created_at LIMIT 1`)
       .get(typeId, url) as Row | undefined
     return row ? this.getObject(row.id as string) : undefined
   }
@@ -1109,7 +1117,7 @@ export class Store {
   listDeletedTypes(spaceId: Id): (ObjectType & { deletedAt: string; objectCount: number })[] {
     const rows = this.db
       .prepare(
-        `SELECT t.*, (SELECT count(*) FROM objects o WHERE o.type_id = t.id AND o.deleted_at = t.deleted_at) AS object_count
+        `SELECT t.*, (SELECT count(*) FROM objects o WHERE o.type_id = t.id AND o.deleted_at = t.deleted_at AND o.template IS NULL) AS object_count
            FROM types t WHERE t.space_id = ? AND t.deleted_at IS NOT NULL ORDER BY t.deleted_at DESC`
       )
       .all(spaceId) as Row[]
@@ -1122,7 +1130,7 @@ export class Store {
       this.db
         .prepare(
           `SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} JOIN types t ON t.id = o.type_id
-            WHERE o.space_id = ? AND o.deleted_at IS NOT NULL AND o.deleted_at IS NOT t.deleted_at
+            WHERE o.space_id = ? AND o.deleted_at IS NOT NULL AND o.deleted_at IS NOT t.deleted_at AND o.template IS NULL
             ORDER BY o.deleted_at DESC`
         )
         .all(spaceId) as Row[]
@@ -1135,7 +1143,7 @@ export class Store {
       .prepare(
         `SELECT (SELECT count(*) FROM types WHERE space_id = ? AND deleted_at IS NOT NULL)
               + (SELECT count(*) FROM objects o JOIN types t ON t.id = o.type_id
-                  WHERE o.space_id = ? AND o.deleted_at IS NOT NULL AND o.deleted_at IS NOT t.deleted_at) AS n`
+                  WHERE o.space_id = ? AND o.deleted_at IS NOT NULL AND o.deleted_at IS NOT t.deleted_at AND o.template IS NULL) AS n`
       )
       .get(spaceId, spaceId) as { n: number }
     return Number(row.n)

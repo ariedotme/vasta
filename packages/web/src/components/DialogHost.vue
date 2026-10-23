@@ -4,21 +4,26 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { activeDialog } from '../lib/overlays.ts'
 
 const text = ref('')
+/** The answers of an asks dialog, by label. */
+const answers = ref<Record<string, string>>({})
+const firstAnswer = ref<(HTMLInputElement | HTMLSelectElement)[] | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 const confirmButton = ref<HTMLButtonElement | null>(null)
 const firstChoice = ref<HTMLButtonElement[] | null>(null)
 const blocked = computed(() => {
   const dialog = activeDialog.value
   if (dialog?.kind === 'prompt') return !dialog.optional && !text.value.trim()
-  if (dialog?.kind === 'choice') return false
+  if (dialog?.kind === 'choice' || dialog?.kind === 'asks') return false
   return !!dialog?.requireText && text.value.trim() !== dialog.requireText.trim()
 })
 
 watch(activeDialog, async (dialog) => {
   if (!dialog) return
   text.value = dialog.kind === 'prompt' ? dialog.value : ''
+  answers.value = dialog.kind === 'asks' ? Object.fromEntries(dialog.fields.map((f) => [f.label, ''])) : {}
   await nextTick()
   if (dialog.kind === 'choice') firstChoice.value?.[0]?.focus()
+  else if (dialog.kind === 'asks') firstAnswer.value?.[0]?.focus()
   else if (dialog.kind === 'prompt' || dialog.requireText) {
     input.value?.focus()
     input.value?.select()
@@ -27,13 +32,14 @@ watch(activeDialog, async (dialog) => {
 
 function cancel() {
   const dialog = activeDialog.value
-  if (dialog?.kind === 'prompt' || dialog?.kind === 'choice') dialog.resolve(null)
+  if (dialog?.kind === 'prompt' || dialog?.kind === 'choice' || dialog?.kind === 'asks') dialog.resolve(null)
   else dialog?.resolve(false)
 }
 
 function accept() {
   const dialog = activeDialog.value
   if (dialog?.kind === 'choice') return
+  if (dialog?.kind === 'asks') return dialog.resolve(answers.value)
   if (dialog?.kind === 'prompt') {
     if (text.value.trim() || dialog.optional) dialog.resolve(text.value)
   } else if (dialog && !blocked.value) dialog.resolve(true)
@@ -70,6 +76,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           >
             {{ choice.label }}
           </button>
+        </div>
+        <div v-else-if="activeDialog.kind === 'asks'" class="mt-4 space-y-3">
+          <label v-for="field in activeDialog.fields" :key="field.label" class="block text-sm">
+            <span class="text-ink-soft">{{ field.label }}</span>
+            <select
+              v-if="field.options?.length"
+              ref="firstAnswer"
+              v-model="answers[field.label]"
+              class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-line-strong"
+            >
+              <option value="">—</option>
+              <option v-for="option in field.options" :key="option" :value="option">{{ option }}</option>
+            </select>
+            <input
+              v-else
+              ref="firstAnswer"
+              v-model="answers[field.label]"
+              class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-line-strong"
+              autocomplete="off"
+            />
+          </label>
         </div>
         <input
           v-else-if="activeDialog.kind === 'prompt' || activeDialog.requireText"

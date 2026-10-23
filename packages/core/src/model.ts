@@ -332,6 +332,11 @@ export interface ObjectRecord {
   query?: QueryDef
   /** Only for system types that carry media or links (weblink, image, pdf…). */
   media?: MediaInfo
+  /**
+   * Set on templates and snippets (templates.ts), which are kept apart from every other object:
+   * never listed, searched, queried, linked to or counted.
+   */
+  template?: TemplateInfo
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
   deletedAt?: IsoDateTime
@@ -342,6 +347,41 @@ export interface ObjectRecord {
    */
   createdBy?: Id
   updatedBy?: Id
+}
+
+/**
+ * What makes an object a template of its type or a snippet. A template's title, text properties
+ * and rich text may hold placeholders (`{{date}}`, `{{ask:With whom?}}`), resolved when an object
+ * is made from it; its other properties are copied as they are, or filled from `fills`.
+ */
+export type TemplateInfo =
+  | {
+      kind: 'template'
+      /** What the template is called (its title is the title the objects made from it get). */
+      name: string
+      /** The one the type's New button and typed lines use. */
+      default?: boolean
+      /** Placeholders that fill properties a value cannot hold: Due = "date:+7d", Assignee = "me". By property id. */
+      fills?: Record<Id, string>
+    }
+  | {
+      kind: 'snippet'
+      name: string
+      /** A short word that finds it in the editor's / menu (`sig` for /sig). */
+      trigger?: string
+      /** Where it applies; everywhere when absent. */
+      scope?: SnippetScope
+    }
+
+/**
+ * The objects a snippet applies to: of one of `typeIds` (any type when empty), whose type has
+ * every property in `requires` (by name and kind, so it matches types that were made apart), and
+ * for which the formula `when` holds. All of them must hold.
+ */
+export interface SnippetScope {
+  typeIds?: Id[]
+  requires?: { name: string; kind: PropertyDef['kind']; /** The object has a value for it. */ set?: boolean }[]
+  when?: string
 }
 
 /** An object without its rich text, plus a short plain-text preview. Used by lists and views. */
@@ -408,6 +448,9 @@ export type DocNodeType =
   | 'mention'        // inline object link; attrs: { objectId: Id, label: string }
   | 'objectEmbed'    // block-level object; attrs: { objectId: Id, display: 'inline' | 'card' | 'wide-card' | 'embed' | 'image' }
   | 'unsupported'    // block we could not convert; attrs: { source: string, raw: unknown }
+  // Only in templates and snippets (templates.ts):
+  | 'placeholder'    // inline `{{…}}`; attrs: { value: string }
+  | 'templateIf' | 'templateBranch' // blocks kept when a condition holds; branch attrs: { condition: string | null }
 
 /**
  * Marks a top-level callout as an item that arrived through a capture channel (Telegram, the
