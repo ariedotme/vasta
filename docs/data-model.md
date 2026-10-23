@@ -293,7 +293,8 @@ the app make the same object from the same template.
   an answer's label. No code runs: templates also apply on the server and in shared spaces.
 - **Conditions** are formulas with the template's variables `date`, `me`, `type` and `title`, and
   `ask("…")`, `has("Due")` (the type has that property) and `prop("Status")` (a value by property
-  name). Blocks: a `templateIf` node holds `templateBranch` nodes (`attrs.condition`, none for the
+  name). `ask("Body", "Yes", "No")` asks with those answers to pick from, like `choose`, but prints
+  nothing where it is a condition. Blocks: a `templateIf` node holds `templateBranch` nodes (`attrs.condition`, none for the
   Else); the first branch that holds keeps its blocks and the container goes. Inline:
   `{{formula:if(ask("Kind") = "Bug", "🐞", "✨")}}`.
 - **Defaults.** One template per type may be the default: the type page's New and typed lines use

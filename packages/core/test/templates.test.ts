@@ -105,6 +105,21 @@ describe('applying a template', () => {
     expect(templateAsks(t)).toEqual([{ label: 'Kind' }])
   })
 
+  it('asks ask() with answers as a choice, in conditions and formulas', () => {
+    const t = template(page, {
+      title: '{{ask:Body}}',
+      content: {
+        body: doc(
+          { type: 'templateIf', content: [branch('ask("Body", "Yes", "No") = "Yes"', paragraph(text('Quote')))] },
+          paragraph(chip('formula:if(ask(\'Mood\', "Good", \'Bad\') = "Good", "🙂", "🙁")'))
+        ),
+      },
+    })
+    expect(templateAsks(t)).toEqual([{ label: 'Body', options: ['Yes', 'No'] }, { label: 'Mood', options: ['Good', 'Bad'] }])
+    expect(texts(applyTemplate(t, page, context({ answers: { Body: 'Yes', Mood: 'Bad' } })).content.body)).toEqual(['Quote', '🙁'])
+    expect(texts(applyTemplate(t, page, context({ answers: { Body: 'No', Mood: 'Good' } })).content.body)).toEqual(['🙂'])
+  })
+
   it('reads the properties it set in conditions', () => {
     const t = template(task, { content: { body: doc({ type: 'templateIf', content: [branch('has("Due") and not empty(prop("Due"))', paragraph(text('Has a due date')))] }) } }, { fills: { due: 'date:+1d' } })
     expect(texts(applyTemplate(t, task, context()).content.body)).toEqual(['Has a due date'])

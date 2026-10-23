@@ -83,7 +83,7 @@ function placeholderCommands(query: string): SlashCommand[] {
       detail: 'One text or another, by a condition',
       icon: 'ph:git-branch',
       run: async (editor, range) => {
-        const condition = await promptDialog({ title: 'If…', message: 'The condition, a formula: weekday(date) = 1, ask("Kind") = "Bug".', placeholder: 'weekday(date) = 1', confirmLabel: 'Next' })
+        const condition = await promptDialog({ title: 'If…', message: 'The condition, a formula: weekday(date) = 1, ask("Body", "Yes", "No") = "Yes" (asked with buttons).', placeholder: 'weekday(date) = 1', confirmLabel: 'Next' })
         if (!condition) return
         const then = await promptDialog({ title: 'Then', message: 'The text when it holds.', confirmLabel: 'Next', optional: true })
         if (then === null) return

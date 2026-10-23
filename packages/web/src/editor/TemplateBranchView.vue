@@ -13,7 +13,7 @@ async function editCondition() {
   if (!props.editor.isEditable) return
   const next = await promptDialog({
     title: 'Condition',
-    message: 'A formula, e.g. weekday(date) = 1, ask("Kind") = "Bug", has("Due").',
+    message: 'A formula, e.g. weekday(date) = 1, ask("Body", "Yes", "No") = "Yes", has("Due").',
     value: condition.value ?? '',
     confirmLabel: 'Save',
   })

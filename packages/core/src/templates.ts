@@ -63,9 +63,15 @@ export interface TemplateAsk {
   options?: string[]
 }
 
-/** Labels a formula asks for with ask("…"). */
-function formulaAsks(source: string): string[] {
-  return [...source.matchAll(/\bask\s*\(\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\s*\)/g)].map((m) => (m[1] ?? m[2] ?? '').replace(/\\(.)/g, '$1'))
+const FORMULA_STRING = String.raw`(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')`
+const FORMULA_ASK = new RegExp(String.raw`\bask\s*\(\s*${FORMULA_STRING}(?:\s*,\s*${FORMULA_STRING})*\s*\)`, 'g')
+
+/** What a formula asks with ask("…"), and its answers with ask("Body", "Yes", "No"). */
+function formulaAsks(source: string): TemplateAsk[] {
+  return [...source.matchAll(FORMULA_ASK)].map((m) => {
+    const [label = '', ...options] = [...m[0].matchAll(new RegExp(FORMULA_STRING, 'g'))].map((s) => s[0].slice(1, -1).replace(/\\(.)/g, '$1'))
+    return { label, options: options.map((o) => o.trim()).filter(Boolean) }
+  })
 }
 
 /** The questions a template or snippet asks, in the order they appear (title, properties, text). */
@@ -73,7 +79,13 @@ export function templateAsks(template: ObjectRecord): TemplateAsk[] {
   const asks: TemplateAsk[] = []
   const add = (label: string, options?: string[]) => {
     const trimmed = label.trim()
-    if (!trimmed || asks.some((a) => a.label === trimmed)) return
+    if (!trimmed) return
+    const known = asks.find((a) => a.label === trimmed)
+    // Asked as free text first and with answers later: it gets the answers.
+    if (known) {
+      if (!known.options && options?.length) known.options = options
+      return
+    }
     asks.push(options?.length ? { label: trimmed, options } : { label: trimmed })
   }
   const fromPlaceholder = (value: string) => {
@@ -82,7 +94,7 @@ export function templateAsks(template: ObjectRecord): TemplateAsk[] {
     else if (placeholder?.name === 'choose') {
       const [label = '', ...options] = placeholder.arg.split('|').map((part) => part.trim())
       add(label, options.filter(Boolean))
-    } else if (placeholder?.name === 'formula') for (const label of formulaAsks(placeholder.arg)) add(label)
+    } else if (placeholder?.name === 'formula') for (const ask of formulaAsks(placeholder.arg)) add(ask.label, ask.options)
   }
   const fromText = (text: string) => {
     for (const match of text.matchAll(PLACEHOLDER_TEXT)) fromPlaceholder(match[1]!)
@@ -93,7 +105,7 @@ export function templateAsks(template: ObjectRecord): TemplateAsk[] {
   const visit = (nodes: DocNode[] | undefined) => {
     for (const node of nodes ?? []) {
       if (node.type === 'templatePlaceholder') fromPlaceholder(String(node.attrs?.value ?? ''))
-      if (node.type === 'templateBranch' && typeof node.attrs?.condition === 'string') for (const label of formulaAsks(node.attrs.condition)) add(label)
+      if (node.type === 'templateBranch' && typeof node.attrs?.condition === 'string') for (const ask of formulaAsks(node.attrs.condition)) add(ask.label, ask.options)
       if (node.type === 'text' && node.text) fromText(node.text)
       visit(node.content)
     }

@@ -31,7 +31,7 @@ export type FormulaContext = Pick<QueryContext, 'types' | 'related' | 'today' | 
 
 /**
  * What formulas read in templates: `date` (the object's date, else today), `me`, `type` and
- * `title` as variables, `ask("With whom?")` for an answer, `has("Due")` for whether the type has a
+ * `title` as variables, `ask("With whom?")` for an answer (`ask("Body", "Yes", "No")` to pick one), `has("Due")` for whether the type has a
  * property, and `prop("Status")` for a property's value by name.
  */
 export interface TemplateScope {
@@ -960,9 +960,9 @@ const FUNCTIONS: Record<string, FormulaFunction> = {
   },
   ask: {
     min: 1,
-    max: 1,
-    usage: 'ask("With whom?")',
-    description: 'In templates: the answer to a question asked when the object is made',
+    max: Infinity,
+    usage: 'ask("With whom?"), ask("Body", "Yes", "No")',
+    description: 'In templates: the answer to a question asked when the object is made, picked from the answers after the question when there are some',
     result: 'text',
     template: (label, _object, scope) => text(scope.context.template!.answer(label)),
   },

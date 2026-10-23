@@ -6,6 +6,12 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Templates: `ask()` with answers.** `ask("Body", "Yes", "No")` in a condition or a formula
+  asks with buttons to pick from, so a choice can decide what a template adds without printing
+  anything.
+
 ## 0.3.2 (2026-10-23)
 
 ### Added
