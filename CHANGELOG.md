@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.3.2 (2026-10-23)
+
 ### Added
 
 - **Ctrl+Enter in Quick Capture** (on macOS too) saves and opens what it made: the new object
