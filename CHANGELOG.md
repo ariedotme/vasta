@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.3.1 (2026-10-23)
+
 ### Added
 
 - **The desktop app works without a server.** On first start, choose **Start on this computer**:
