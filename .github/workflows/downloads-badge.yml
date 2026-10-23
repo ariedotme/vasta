@@ -1,0 +1,43 @@
+# Once a day and after each release: the README's downloads badge (scripts/downloads-badge.mjs:
+# release files without latest.json, plus the server image's pulls). The shields.io endpoint file
+# goes to the `badges` branch, a single commit replaced each time, which the README's badge reads.
+name: Downloads badge
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: downloads-badge
+
+jobs:
+  badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Count
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/downloads-badge.mjs > "$RUNNER_TEMP/downloads.json"
+      - name: Publish to the badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/badges/downloads.json" || true)
+          if [ "$current" = "$(cat "$RUNNER_TEMP/downloads.json")" ]; then echo "Unchanged."; exit 0; fi
+          mkdir "$RUNNER_TEMP/badges" && cd "$RUNNER_TEMP/badges"
+          git init -q -b badges
+          cp "$RUNNER_TEMP/downloads.json" .
+          git add downloads.json
+          git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm "Downloads badge"
+          git push -qf "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" badges
