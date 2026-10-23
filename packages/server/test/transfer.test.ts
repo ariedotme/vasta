@@ -121,7 +121,7 @@ describe('moving notes to another server', () => {
       Promise.resolve(String(url).endsWith('/api/health') ? Response.json({ ok: true }) : old.app.request(String(url), init))
     const migration = new Migration({ store: local.store, media: local.media, fetch: oldFetch })
     migration.start(local.store.listUsers()[0]!.id, { server: 'vasta.test', code: old.accounts.setupCode()!, username: 'ana', password: PASSWORD })
-    expect(await finished(migration)).toMatchObject({ phase: 'failed', error: 'vasta.test runs an older Vasta. Update it to 0.4 or later, then try again.' })
+    expect(await finished(migration)).toMatchObject({ phase: 'failed', error: 'vasta.test runs an older Vasta. Update it to 0.3.1 or later, then try again.' })
     expect(old.store.listUsers()).toEqual([])
 
     const remote = server()

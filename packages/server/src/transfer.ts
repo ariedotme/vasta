@@ -183,7 +183,7 @@ export class Migration {
     if (!response) throw new ImportError(`${server.host} does not answer. Check the address and the connection.`)
     const health = (await response.json().catch(() => undefined)) as { ok?: boolean; import?: number } | undefined
     if (!response.ok || !health?.ok) throw new ImportError(`${server.host} does not look like a Vasta server (it answered ${response.status}).`)
-    if (!health.import) throw new ImportError(`${server.host} runs an older Vasta. Update it to 0.4 or later, then try again.`)
+    if (!health.import) throw new ImportError(`${server.host} runs an older Vasta. Update it to 0.3.1 or later, then try again.`)
   }
 
   private async makeAccount(target: ReturnType<typeof parseTarget>, input: MigrationInput) {

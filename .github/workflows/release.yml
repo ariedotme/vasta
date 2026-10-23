@@ -1,6 +1,7 @@
 # A tag vX.Y.Z (scripts/release.sh makes one) publishes that version: the server image on GHCR
 # (linux/amd64 and linux/arm64) and the desktop app on a GitHub release, with the updater manifest
 # (latest.json) that installed apps check. The jobs run in parallel once the version is checked.
+# The release's notes are the version's section of CHANGELOG.md (scripts/release.sh names it).
 #
 # Secrets: TAURI_SIGNING_PRIVATE_KEY (and TAURI_SIGNING_PRIVATE_KEY_PASSWORD if the key has one),
 # the key whose public half is in packages/desktop/src-tauri/tauri.conf.json.
@@ -19,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      notes: ${{ steps.notes.outputs.notes }}
     steps:
       - uses: actions/checkout@v4
       - id: version
@@ -26,6 +28,18 @@ jobs:
           version=$(node -p "require('./packages/desktop/src-tauri/tauri.conf.json').version")
           [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME does not match the app version $version"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
+      - id: notes
+        run: |
+          notes=$(V=${{ steps.version.outputs.version }} node -e '
+            const text = require("fs").readFileSync("CHANGELOG.md", "utf8")
+            const head = `## ${process.env.V} (`
+            const start = text.indexOf(head)
+            if (start < 0) { console.error(`CHANGELOG.md has no section ${head}…)`); process.exit(1) }
+            const body = text.slice(text.indexOf("\n", start) + 1)
+            const end = body.search(/^## /m)
+            console.log((end < 0 ? body : body.slice(0, end)).trim())
+          ')
+          { echo "notes<<CHANGELOG_EOF"; echo "$notes"; echo "CHANGELOG_EOF"; } >> "$GITHUB_OUTPUT"
 
   image:
     needs: version
@@ -99,6 +113,11 @@ jobs:
           args: ${{ matrix.args }}
           tagName: ${{ github.ref_name }}
           releaseName: Vasta ${{ needs.version.outputs.version }}
-          releaseBody: See the README for installing the desktop app (it is not signed by Apple or Microsoft).
+          releaseBody: |
+            ${{ needs.version.outputs.notes }}
+
+            ---
+
+            **Installing the desktop app**: it is not signed by Apple or Microsoft, so your system warns the first time. See [Installing](https://github.com/ariedotme/vasta/blob/main/docs/desktop.md#installing). The server image: `ghcr.io/ariedotme/vasta:${{ needs.version.outputs.version }}`.
           releaseDraft: false
           uploadUpdaterJson: true

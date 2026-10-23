@@ -88,7 +88,7 @@ else's server: the link names it), and chooses a name, username and password. Th
 does the rest (`Migration` in `packages/server/src/transfer.ts`, `POST /api/migrate`, polled with
 `GET /api/migrate`):
 
-1. **Checks the server**: `/api/health` must say `import: 1` (0.4 and later), so an older server
+1. **Checks the server**: `/api/health` must say `import: 1` (0.3.1 and later), so an older server
    never gets an account with nothing in it.
 2. **Makes the account** with `/api/auth/setup` or `/api/auth/join` and `noSpace: true` (no empty
    space next to the ones coming), and keeps its session.
@@ -161,11 +161,12 @@ cd packages/desktop/src-tauri && cargo test
 ```
 
 Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a version tag is
-pushed: `scripts/release.sh 0.2.0` sets the version in the three files that hold it, checks,
-commits and tags; `git push origin main v0.2.0` publishes. The workflow builds macOS (Apple
+pushed: `scripts/release.sh 0.2.0` names `CHANGELOG.md`'s Unreleased section after the version
+(and refuses an empty one), sets the version in the files that hold it, checks, commits and tags; `git push origin main v0.2.0` publishes. The workflow builds macOS (Apple
 silicon), Windows (NSIS installer) and Linux (AppImage, `.deb`), signs the updater archives and
 attaches `latest.json`, the manifest installed apps check at
-`https://github.com/ariedotme/vasta/releases/latest/download/latest.json`.
+`https://github.com/ariedotme/vasta/releases/latest/download/latest.json`. The release's notes are
+that changelog section, with a line on installing.
 
 The updater key's public half is in `tauri.conf.json`; the private half is the repository secret
 `TAURI_SIGNING_PRIVATE_KEY`. **Keep a backup of the key**: without it, installed apps cannot be
