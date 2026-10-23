@@ -27,6 +27,10 @@ rustls = { version = "=0.23.46", default-features = false, features = ["ring"] }
 url = "2"
 getrandom = "=0.3.4"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "=0.6.5"
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSPanel", "NSResponder", "NSWindow"] }
+
 [profile.release]
 codegen-units = 1
 lto = true

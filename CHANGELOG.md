@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- macOS: Quick Capture from another app no longer brings Vasta's window to the front from its
+  second use on.
+
 ## 0.3.1 (2026-10-23)
 
 ### Added

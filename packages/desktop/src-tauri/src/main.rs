@@ -11,6 +11,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod local;
+#[cfg(target_os = "macos")]
+mod panel;
 mod notifications;
 mod settings;
 
@@ -196,8 +198,14 @@ fn quick_capture(app: &AppHandle) {
     match capture_panel(app) {
         Ok(panel) => {
             place_panel(app, &panel);
-            let _ = panel.show();
-            let _ = panel.set_focus();
+            // macOS: over the app in front without bringing Vasta (and its window) along.
+            #[cfg(target_os = "macos")]
+            panel::show(&panel);
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = panel.show();
+                let _ = panel.set_focus();
+            }
             let _ = panel.eval("window.dispatchEvent(new Event('vasta:open'))");
         }
         Err(error) => {
@@ -207,7 +215,7 @@ fn quick_capture(app: &AppHandle) {
     }
 }
 
-/// The panel window, made on first use and then only hidden and shown.
+/// The panel window, made at start (or on first use, if that failed) and then only hidden and shown.
 fn capture_panel(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     if let Some(panel) = app.get_webview_window(CAPTURE) {
         return Ok(panel);
@@ -225,7 +233,10 @@ fn capture_panel(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     // The card draws its own corners and shadow on a transparent window.
     #[cfg(target_os = "macos")]
     let builder = builder.transparent(true);
-    builder.build()
+    let panel = builder.build()?;
+    #[cfg(target_os = "macos")]
+    panel::make(&panel);
+    Ok(panel)
 }
 
 /// Centered on the screen with the pointer, a quarter of the way down.
@@ -238,18 +249,12 @@ fn place_panel(app: &AppHandle, panel: &WebviewWindow) {
     let _ = panel.set_position(PhysicalPosition::new(x, y));
 }
 
-/// Hide the panel; with `back`, also hand the focus back to the app that had it (macOS hides the
-/// whole app; it was not in front when the panel opened).
-fn hide_panel(app: &AppHandle, back: bool) {
+/// Hide the panel. The focus goes back to the app in front; on macOS it never left it (the panel
+/// does not activate Vasta).
+fn hide_panel(app: &AppHandle) {
     if let Some(panel) = app.get_webview_window(CAPTURE) {
         let _ = panel.hide();
     }
-    #[cfg(target_os = "macos")]
-    if back {
-        let _ = app.hide();
-    }
-    #[cfg(not(target_os = "macos"))]
-    let _ = back;
 }
 
 /// vasta://capture, vasta://today, or any path of the web app: vasta://o/<id>, vasta://day/2026-10-19,
@@ -455,7 +460,7 @@ fn capture_result(app: AppHandle, ok: bool, message: Option<String>) {
     let Some(panel) = app.get_webview_window(CAPTURE) else { return };
     if ok {
         let _ = panel.eval("window.dispatchEvent(new Event('vasta:capture-saved'))");
-        hide_panel(&app, true);
+        hide_panel(&app);
     } else {
         let detail = serde_json::to_string(&message.unwrap_or_default()).unwrap();
         let _ = panel.eval(format!("window.dispatchEvent(new CustomEvent('vasta:capture-failed', {{ detail: {detail} }}))"));
@@ -464,7 +469,7 @@ fn capture_result(app: AppHandle, ok: bool, message: Option<String>) {
 
 #[tauri::command]
 fn close_capture(app: AppHandle) {
-    hide_panel(&app, true);
+    hide_panel(&app);
 }
 
 /// Ask the web app what to offer at the panel's cursor (types after "/", a relation's objects, a
@@ -862,6 +867,10 @@ fn main() {
 
             let hidden = std::env::args().any(|arg| arg == HIDDEN_ARG);
             build_window(&handle, !hidden)?;
+            // Made now: making a webview brings Vasta to the front (wry), as starting does anyway.
+            if let Err(error) = capture_panel(&handle) {
+                eprintln!("Could not make the capture panel: {error}");
+            }
             build_tray(&handle)?;
 
             let shortcut = state(&handle).settings.lock().unwrap().shortcut();
@@ -901,7 +910,7 @@ fn main() {
                     let _ = window.hide();
                 }
                 // Like Spotlight: clicking elsewhere closes the capture panel (the draft stays).
-                WindowEvent::Focused(false) if window.label() == CAPTURE => hide_panel(window.app_handle(), false),
+                WindowEvent::Focused(false) if window.label() == CAPTURE => hide_panel(window.app_handle()),
                 _ => {}
             }
         })
