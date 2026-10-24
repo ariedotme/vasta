@@ -36,7 +36,7 @@
 </p>
 
 > Esta es una traducción del [README en inglés](README.md) (actualizada el 2026-10-24). La app y la
-> documentación de `docs/` todavía están solo en inglés
+> documentación de `docs/` todavía están solo en inglés, salvo la [guía para tu servidor](docs/deploy.es.md)
 > ([#34](https://github.com/ariedotme/vasta/issues/34)).
 
 Vasta es una alternativa de código abierto y autoalojada a Capacities y Notion. Guarda todo como objetos con tipo: páginas, tareas, libros, personas o un tipo que tú
@@ -46,7 +46,7 @@ servidor mantiene todos los dispositivos sincronizados.
 
 > [!NOTE]
 > Vasta está en alfa. Su autora la usa todos los días, pero algunas partes son nuevas. Haz copias
-> de seguridad ([docs/deploy.md](docs/deploy.md#upgrading-and-backups)).
+> de seguridad ([docs/deploy.es.md](docs/deploy.es.md#actualizaciones-y-copias-de-seguridad)).
 
 Si Vasta te resulta útil, dale una ⭐ en GitHub. Lo hace una sola persona, y las estrellas son la
 forma en que otras personas lo encuentran.
@@ -245,7 +245,7 @@ Settings › Server › **Move to a server…** y pega ahí el código de config
 con la cuenta nueva.
 
 Para HTTPS, copias de seguridad, actualizaciones y buckets de archivos, lee
-[docs/deploy.md](docs/deploy.md).
+[docs/deploy.es.md](docs/deploy.es.md).
 
 ## App de escritorio
 
@@ -298,7 +298,7 @@ La documentación está en inglés.
 
 - [Modelo de datos](docs/data-model.md): objetos, tipos, propiedades, documentos y consultas
 - [Cuentas](docs/accounts.md): usuarios, espacios compartidos, tokens y cómo se protege la API
-- [En tu servidor](docs/deploy.md): Docker, HTTPS, copias de seguridad y actualizaciones
+- [En tu servidor](docs/deploy.es.md): Docker, HTTPS, copias de seguridad y actualizaciones
 - [App de escritorio](docs/desktop.md): instalación, cómo funciona, versiones
 - [Captura](docs/capture.md): Telegram, API HTTP, extensión del navegador, Atajos
 - [Agentes](docs/agents.md): el endpoint MCP y la CLI

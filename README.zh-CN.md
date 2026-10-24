@@ -35,12 +35,12 @@
   </picture>
 </p>
 
-> 本文是[英文 README](README.md) 的翻译（更新于 2026-10-24）。应用界面和 `docs/` 中的文档目前只有英文（[#34](https://github.com/ariedotme/vasta/issues/34)）。
+> 本文是[英文 README](README.md) 的翻译（更新于 2026-10-24）。应用界面和 `docs/` 中的文档目前只有英文，[自托管指南](docs/deploy.zh-CN.md)除外（[#34](https://github.com/ariedotme/vasta/issues/34)）。
 
 Vasta 是 Capacities 和 Notion 的开源、可自托管替代品。它把一切都保存为带类型的对象：页面、任务、书籍、人物，或者你自己创建的类型。每一天都有一篇笔记，来自手机、浏览器或智能体的捕获内容都会进入这篇笔记。每台设备都保存一份你的空间副本，所以应用可以离线使用；你的服务器负责让所有设备保持同步。
 
 > [!NOTE]
-> Vasta 目前处于 alpha 阶段。作者每天都在使用它，但有些部分还很新。请做好备份（[docs/deploy.md](docs/deploy.md#upgrading-and-backups)）。
+> Vasta 目前处于 alpha 阶段。作者每天都在使用它，但有些部分还很新。请做好备份（[docs/deploy.zh-CN.md](docs/deploy.zh-CN.md#升级和备份)）。
 
 如果 Vasta 对你有用，请在 GitHub 上给它一个 ⭐。它由一个人开发，星标是其他人发现它的方式。
 
@@ -209,7 +209,7 @@ docker compose logs vasta
 
 已经在电脑上用桌面应用开始了？跳过第 3 步：在应用中打开 Settings › Server › **Move to a server…**，把设置码粘贴到那里。你的笔记会随新账户一起迁移过去。
 
-关于 HTTPS、备份、升级和媒体存储桶，请阅读 [docs/deploy.md](docs/deploy.md)。
+关于 HTTPS、备份、升级和媒体存储桶，请阅读 [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md)。
 
 ## 桌面应用
 
@@ -252,7 +252,7 @@ packages/
 
 - [数据模型](docs/data-model.md)：对象、类型、属性、文档和查询
 - [账户](docs/accounts.md)：用户、共享空间、令牌，以及 API 如何保证安全
-- [自托管](docs/deploy.md)：Docker、HTTPS、备份和升级
+- [自托管](docs/deploy.zh-CN.md)：Docker、HTTPS、备份和升级
 - [桌面应用](docs/desktop.md)：安装、工作原理、发布
 - [捕获](docs/capture.md)：Telegram、HTTP API、浏览器扩展、快捷指令
 - [智能体](docs/agents.md)：MCP 端点和 CLI

@@ -1,5 +1,7 @@
 # Self-hosting
 
+**English** · [Português](deploy.pt-BR.md) · [Español](deploy.es.md) · [简体中文](deploy.zh-CN.md) · [日本語](deploy.ja.md)
+
 Vasta runs as one Docker image, `ghcr.io/ariedotme/vasta` (for `linux/amd64` and `linux/arm64`):
 the API plus the built web app on port 5174, with the data directory mounted at `/data`
 (`vasta.db`, and `media/` unless media live in an S3-compatible bucket). Every release publishes

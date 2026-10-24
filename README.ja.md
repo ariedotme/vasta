@@ -35,12 +35,12 @@
   </picture>
 </p>
 
-> これは[英語版 README](README.md) の翻訳です（2026-10-24 更新）。アプリと `docs/` のドキュメントは、今のところ英語のみです（[#34](https://github.com/ariedotme/vasta/issues/34)）。
+> これは[英語版 README](README.md) の翻訳です（2026-10-24 更新）。アプリと `docs/` のドキュメントは、[セルフホストのガイド](docs/deploy.ja.md)を除いて、今のところ英語のみです（[#34](https://github.com/ariedotme/vasta/issues/34)）。
 
 Vasta は Capacities と Notion の、オープンソースでセルフホストできる代替です。すべてを型付きのオブジェクトとして保存します。ページ、タスク、本、人物、あるいは自分で作った型です。毎日にひとつのノートがあり、スマートフォンやブラウザ、エージェントからのキャプチャはそこに入ります。各デバイスがスペースのコピーを持つので、アプリはオフラインでも動きます。サーバーがすべてのデバイスを同期させます。
 
 > [!NOTE]
-> Vasta はアルファ版です。作者は毎日使っていますが、新しい部分もあります。バックアップを取ってください（[docs/deploy.md](docs/deploy.md#upgrading-and-backups)）。
+> Vasta はアルファ版です。作者は毎日使っていますが、新しい部分もあります。バックアップを取ってください（[docs/deploy.ja.md](docs/deploy.ja.md#アップグレードとバックアップ)）。
 
 Vasta が役に立ったら、GitHub で ⭐ を付けてください。ひとりで作っているプロジェクトで、スターが他の人に見つけてもらう手段になります。
 
@@ -208,7 +208,7 @@ docker compose logs vasta
 
 パソコンのデスクトップアプリで始めていた場合は、手順 3 を飛ばしてください。アプリで Settings › Server › **Move to a server…** を開き、そこにセットアップコードを貼り付けます。ノートは新しいアカウントと一緒に移ります。
 
-HTTPS、バックアップ、アップグレード、メディアバケットについては [docs/deploy.md](docs/deploy.md) を読んでください。
+HTTPS、バックアップ、アップグレード、メディアバケットについては [docs/deploy.ja.md](docs/deploy.ja.md) を読んでください。
 
 ## デスクトップアプリ
 
@@ -255,7 +255,7 @@ extensions/browser/      「Save to Vasta」ブラウザ拡張
 
 - [データモデル](docs/data-model.md)：オブジェクト、型、プロパティ、ドキュメント、クエリ
 - [アカウント](docs/accounts.md)：ユーザー、共有スペース、トークン、API の安全性
-- [セルフホスト](docs/deploy.md)：Docker、HTTPS、バックアップ、アップグレード
+- [セルフホスト](docs/deploy.ja.md)：Docker、HTTPS、バックアップ、アップグレード
 - [デスクトップアプリ](docs/desktop.md)：インストール、仕組み、リリース
 - [キャプチャ](docs/capture.md)：Telegram、HTTP API、ブラウザ拡張、ショートカット
 - [エージェント](docs/agents.md)：MCP エンドポイントと CLI

@@ -36,7 +36,7 @@
 </p>
 
 > Esta é uma tradução do [README em inglês](README.md) (atualizada em 2026-10-24). O app e a
-> documentação em `docs/` ainda estão só em inglês
+> documentação em `docs/` ainda estão só em inglês, menos o [guia de self-hosting](docs/deploy.pt-BR.md)
 > ([#34](https://github.com/ariedotme/vasta/issues/34)).
 
 O Vasta é uma alternativa open source e auto-hospedada ao Capacities e ao Notion. Ele guarda tudo como objetos com tipo: páginas, tarefas, livros, pessoas ou um tipo que você
@@ -46,7 +46,7 @@ mantém todos os dispositivos sincronizados.
 
 > [!NOTE]
 > O Vasta está em alfa. A autora usa todo dia, mas algumas partes são novas. Faça backups
-> ([docs/deploy.md](docs/deploy.md#upgrading-and-backups)).
+> ([docs/deploy.pt-BR.md](docs/deploy.pt-BR.md#atualizações-e-backups)).
 
 Se o Vasta for útil para você, dê uma ⭐ no GitHub. Ele é feito por uma pessoa só, e as estrelas
 são como outras pessoas o encontram.
@@ -242,7 +242,7 @@ docker compose logs vasta
 Começou com o app desktop no seu computador? Pule o passo 3: no app, abra Settings › Server ›
 **Move to a server…** e cole o código de configuração lá. Suas notas vêm junto com a conta nova.
 
-Para HTTPS, backups, atualizações e buckets de arquivos, leia [docs/deploy.md](docs/deploy.md).
+Para HTTPS, backups, atualizações e buckets de arquivos, leia [docs/deploy.pt-BR.md](docs/deploy.pt-BR.md).
 
 ## App desktop
 
@@ -294,7 +294,7 @@ A documentação está em inglês.
 
 - [Modelo de dados](docs/data-model.md): objetos, tipos, propriedades, documentos e consultas
 - [Contas](docs/accounts.md): usuários, espaços compartilhados, tokens e como a API se protege
-- [No seu servidor](docs/deploy.md): Docker, HTTPS, backups e atualizações
+- [No seu servidor](docs/deploy.pt-BR.md): Docker, HTTPS, backups e atualizações
 - [App desktop](docs/desktop.md): instalação, como funciona, versões
 - [Captura](docs/capture.md): Telegram, API HTTP, extensão do navegador, Atalhos
 - [Agentes](docs/agents.md): o endpoint MCP e a CLI
