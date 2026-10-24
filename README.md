@@ -267,7 +267,7 @@ extensions/browser/      "Save to Vasta" browser extension
 - [Capture](docs/capture.md): Telegram, HTTP API, browser extension, Shortcuts
 - [Agents](docs/agents.md): the MCP endpoint and the CLI
 - [Reminders](docs/reminders.md): ntfy, Telegram and the desktop app
-- [Sync](docs/sync-plan.md): how local-first sync works
+- [Sync](docs/sync.md): how local-first sync works
 
 The server also describes its capture API at `/api/openapi.json` (OpenAPI 3.1).
 

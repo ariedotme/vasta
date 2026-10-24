@@ -419,13 +419,12 @@ last write, from `meta` `sync.rev`) and `clock` (JSON: field name → HLC of the
 a new row's empty fields have none, and a new daily note's fields are stamped at the epoch so a
 change made to the same day's note elsewhere wins).
 `sync_tombstones (kind, id, space_id, rev)` remembers synced rows deleted for good, so clients
-learn they are gone. See [sync-plan.md](sync-plan.md), "Step 1 as built".
+learn they are gone. See [sync.md](sync.md#revisions).
 
 An object's rich text lives in `object_docs (object_id, ydoc, vector, rev)`: one Yjs document
 per object, one `Y.XmlFragment` per rich-text field. `objects.content` is derived from it (the
 JSON the editor would save) and kept for search, links, previews, queries and the export. Rich
-text is not in the `clock`: it merges through Yjs. See [sync-plan.md](sync-plan.md), "Step 2 as
-built".
+text is not in the `clock`: it merges through Yjs. See [sync.md](sync.md#rich-text-storage).
 
 `calendar_sources.data_hash` is a hash of the fetched iCalendar data (`CalendarSource.dataVersion`):
 replicas download the data again when it changes (`GET /api/sync/calendars/:id`).
@@ -438,7 +437,7 @@ copy of an object's text, and `sync_refused (id, at, kind, row_id, title, reason
 server refused, shown in Settings › This device until dismissed. Their `meta` holds `sync.pulled` (the server revision reached),
 `sync.spaces` (spaces pulled in full), `sync.calendars` (calendars whose data is out of date),
 `sync.text` (objects whose text the server has beyond the local copy, until fetched) and
-`replica.user`. See [sync-plan.md](sync-plan.md), "Steps 4b and 4c as built".
+`replica.user`. See [sync.md](sync.md#device).
 
 ## Import provenance
 

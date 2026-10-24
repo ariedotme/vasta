@@ -15,7 +15,7 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'sessions', column: 'last_seen_at', definition: 'TEXT' },
   // Deleted spaces wait 30 days in the trash before they are purged (AccountService.deleteSpace).
   { table: 'spaces', column: 'deleted_at', definition: 'TEXT' },
-  // Sync (docs/sync-plan.md): the global revision of the row's last write, and per-field HLCs (JSON).
+  // Sync (docs/sync.md): the global revision of the row's last write, and per-field HLCs (JSON).
   ...['spaces', 'types', 'objects', 'calendar_sources'].flatMap((table) => [
     { table, column: 'rev', definition: 'INTEGER' },
     { table, column: 'clock', definition: 'TEXT' },

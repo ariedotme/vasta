@@ -1019,7 +1019,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     })
   )
 
-  // Sync (docs/sync-plan.md) ---------------------------------------------------
+  // Sync (docs/sync.md) ---------------------------------------------------
   const speaksProtocol = (value: unknown) => Number(value) === SYNC_PROTOCOL
   const wrongProtocol = (c: Context) => c.json({ error: `this server speaks sync protocol ${SYNC_PROTOCOL}`, protocol: SYNC_PROTOCOL }, 409)
 

@@ -1,6 +1,6 @@
 // A device's replica of its user's spaces (the web app's worker; Tauri later): the shared store,
 // written by the user on this device and by pulls from the server, plus an outbox of what this
-// device changed and has not pushed yet. See docs/sync-plan.md, "Client".
+// device changed and has not pushed yet. See docs/sync.md, "Device".
 //
 // Local writes go through the store's ordinary methods, which stamp the fields they change with
 // this device's HLC; the `stamped` and `textSaved` hooks put those fields (and objects whose text

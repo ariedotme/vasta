@@ -1,4 +1,4 @@
-// A randomized convergence test of sync (docs/sync-plan.md, "Convergence test as built"). The
+// A randomized convergence test of sync (docs/sync.md, "Testing"). The
 // real server app, two or three devices with a replica (ClientStore on sqlite-wasm, editors on its
 // Y.Docs) and a browser tab without one (whole-object PUT with `base`) take a seeded random
 // sequence of steps: going offline and back, editing text and fields, trashing and restoring, the

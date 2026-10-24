@@ -1,4 +1,4 @@
-// Sync endpoints (docs/sync-plan.md): `pull` answers what changed in the user's spaces after a
+// Sync endpoints (docs/sync.md): `pull` answers what changed in the user's spaces after a
 // revision; `push` merges field changes from a client, each field kept only if its HLC is newer
 // than the stored one, and Yjs updates of rich text; `text` hands out the Yjs updates a client
 // lacks. The app's other routes keep writing whole records; the store stamps them.

@@ -1,6 +1,6 @@
 // Sync primitives shared by the server and (later) the clients' local stores: hybrid logical
 // clocks, and the fields of each synced record that merge one by one, the later write winning.
-// See docs/sync-plan.md.
+// See docs/sync.md.
 import type { CalendarSource, Id, IsoDateTime, ObjectRecord, ObjectType, Space } from './model.ts'
 
 /** Version of the pull/push protocol; a client speaking another one resets its replica. */

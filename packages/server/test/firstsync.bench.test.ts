@@ -1,4 +1,4 @@
-// How long a device's first sync takes against a big space (docs/sync-plan.md, "Measured").
+// How long a device's first sync takes against a big space (docs/sync.md, "Big spaces").
 // Skipped unless VASTA_BENCH is set: `VASTA_BENCH=1 pnpm vitest run firstsync`.
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'

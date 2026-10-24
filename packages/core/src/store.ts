@@ -372,7 +372,7 @@ export class Store {
 
   // -------------------------------------------------------------------------
   // Sync: every write to a synced row takes the next global revision (in the same transaction)
-  // and stamps the fields it changed. See docs/sync-plan.md.
+  // and stamps the fields it changed. See docs/sync.md.
 
   private revListeners = new Set<(spaceId: Id, rev: number) => void>()
   private pendingRevs = new Map<Id, number>()

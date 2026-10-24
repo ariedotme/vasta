@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 // The replica worker: the user's spaces in SQLite (sqlite-wasm on OPFS, "SAH pool" VFS, which
 // needs a dedicated worker and works in Safari 16.4+), the client store over it, and the sync
-// loop with the server. See docs/sync-plan.md, "Client".
+// loop with the server. See docs/sync.md, "Device".
 import sqlite3InitModule, { type SAHPoolUtil } from '@sqlite.org/sqlite-wasm'
 import { ClientStore, InvalidError, NotFoundError } from '@vasta/core/client'
 import { wasmDatabase } from '@vasta/core/sql-wasm'
