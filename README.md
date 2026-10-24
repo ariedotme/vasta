@@ -150,13 +150,36 @@ calendars with their iCal links.
 </picture>
 </td>
 </tr>
+<tr>
+<td width="40%" valign="middle">
+
+### Your agents, your notes
+
+Claude Code, Codex and scripts read and write your notes through an MCP endpoint and the `vasta`
+command: search, query, make objects, capture, log habits. They act as you, with a token you can
+revoke. Vasta has no AI inside and keeps no model keys.
+
+[Agents →](docs/agents.md)
+
+</td>
+<td width="60%">
+
+```sh
+claude mcp add --transport http vasta \
+  https://vasta.example.org/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+> Read my notes from this week's meetings and make a task for each
+> thing I promised, due Friday.
+
+</td>
+</tr>
 </table>
 
 **Also in Vasta:**
 
 - **Offline first**: each device keeps a copy in SQLite. Edits made offline on two devices merge.
-- **Agents**: an MCP endpoint and a CLI let Claude Code, Codex and scripts read and write your
-  notes with a token. Vasta keeps no AI keys. [Agents →](docs/agents.md)
 - **Block editor**: slash commands, `@` mentions, embeds, callouts, toggles, columns, tables and
   backlinks.
 - **Templates and snippets**: start a type's objects or each day's note from a template, with
