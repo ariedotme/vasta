@@ -119,10 +119,7 @@ relações, fórmulas. Mostre como lista, tabela, quadro, grade, mural ou galeri
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/types-dark.jpg" />
-  <img src="docs/assets/types-light.jpg" alt="Um tipo Livros na galeria, com capas, autores e status de leitura" width="100%" />
-</picture>
+<img src="docs/assets/types.gif" alt="O tipo Livros passa de estante para tabela e depois para galeria com capas" width="100%" />
 </td>
 </tr>
 <tr>
@@ -137,10 +134,7 @@ notificações. Métricas de fluxo mostram a velocidade do trabalho.
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/board-dark.jpg" />
-  <img src="docs/assets/board-light.jpg" alt="Um quadro de tarefas com as colunas A fazer, Em andamento e Feito, responsáveis e projetos" width="100%" />
-</picture>
+<img src="docs/assets/board.gif" alt="Duas tarefas arrastadas no quadro: uma para Done, outra para In progress" width="100%" />
 </td>
 </tr>
 <tr>
@@ -153,10 +147,7 @@ outros calendários pelos links iCal.
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/calendar-dark.jpg" />
-  <img src="docs/assets/calendar-light.jpg" alt="A visão do mês com sprints, tarefas e eventos" width="100%" />
-</picture>
+<img src="docs/assets/calendar.gif" alt="Duas tarefas arrastadas para outros dias na visão do mês" width="100%" />
 </td>
 </tr>
 <tr>

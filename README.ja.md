@@ -106,10 +106,7 @@ Telegram、ブラウザ拡張、エージェントからのキャプチャがど
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/types-dark.jpg" />
-  <img src="docs/assets/types-light.jpg" alt="ギャラリー表示の「本」の型。表紙、著者、読書状況が並ぶ" width="100%" />
-</picture>
+<img src="docs/assets/types.gif" alt="「本」の型を本棚表示から表、表紙付きのギャラリーへ切り替える様子" width="100%" />
 </td>
 </tr>
 <tr>
@@ -123,10 +120,7 @@ Telegram、ブラウザ拡張、エージェントからのキャプチャがど
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/board-dark.jpg" />
-  <img src="docs/assets/board-light.jpg" alt="未着手、進行中、完了の列があるタスクボード。担当者とプロジェクト付き" width="100%" />
-</picture>
+<img src="docs/assets/board.gif" alt="ボード上で 2 つのタスクをドラッグ：1 つは Done へ、もう 1 つは In progress へ" width="100%" />
 </td>
 </tr>
 <tr>
@@ -138,10 +132,7 @@ Telegram、ブラウザ拡張、エージェントからのキャプチャがど
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/calendar-dark.jpg" />
-  <img src="docs/assets/calendar-light.jpg" alt="スプリント、タスク、予定が表示された月表示" width="100%" />
-</picture>
+<img src="docs/assets/calendar.gif" alt="月表示で 2 つのタスクを別の日へドラッグする様子" width="100%" />
 </td>
 </tr>
 <tr>

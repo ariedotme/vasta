@@ -115,10 +115,7 @@ formulas. Show it as a list, table, board, grid, wall or gallery.
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/types-dark.jpg" />
-  <img src="docs/assets/types-light.jpg" alt="A Books type in the gallery view, with covers, authors and reading status" width="100%" />
-</picture>
+<img src="docs/assets/types.gif" alt="The Books type switches from a shelf to a table to a gallery with covers" width="100%" />
 </td>
 </tr>
 <tr>
@@ -133,10 +130,7 @@ notifications. Flow metrics show how fast work moves.
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/board-dark.jpg" />
-  <img src="docs/assets/board-light.jpg" alt="A task board with To do, In progress and Done columns, assignees and projects" width="100%" />
-</picture>
+<img src="docs/assets/board.gif" alt="Two tasks are dragged on the board: one to Done, one to In progress" width="100%" />
 </td>
 </tr>
 <tr>
@@ -149,10 +143,7 @@ calendars with their iCal links.
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/calendar-dark.jpg" />
-  <img src="docs/assets/calendar-light.jpg" alt="The month view with sprints, tasks and events" width="100%" />
-</picture>
+<img src="docs/assets/calendar.gif" alt="Two tasks are dragged to other days in the month view" width="100%" />
 </td>
 </tr>
 <tr>

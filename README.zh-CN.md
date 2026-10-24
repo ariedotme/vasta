@@ -107,10 +107,7 @@ Vasta 是 Capacities 和 Notion 的开源、可自托管替代品。它把一切
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/types-dark.jpg" />
-  <img src="docs/assets/types-light.jpg" alt="画廊视图中的“书籍”类型，显示封面、作者和阅读状态" width="100%" />
-</picture>
+<img src="docs/assets/types.gif" alt="“书籍”类型从书架视图切换到表格，再切换到带封面的画廊" width="100%" />
 </td>
 </tr>
 <tr>
@@ -124,10 +121,7 @@ Vasta 是 Capacities 和 Notion 的开源、可自托管替代品。它把一切
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/board-dark.jpg" />
-  <img src="docs/assets/board-light.jpg" alt="任务看板，包含待办、进行中和已完成三列，以及负责人和项目" width="100%" />
-</picture>
+<img src="docs/assets/board.gif" alt="在看板上拖动两个任务：一个拖到 Done，一个拖到 In progress" width="100%" />
 </td>
 </tr>
 <tr>
@@ -139,10 +133,7 @@ Vasta 是 Capacities 和 Notion 的开源、可自托管替代品。它把一切
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/calendar-dark.jpg" />
-  <img src="docs/assets/calendar-light.jpg" alt="月视图，显示冲刺、任务和日程" width="100%" />
-</picture>
+<img src="docs/assets/calendar.gif" alt="在月视图中把两个任务拖到其他日期" width="100%" />
 </td>
 </tr>
 <tr>
