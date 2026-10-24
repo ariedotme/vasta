@@ -104,10 +104,7 @@ propiedades: `/Task Ask Lena due:fri assignee:lena`.
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/capture-dark.jpg" />
-  <img src="docs/assets/capture-light.jpg" alt="La paleta ⌘K crea una tarea con fecha límite y responsable a partir de una línea" width="100%" />
-</picture>
+<img src="docs/assets/capture.gif" alt="La paleta ⌘K crea una tarea con fecha límite y responsable a partir de una línea" width="100%" />
 </td>
 </tr>
 <tr>

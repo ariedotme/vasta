@@ -93,10 +93,7 @@ Vasta 是 Capacities 和 Notion 的开源、可自托管替代品。它把一切
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/capture-dark.jpg" />
-  <img src="docs/assets/capture-light.jpg" alt="⌘K 面板用一行文字创建一个带截止日期和负责人的任务" width="100%" />
-</picture>
+<img src="docs/assets/capture.gif" alt="⌘K 面板用一行文字创建一个带截止日期和负责人的任务" width="100%" />
 </td>
 </tr>
 <tr>

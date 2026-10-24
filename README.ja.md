@@ -92,10 +92,7 @@ Telegram、ブラウザ拡張、エージェントからのキャプチャがど
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/capture-dark.jpg" />
-  <img src="docs/assets/capture-light.jpg" alt="⌘K パレットが 1 行から期限と担当者付きのタスクを作成する様子" width="100%" />
-</picture>
+<img src="docs/assets/capture.gif" alt="⌘K パレットが 1 行から期限と担当者付きのタスクを作成する様子" width="100%" />
 </td>
 </tr>
 <tr>

@@ -104,10 +104,7 @@ dela: `/Task Ask Lena due:fri assignee:lena`.
 
 </td>
 <td width="60%">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/capture-dark.jpg" />
-  <img src="docs/assets/capture-light.jpg" alt="A paleta ⌘K cria uma tarefa com prazo e responsável a partir de uma linha" width="100%" />
-</picture>
+<img src="docs/assets/capture.gif" alt="A paleta ⌘K cria uma tarefa com prazo e responsável a partir de uma linha" width="100%" />
 </td>
 </tr>
 <tr>
