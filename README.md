@@ -21,6 +21,7 @@
 
 <p align="center">
   <a href="#get-started">Get started</a> ·
+  <a href="#why-vasta">Why Vasta</a> ·
   <a href="#self-hosting">Self-hosting</a> ·
   <a href="#desktop-app">Desktop app</a> ·
   <a href="#documentation">Documentation</a> ·
@@ -34,14 +35,17 @@
   </picture>
 </p>
 
-Vasta keeps everything as typed objects: pages, tasks, books, people, or a type that you make.
-Each day has a note. Captures from your phone, your browser or an agent go into it.
-Each device keeps a copy of your spaces, so the app works offline. Your server keeps all
-devices in sync.
+Vasta is an open-source, self-hosted alternative to Capacities and Notion. It keeps everything as
+typed objects: pages, tasks, books, people, or a type that you make. Each day has a note.
+Captures from your phone, your browser or an agent go into it. Each device keeps a copy of your
+spaces, so the app works offline. Your server keeps all devices in sync.
 
 > [!NOTE]
 > Vasta is in alpha. Its author uses it every day, but some parts are new. Make backups
 > ([docs/deploy.md](docs/deploy.md#upgrading-and-backups)).
+
+If Vasta is useful to you, give it a ⭐ on GitHub. It is made by one person, and stars are how
+other people find it.
 
 ## Get started
 
@@ -195,6 +199,26 @@ claude mcp add --transport http vasta \
 - **Apps**: install the web app on a phone (PWA). The desktop app adds a global capture shortcut.
 - **Media** on disk or in an S3-compatible bucket.
 - **Import** from Capacities.
+
+## Why Vasta
+
+- **Capacities** has the same idea, objects with types and a note for each day, but it is closed
+  source and your notes live on its servers. Vasta runs on your computer or your server, works
+  offline, and has an importer for Capacities spaces.
+- **Notion** is in the cloud and needs an account with Notion. Vasta keeps a full copy on each
+  device and syncs through a server you own.
+- **Obsidian** keeps Markdown files on your disk; syncing them is a paid service or yours to set
+  up, and sharing a vault with other people is hard. Vasta has types and views built in, syncs to
+  your own server, and shares spaces with other people. It does not keep Markdown files (an export
+  is [planned](https://github.com/ariedotme/vasta/issues/1)).
+- **AFFiNE and AppFlowy** are open source too, and do much more (whiteboards, AI, a cloud). Their
+  self-hosted servers run on Postgres and Redis, next to their own services. Vasta's server is one container
+  and one SQLite file, and it focuses on daily notes, typed objects and quick capture: Telegram,
+  a desktop shortcut, a browser extension and agents.
+
+Vasta is not for you yet if you need a native phone app (it is a web app you install), plain
+Markdown files, or several people typing in the same note at once
+([#22](https://github.com/ariedotme/vasta/issues/22)).
 
 ## Self-hosting
 

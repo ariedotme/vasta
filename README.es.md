@@ -21,6 +21,7 @@
 
 <p align="center">
   <a href="#primeros-pasos">Primeros pasos</a> ·
+  <a href="#por-qué-vasta">Por qué Vasta</a> ·
   <a href="#en-tu-servidor">En tu servidor</a> ·
   <a href="#app-de-escritorio">App de escritorio</a> ·
   <a href="#documentación">Documentación</a> ·
@@ -34,11 +35,11 @@
   </picture>
 </p>
 
-> Esta es una traducción del [README en inglés](README.md) (hasta el commit `7f01fcb`). La app y la
+> Esta es una traducción del [README en inglés](README.md) (actualizada el 2026-10-24). La app y la
 > documentación de `docs/` todavía están solo en inglés
 > ([#34](https://github.com/ariedotme/vasta/issues/34)).
 
-Vasta guarda todo como objetos con tipo: páginas, tareas, libros, personas o un tipo que tú
+Vasta es una alternativa de código abierto y autoalojada a Capacities y Notion. Guarda todo como objetos con tipo: páginas, tareas, libros, personas o un tipo que tú
 creas. Cada día tiene una nota. Las capturas desde tu teléfono, tu navegador o un agente van ahí.
 Cada dispositivo guarda una copia de tus espacios, así que la app funciona sin conexión. Tu
 servidor mantiene todos los dispositivos sincronizados.
@@ -46,6 +47,9 @@ servidor mantiene todos los dispositivos sincronizados.
 > [!NOTE]
 > Vasta está en alfa. Su autora la usa todos los días, pero algunas partes son nuevas. Haz copias
 > de seguridad ([docs/deploy.md](docs/deploy.md#upgrading-and-backups)).
+
+Si Vasta te resulta útil, dale una ⭐ en GitHub. Lo hace una sola persona, y las estrellas son la
+forma en que otras personas lo encuentran.
 
 ## Primeros pasos
 
@@ -201,6 +205,26 @@ claude mcp add --transport http vasta \
   captura.
 - **Archivos** en disco o en un bucket compatible con S3.
 - **Importación** desde Capacities.
+
+## Por qué Vasta
+
+- **Capacities** tiene la misma idea, objetos con tipo y una nota para cada día, pero es de código
+  cerrado y tus notas viven en sus servidores. Vasta funciona en tu computadora o en tu servidor,
+  funciona sin conexión y tiene un importador para espacios de Capacities.
+- **Notion** está en la nube y requiere una cuenta en Notion. Vasta guarda una copia completa en
+  cada dispositivo y sincroniza a través de un servidor que es tuyo.
+- **Obsidian** guarda archivos Markdown en tu disco; sincronizarlos es un servicio de pago o corre
+  por tu cuenta, y compartir una bóveda con otras personas es difícil. Vasta trae tipos y vistas,
+  sincroniza con tu propio servidor y comparte espacios con otras personas. No guarda archivos
+  Markdown (hay una exportación [planeada](https://github.com/ariedotme/vasta/issues/1)).
+- **AFFiNE y AppFlowy** también son de código abierto y hacen mucho más (pizarras, IA, una nube).
+  Sus servidores autoalojados funcionan con Postgres y Redis, junto a sus propios servicios. El
+  servidor de Vasta es un contenedor y un archivo SQLite, y se centra en notas diarias, objetos con
+  tipo y captura rápida: Telegram, un atajo de escritorio, una extensión de navegador y agentes.
+
+Vasta todavía no es para ti si necesitas una app nativa para el teléfono (es una web app que
+instalas), archivos Markdown planos o que varias personas escriban en la misma nota a la vez
+([#22](https://github.com/ariedotme/vasta/issues/22)).
 
 ## En tu servidor
 

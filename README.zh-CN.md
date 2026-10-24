@@ -21,6 +21,7 @@
 
 <p align="center">
   <a href="#快速开始">快速开始</a> ·
+  <a href="#为什么选择-vasta">为什么选择 Vasta</a> ·
   <a href="#自托管">自托管</a> ·
   <a href="#桌面应用">桌面应用</a> ·
   <a href="#文档">文档</a> ·
@@ -34,12 +35,14 @@
   </picture>
 </p>
 
-> 本文是[英文 README](README.md) 的翻译（对应提交 `7f01fcb`）。应用界面和 `docs/` 中的文档目前只有英文（[#34](https://github.com/ariedotme/vasta/issues/34)）。
+> 本文是[英文 README](README.md) 的翻译（更新于 2026-10-24）。应用界面和 `docs/` 中的文档目前只有英文（[#34](https://github.com/ariedotme/vasta/issues/34)）。
 
-Vasta 把一切都保存为带类型的对象：页面、任务、书籍、人物，或者你自己创建的类型。每一天都有一篇笔记，来自手机、浏览器或智能体的捕获内容都会进入这篇笔记。每台设备都保存一份你的空间副本，所以应用可以离线使用；你的服务器负责让所有设备保持同步。
+Vasta 是 Capacities 和 Notion 的开源、可自托管替代品。它把一切都保存为带类型的对象：页面、任务、书籍、人物，或者你自己创建的类型。每一天都有一篇笔记，来自手机、浏览器或智能体的捕获内容都会进入这篇笔记。每台设备都保存一份你的空间副本，所以应用可以离线使用；你的服务器负责让所有设备保持同步。
 
 > [!NOTE]
 > Vasta 目前处于 alpha 阶段。作者每天都在使用它，但有些部分还很新。请做好备份（[docs/deploy.md](docs/deploy.md#upgrading-and-backups)）。
+
+如果 Vasta 对你有用，请在 GitHub 上给它一个 ⭐。它由一个人开发，星标是其他人发现它的方式。
 
 ## 快速开始
 
@@ -180,6 +183,15 @@ claude mcp add --transport http vasta \
 - **应用**：在手机上安装网页应用（PWA）。桌面应用提供全局捕获快捷键。
 - **媒体文件**存放在磁盘或兼容 S3 的存储桶中。
 - 从 Capacities **导入**。
+
+## 为什么选择 Vasta
+
+- **Capacities** 的理念相同：带类型的对象，每天一篇笔记。但它是闭源的，你的笔记存放在它的服务器上。Vasta 运行在你的电脑或你的服务器上，可以离线使用，并提供 Capacities 空间的导入工具。
+- **Notion** 在云端，需要一个 Notion 账户。Vasta 在每台设备上保存完整副本，并通过你自己的服务器同步。
+- **Obsidian** 把 Markdown 文件保存在你的磁盘上；同步它们要么是付费服务，要么需要你自己搭建，和别人共享一个仓库也很困难。Vasta 内置类型和视图，同步到你自己的服务器，并可以和他人共享空间。它不保存 Markdown 文件（导出功能已[在计划中](https://github.com/ariedotme/vasta/issues/1)）。
+- **AFFiNE 和 AppFlowy** 同样开源，功能也多得多（白板、AI、云服务）。它们的自托管服务器除了自身的服务，还需要 Postgres 和 Redis。Vasta 的服务器只是一个容器加一个 SQLite 文件，专注于每日笔记、带类型的对象和快速捕获：Telegram、桌面快捷键、浏览器扩展和智能体。
+
+如果你需要原生手机应用（Vasta 是可安装的网页应用）、纯 Markdown 文件，或多人同时在同一篇笔记中输入（[#22](https://github.com/ariedotme/vasta/issues/22)），那么 Vasta 暂时还不适合你。
 
 ## 自托管
 
