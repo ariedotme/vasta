@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.3.3 (2026-10-25)
+
 ### Added
 
 - **Templates: `ask()` with answers.** `ask("Body", "Yes", "No")` in a condition or a formula
