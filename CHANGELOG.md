@@ -12,6 +12,11 @@ GitHub release page.
   asks with buttons to pick from, so a choice can decide what a template adds without printing
   anything.
 
+### Fixed
+
+- macOS: **On this computer** starts again. Its server stopped right away ("signal: 5
+  (SIGTRAP)") because the bundled Node.js was not allowed the memory it compiles JavaScript into.
+
 ## 0.3.2 (2026-10-23)
 
 ### Added
