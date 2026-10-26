@@ -28,6 +28,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node blockrefs.mjs [base]    # @Title#… mentions a block, @@ embeds one read-only; it follows edits; links open the block (MODE=json too)
     node channels.mjs [base]     # Settings › Capture channels and Telegram's chats (the bot's state faked)
     node inbox.mjs [base]        # Settings › Inbox: the word for reviewed items, fading, in the inbox and the daily note
+    node import.mjs <export.zip> [base]   # Settings › Import: a Capacities full export into a new space, the report, a type and an object (SHOTS=<dir>)
     node nutrition.mjs [chromium|webkit] [base] [phone]   # food tracking: Settings, a weekly goal, the picker, editing, a recipe, portions, /food in ⌘K, the Nutrition page, kcal in the month (MODE=json too)
     node board.mjs [chromium|webkit] [base] [phone]   # drag between columns and within one (manual order), "+", WIP limit, folding, swimlanes, card fields, Blocked; phone = long press (chromium) (MODE=json too)
     node sprints.mjs [chromium|webkit] [base]   # Settings › Sprints (on, named Rodada), Current rodada and Backlog, a sprint's panel, Finish, Next (MODE=json too)

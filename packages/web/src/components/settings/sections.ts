@@ -9,6 +9,7 @@ export const SECTIONS = [
   { id: 'space', label: 'Space', icon: 'ph:planet' },
   // On the desktop app's own server: no other accounts, and the way to a real server.
   isLocalServer() ? { id: 'server', label: 'Server', icon: 'ph:hard-drives' } : { id: 'server', label: 'Server accounts', icon: 'ph:users-three' },
+  { id: 'import', label: 'Import', icon: 'ph:download-simple' },
   { id: 'snippets', label: 'Snippets', icon: 'ph:brackets-curly' },
   { id: 'sprints', label: 'Sprints', icon: 'ph:flag-banner' },
   { id: 'inbox', label: 'Inbox', icon: 'ph:tray' },

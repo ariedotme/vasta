@@ -38,6 +38,7 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=5174 VASTA_DATA=/data VASTA_WEB_DIR=/a
 COPY --from=server-deps /app ./
 COPY packages/core packages/core
 COPY packages/editor-schema/src packages/editor-schema/src
+COPY packages/importer-capacities/src packages/importer-capacities/src
 COPY packages/server/src packages/server/src
 COPY --from=web /app/packages/web/dist web
 RUN printf '#!/bin/sh\nexec node --no-warnings /app/packages/server/src/cli.ts "$@"\n' > /usr/local/bin/vasta \

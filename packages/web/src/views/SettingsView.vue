@@ -8,6 +8,7 @@ import AppearanceSettings from '../components/settings/AppearanceSettings.vue'
 import ChannelSettings from '../components/settings/ChannelSettings.vue'
 import DesktopSettings from '../components/settings/DesktopSettings.vue'
 import DeviceSettings from '../components/settings/DeviceSettings.vue'
+import ImportSettings from '../components/settings/ImportSettings.vue'
 import InboxSettings from '../components/settings/InboxSettings.vue'
 import NutritionSettings from '../components/settings/NutritionSettings.vue'
 import SnippetSettings from '../components/settings/SnippetSettings.vue'
@@ -85,6 +86,7 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
       <AccountSettings />
       <SpaceSettings />
       <ServerAccountsSettings />
+      <ImportSettings />
       <SnippetSettings />
       <SprintSettings />
       <InboxSettings />

@@ -22,8 +22,8 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     response = await fetch(url, {
       method,
       // The server refuses cookie-authenticated changes without this header (CSRF protection).
-      headers: { 'x-requested-with': 'vasta', ...(body === undefined || body instanceof FormData ? {} : { 'content-type': 'application/json' }) },
-      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
+      headers: { 'x-requested-with': 'vasta', ...(body === undefined || body instanceof FormData || body instanceof Blob ? {} : { 'content-type': 'application/json' }) },
+      body: body === undefined ? undefined : body instanceof FormData || body instanceof Blob ? body : JSON.stringify(body),
     })
   } catch (error) {
     noteNetworkError()
@@ -45,6 +45,20 @@ export interface SpaceBundle {
   counts: Record<Id, number>
   /** Entries in the trash. */
   trash: number
+}
+
+/** What importing a Capacities export did (mapExport in packages/importer-capacities/src/export.ts). */
+export interface CapacitiesImportReport {
+  objects: number
+  objectsByType: Record<string, number>
+  mergedDailyNotes: number
+  types: { created: string[]; matched: string[] }
+  tags: { created: number; matched: number }
+  media: { attached: number; missing: string[] }
+  unresolvedLinks: string[]
+  queries: string[]
+  skipped: string[]
+  warnings: Record<string, number>
 }
 
 export interface Trash {
@@ -284,6 +298,13 @@ const http = {
     form.set('file', file)
     return request<ObjectRecord>('POST', `/api/spaces/${spaceId}/files`, form)
   },
+  /** Which of these media files (by key) the server lacks. */
+  missingMedia: (keys: string[]) => request<{ missing: string[] }>('POST', '/api/import/media', { keys }),
+  /** Store a media file under its key ("<sha256>.<extension>"). */
+  putMedia: (key: string, data: Uint8Array) => request<void>('PUT', `/api/import/media/${key}`, new Blob([data as Uint8Array<ArrayBuffer>])),
+  /** Import a Capacities export's space folder into a space (lib/capacities-import.ts). */
+  importCapacities: (spaceId: Id, body: { markdown: Record<string, string>; media: Record<string, { key: string; name: string; sizeBytes: number; mimeType?: string }> }) =>
+    request<CapacitiesImportReport>('POST', `/api/spaces/${spaceId}/import/capacities`, body),
   /** The space's templates and snippets, whole (core's templates.ts): nothing else lists them. */
   templates: (spaceId: Id) => request<ObjectRecord[]>('GET', `/api/spaces/${spaceId}/templates`),
   /** The daily note of a day ("YYYY-MM-DD"), created on first use. */
@@ -478,6 +499,7 @@ const local: Partial<Api> = {
   refreshWeblink: viaServer(http.refreshWeblink),
   saveReadable: viaServer(http.saveReadable),
   uploadFile: viaServer(http.uploadFile),
+  importCapacities: viaServer(http.importCapacities),
   deleteObjectForever: viaServer(http.deleteObjectForever),
   deleteTypeForever: viaServer(http.deleteTypeForever),
   emptyTrash: viaServer(http.emptyTrash),

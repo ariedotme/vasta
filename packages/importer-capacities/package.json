@@ -4,11 +4,15 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
+  "exports": {
+    "./export": "./src/export.ts"
+  },
   "bin": {
     "vasta-import-capacities": "./src/cli.ts"
   },
   "dependencies": {
     "@vasta/core": "workspace:*",
-    "fflate": "0.8.2"
+    "fflate": "0.8.2",
+    "yaml": "2.9.1"
   }
 }

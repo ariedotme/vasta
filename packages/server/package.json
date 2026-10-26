@@ -13,6 +13,7 @@
     "@mozilla/readability": "0.6.0",
     "@vasta/core": "workspace:*",
     "@vasta/editor-schema": "workspace:*",
+    "@vasta/importer-capacities": "workspace:*",
     "hono": "4.13.13",
     "linkedom": "0.18.13",
     "zod": "4.6.5"

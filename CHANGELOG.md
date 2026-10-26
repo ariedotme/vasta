@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Import from Capacities in the app.** Settings › Import takes a Capacities full export (the ZIP
+  of Markdown files), on Windows, Linux and macOS and without the Capacities app, into a new
+  space or one you have. Types, properties, tags, links, daily notes and media come over, and a
+  report says what did not (queries need their filters again). [Import →](docs/import.md)
+
 ### Fixed
 
 - **Inbox:** objects you moved to the trash or deleted for good no longer show up there, as

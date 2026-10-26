@@ -10,7 +10,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { streamSSE } from 'hono/streaming'
-import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, TokenScope } from '@vasta/core'
+import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, StoredFile, TokenScope } from '@vasta/core'
 import {
   ACTIVITY_RETENTION_CHOICES,
   addDays,
@@ -23,6 +23,7 @@ import {
   QuoteError,
   SOURCE_PROPERTY_ID,
   SYNC_PROTOCOL,
+  builtinTypeId,
   applyEdit,
   canonicalJson,
   createQuote,
@@ -42,6 +43,7 @@ import {
 } from '@vasta/core'
 import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, type OccurrenceEdit } from '@vasta/core/calendar'
 import { checkMediaKey, mediaKey, RangeNotSatisfiableError, type MediaStore } from '@vasta/core/media'
+import { mapExport } from '@vasta/importer-capacities/export'
 import type { NodeStore } from '@vasta/core/node'
 import { AccountError, AccountService, type Auth } from './accounts.ts'
 import { currentActor, outsideActor, runAs } from './actor.ts'
@@ -118,6 +120,8 @@ const fromApp = (c: Context) => c.req.header(CLIENT_HEADER) === CLIENT_VALUE
 
 /** Largest file accepted by uploads and file captures. */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+/** The text of a Capacities export (its media go to /import/media one by one). */
+const MAX_CAPACITIES_IMPORT_BYTES = 64 * 1024 * 1024
 
 const uploadLimit = bodyLimit({
   // A little room for the multipart envelope around the file.
@@ -540,6 +544,44 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     if (mediaKey(data, key) !== key) return c.json({ error: 'the file does not match its key' }, 400)
     await media.put(data, key)
     return c.body(null, 204)
+  })
+
+  /**
+   * A Capacities "Full export", into this space: the Markdown files of one space folder of the ZIP
+   * ({ markdown: { path: text } }) and its media files, sent to /import/media first ({ media: { path:
+   * { key, name, mimeType? } } }). The app reads the ZIP (Settings › Import); this maps and writes it
+   * (importer-capacities/src/export.ts) and answers what it did.
+   */
+  api.post('/spaces/:id/import/capacities', bodyLimit({ maxSize: MAX_CAPACITIES_IMPORT_BYTES, onError: (c) => c.json({ error: 'the export is too large' }, 413) }), async (c) => {
+    const space = store.getSpace(c.req.param('id'))
+    if (!space) return c.json({ error: 'not found' }, 404)
+    const body = await c.req.json<{ markdown?: unknown; media?: unknown }>().catch(() => undefined)
+    if (!body?.markdown || typeof body.markdown !== 'object') return c.json({ error: 'send { markdown, media }' }, 400)
+    const markdown = Object.fromEntries(Object.entries(body.markdown).filter((e): e is [string, string] => typeof e[1] === 'string'))
+    const files: Record<string, StoredFile> = {}
+    for (const [path, file] of Object.entries(body.media && typeof body.media === 'object' ? body.media : {})) {
+      const { key, name, mimeType, sizeBytes } = (file ?? {}) as Partial<StoredFile>
+      if (!isMediaKey(key) || typeof name !== 'string' || !(await media.has(key))) continue
+      files[path] = { key, name, sizeBytes: typeof sizeBytes === 'number' ? sizeBytes : 0, ...(typeof mimeType === 'string' && mimeType ? { mimeType } : {}) }
+    }
+    const dailyType = builtinTypeId(space.id, 'daily-note')
+    const result = mapExport(
+      { markdown, media: files },
+      {
+        spaceId: space.id,
+        types: store.listTypes(space.id),
+        tags: store.listObjects(builtinTypeId(space.id, 'tag')).map((tag) => ({ id: tag.id, title: tag.title })),
+        dailyNote: (day) => store.findObjectOnDay(dailyType, day),
+        exists: (id) => !!store.getObject(id) || store.isTombstoned('objects', id),
+        newId: () => randomUUID(),
+      },
+      now()
+    )
+    store.transaction(() => {
+      for (const type of result.types) store.putType(type)
+      for (const object of result.objects) store.putObject(object)
+    })
+    return c.json(result.report)
   })
 
   // The desktop app's own server: move its user's notes to another server, where they make an
