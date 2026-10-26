@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **Inbox:** objects you moved to the trash or deleted for good no longer show up there, as
+  empty items that could not be opened.
+
 ## 0.3.3 (2026-10-25)
 
 ### Added

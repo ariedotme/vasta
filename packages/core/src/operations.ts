@@ -335,7 +335,17 @@ export function listInbox(store: Store, spaceId: Id, today: string, days: number
       })
     }
   }
-  return items.sort((a, b) => b.at.localeCompare(a.at))
+  // Objects in the trash or deleted for good leave the inbox: an item that was nothing but them goes.
+  const live = new Set(
+    store
+      .getObjectSummaries([...new Set(items.flatMap((i) => i.objectIds))])
+      .filter((o) => !o.deletedAt)
+      .map((o) => o.id)
+  )
+  return items
+    .filter((item) => item.content.some((node) => !isEmptyParagraph(node) && !(node.type === 'objectEmbed' && !live.has(node.attrs?.objectId as Id))))
+    .map((item) => ({ ...item, objectIds: item.objectIds.filter((id) => live.has(id)) }))
+    .sort((a, b) => b.at.localeCompare(a.at))
 }
 
 /** Mark a captured item done (or not). Returns the updated daily note, or undefined when the item is not in it. */

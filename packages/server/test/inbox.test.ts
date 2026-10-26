@@ -63,6 +63,20 @@ describe('inbox', () => {
     expect((await app.request(`/api/objects/${result.dailyNote.id}/captures/nope`, { method: 'PUT', body: '{"done":true}' })).status).toBe(404)
   })
 
+  it('leaves out objects in the trash or deleted for good', async () => {
+    const { app, capture, store, clock } = setup()
+    const trashed = await capture.task({ line: 'Trashed task', channel: 'shortcuts' })
+    const purged = await capture.task({ line: 'Purged task', channel: 'shortcuts' })
+    await capture.task({ line: 'Kept task', channel: 'shortcuts' })
+    await capture.note({ text: 'a note', channel: 'telegram' })
+    store.deleteObject(trashed.objects[0]!.id, clock.at)
+    store.purgeObject(purged.objects[0]!.id)
+
+    const inbox = (await (await app.request('/api/spaces/s/inbox?today=2026-10-01')).json()) as Inbox
+    expect(inbox.items).toHaveLength(2)
+    expect(inbox.objects.map((o) => o.title)).toEqual(['Kept task'])
+  })
+
   it('answers 404 for another space', async () => {
     const { app, store, capture } = setup()
     const other = await capture.note({ text: 'not yours', spaceId: 'other' })
