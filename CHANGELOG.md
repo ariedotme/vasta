@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.4.0 (2026-10-26)
+
 ### Added
 
 - **Mermaid diagrams.** `/Diagram` (or typing ```` ```mermaid ````) adds one; it is drawn on the
@@ -14,7 +16,7 @@ GitHub release page.
 - **Import from Capacities in the app.** Settings › Import takes a Capacities full export (the ZIP
   of Markdown files), on Windows, Linux and macOS and without the Capacities app, into a new
   space or one you have. Types, properties, tags, links, daily notes and media come over, and a
-  report says what did not (queries need their filters again). [Import →](docs/import.md)
+  report says what did not (queries need their filters again). [Import →](https://github.com/ariedotme/vasta/blob/main/docs/import.md)
 
 ### Fixed
 
