@@ -1,0 +1,83 @@
+// Mermaid diagrams (test env only): /Diagram inserts one, it is drawn, the code hides when the cursor
+// leaves and shows again on a click, a mistake names its line, ```mermaid typed makes one, and the
+// text is kept as a code block in "mermaid". SHOTS=<dir> saves light and dark screenshots.
+import { chromium } from 'playwright'
+const base = process.argv[2] ?? 'http://127.0.0.1:5183'
+if (!/^http:\/\/127\.0\.0\.1:518[34]$/.test(base)) throw new Error(`not the test env: ${base}`)
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1000, height: 900 } })
+const problems = []
+page.on('console', (m) => m.type() === 'error' && !/401/.test(m.text()) && problems.push(m.text()))
+page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`))
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+await page.goto(base)
+await page.fill('#login-username', 'tester')
+await page.fill('#login-password', 'test-password')
+await page.click('button[type=submit]')
+await page.waitForSelector('nav', { timeout: 30000 })
+const spaces = await (await page.request.get(`${base}/api/spaces`)).json()
+const bundle = await (await page.request.get(`${base}/api/spaces/${spaces[0].id}`)).json()
+const pageType = bundle.types.find((t) => t.system === 'page')
+const created = await (await page.request.post(`${base}/api/objects`, { headers: { 'x-requested-with': 'vasta' }, data: { typeId: pageType.id, title: 'Diagram check' } })).json()
+await sleep(1500)
+await page.goto(`${base}/o/${created.id}`)
+await page.waitForSelector('.vasta-doc')
+await page.click('.vasta-doc')
+await sleep(150)
+
+console.log('• /Diagram')
+await page.keyboard.type('/diagram')
+await sleep(300)
+await page.keyboard.press('Enter')
+const diagram = page.locator('[data-diagram]').first()
+await diagram.locator('svg').waitFor({ timeout: 15000 })
+console.log('drawn:', await diagram.locator('svg').count() === 1, '| code shown while editing:', await diagram.locator('pre').isVisible())
+
+console.log('• leave the block: only the drawing')
+await page.keyboard.press('Meta+ArrowDown')
+await page.keyboard.press('ArrowDown')
+await page.keyboard.type('After the diagram')
+await sleep(300)
+console.log('code hidden:', !(await diagram.locator('pre').isVisible()))
+if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/diagram-light.png` })
+
+console.log('• click the drawing: the code again, edited live')
+await diagram.locator('svg').click()
+await sleep(200)
+console.log('code shown:', await diagram.locator('pre').isVisible())
+await page.keyboard.type('\n  B --> C[Diagram]')
+await sleep(800)
+console.log('nodes:', (await diagram.locator('svg').textContent()).replace(/\s+/g, ' ').trim())
+
+console.log('• a mistake')
+await page.keyboard.type('\n  C -->')
+await sleep(800)
+console.log('error:', (await diagram.locator('[data-diagram-error]').textContent())?.trim())
+for (let i = 0; i < '\n  C -->'.length; i++) await page.keyboard.press('Backspace')
+await sleep(800)
+console.log('fixed:', await diagram.locator('svg').count() === 1 && !(await diagram.locator('[data-diagram-error]').count()))
+
+console.log('• ```mermaid typed')
+await page.locator('.vasta-doc p', { hasText: 'After the diagram' }).click()
+// ProseMirror takes the click's selection on selectionchange (README).
+await sleep(300)
+await page.keyboard.press('End')
+await page.keyboard.press('Enter')
+await page.keyboard.type('```mermaid ')
+await page.keyboard.type('sequenceDiagram\n  Ana->>Bia: Hi')
+await page.waitForFunction(() => document.querySelectorAll('[data-diagram] svg').length === 2, null, { timeout: 15000 }).catch(() => {})
+console.log('second diagram drawn:', await page.locator('[data-diagram] svg').count() === 2)
+await sleep(1500)
+const saved = await (await page.request.get(`${base}/api/objects/${created.id}`)).json()
+const blocks = saved.content.body.content.filter((n) => n.type === 'codeBlock').map((n) => [n.attrs.language, n.content?.[0]?.text])
+console.log('saved:', JSON.stringify(blocks))
+
+if (process.env.SHOTS) {
+  await page.click('.vasta-doc h1, .vasta-doc', { position: { x: 5, y: 5 } }).catch(() => {})
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.evaluate(() => document.documentElement.classList.add('dark'))
+  await sleep(400)
+  await page.screenshot({ path: `${process.env.SHOTS}/diagram-dark.png` })
+}
+console.log(problems.length ? `problems:\n${problems.join('\n')}` : 'no console errors')
+await browser.close()

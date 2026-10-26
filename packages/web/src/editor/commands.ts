@@ -2,6 +2,7 @@
 import type { Editor, Range } from '@tiptap/core'
 import type { Id } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
+import { MERMAID } from '../lib/mermaid.ts'
 import { openMenuAt, type MenuItem } from '../lib/overlays.ts'
 import { systemType, typesById } from '../lib/state.ts'
 import { insertSnippet, insertTemplate, loadTemplates, snippetsFor, templates } from '../lib/templates.ts'
@@ -81,6 +82,17 @@ export const slashCommands: SlashCommand[] = [
   },
   { id: 'table', label: 'Table', icon: 'ph:table', run: (e, r) => chain(e, r).insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run() },
   { id: 'code', label: 'Code', icon: 'ph:code', run: (e, r) => chain(e, r).toggleCodeBlock().run() },
+  {
+    id: 'diagram',
+    label: 'Diagram',
+    icon: 'ph:flow-arrow',
+    keywords: 'mermaid flowchart chart graph sequence mindmap',
+    // A Mermaid code block (CodeBlockView.vue draws it), started with a small flowchart.
+    run: (e, r) =>
+      chain(e, r)
+        .insertContent({ type: 'codeBlock', attrs: { language: MERMAID }, content: [{ type: 'text', text: 'flowchart LR\n  A[Idea] --> B[Note]' }] })
+        .run(),
+  },
   { id: 'divider', label: 'Divider', icon: 'ph:minus', keywords: 'hr line', run: (e, r) => chain(e, r).setHorizontalRule().run() },
   {
     id: 'query',

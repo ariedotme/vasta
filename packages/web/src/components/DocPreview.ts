@@ -1,6 +1,6 @@
 // Read-only rendering of rich text outside the editor (the inbox), without loading TipTap.
-// Covers what captures contain: paragraphs with marks and links, lists, quotes, code, mentions
-// and embedded objects; other containers show their children.
+// Covers what captures contain: paragraphs with marks and links, lists, quotes, code (Mermaid
+// diagrams drawn), mentions and embedded objects; other containers show their children.
 import { defineComponent, h, type PropType, type VNode } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { DocMark, DocNode } from '@vasta/core'
@@ -8,7 +8,9 @@ import { displayTitle } from '../lib/format.ts'
 import { imageOf } from '../lib/media.ts'
 import { iconTextClasses } from '../lib/colors.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
+import { MERMAID } from '../lib/mermaid.ts'
 import AppIcon from './AppIcon.vue'
+import MermaidDiagram from './MermaidDiagram.vue'
 import ObjectChip from './ObjectChip.vue'
 
 const safeHref = (href: string) => (/^(https?:|mailto:)/i.test(href) ? href : undefined)
@@ -83,6 +85,7 @@ function block(node: DocNode): VNode | null {
     case 'blockquote':
       return h('blockquote', { class: 'my-1 border-l-2 border-line-strong pl-3 text-ink-soft' }, children())
     case 'codeBlock':
+      if (node.attrs?.language === MERMAID) return h(MermaidDiagram, { text: (node.content ?? []).map((n) => n.text ?? '').join('') })
       return h('pre', { class: 'my-1 overflow-x-auto rounded-lg bg-hover p-2 text-xs' }, inline(node.content))
     case 'objectEmbed':
       return typeof node.attrs?.objectId === 'string' ? embed(node.attrs.objectId) : null

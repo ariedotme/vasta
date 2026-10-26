@@ -156,7 +156,8 @@ reach back only as far as the space keeps activity (the page says so when the ra
 
 Documents are ProseMirror JSON so the editor (TipTap) and sync (Yjs via y-prosemirror) use them
 directly. Besides the standard nodes (paragraph, heading, lists, task lists, blockquote,
-code block, horizontal rule, table) Vasta defines:
+code block, horizontal rule, table) Vasta defines the nodes below. A code block whose `language`
+is `mermaid` is a diagram: the app draws it with [Pele](https://pele.run) and keeps the text.
 
 - `mention` — inline link to an object (`objectId`, `label`)
 - `objectEmbed` — an object shown as a block (`display`: inline, card, wide-card, embed)

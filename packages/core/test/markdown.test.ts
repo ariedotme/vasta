@@ -105,6 +105,13 @@ describe('markdown', () => {
     expect(markdownToDoc(markdown).content).toEqual(doc.content)
   })
 
+  it('keeps a Mermaid diagram as a mermaid code block, so agents read and write diagrams', () => {
+    const diagram = '```mermaid\nflowchart LR\n  A[Idea] --> B[Note]\n```'
+    const doc = markdownToDoc(diagram)
+    expect(doc.content).toEqual([{ type: 'codeBlock', attrs: { language: 'mermaid' }, content: [text('flowchart LR\n  A[Idea] --> B[Note]')] }])
+    expect(docToMarkdown(doc)).toBe(diagram)
+  })
+
   it('flattens toggles, groups and columns', () => {
     const doc: Doc = {
       type: 'doc',

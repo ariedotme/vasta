@@ -86,6 +86,7 @@ code, `==highlight==` and links. Vasta's own pieces:
 - an embedded object (a card, an image): `![Title](vasta://o/<id>)`; one block of it (read-only,
   following the original): `![Title](vasta://o/<id>#b-<block>)`
 - a callout: a quote that starts with `[!NOTE]`
+- a diagram: a code block in `mermaid` (```` ```mermaid ````), which the app draws
 
 Toggles, groups and columns come out as their content; block colors and ids are not part of the
 Markdown. So "replace" rewrites a text with what Markdown holds; "append" and "prepend" leave the

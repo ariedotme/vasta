@@ -176,8 +176,8 @@ claude mcp add --transport http vasta \
 **Also in Vasta:**
 
 - **Offline first**: each device keeps a copy in SQLite. Edits made offline on two devices merge.
-- **Block editor**: slash commands, `@` mentions, embeds, callouts, toggles, columns, tables and
-  backlinks.
+- **Block editor**: slash commands, `@` mentions, embeds, callouts, toggles, columns, tables,
+  Mermaid diagrams and backlinks.
 - **Templates and snippets**: start a type's objects or each day's note from a template, with
   placeholders (`{{date:+7d}}`, `{{ask:With whom?}}`) and blocks shown only when a condition
   holds; insert snippets with `/`. [Templates →](docs/data-model.md#templates-and-snippets)

@@ -7,6 +7,7 @@ import { Y, contentToYDoc, loadYDoc, markDeletions, normalizeDoc, readContent, t
 // The web editor's extensions without the browser: views and app state are stubbed, they do not
 // shape the schema.
 vi.mock('../../web/src/editor/CalloutView.vue', () => ({ default: {} }))
+vi.mock('../../web/src/editor/CodeBlockView.vue', () => ({ default: {} }))
 vi.mock('../../web/src/editor/MentionList.vue', () => ({ default: {} }))
 vi.mock('../../web/src/editor/MentionView.vue', () => ({ default: {} }))
 vi.mock('../../web/src/editor/ObjectEmbedView.vue', () => ({ default: {} }))

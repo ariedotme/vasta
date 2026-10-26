@@ -19,6 +19,7 @@ import {
   ObjectEmbed,
   TaskItemNested,
   Unsupported,
+  VastaCodeBlock,
   VastaDetails,
   VastaStarterKit,
   VastaTableKit,
@@ -34,6 +35,7 @@ import { createObject } from '../lib/actions.ts'
 import { BlockAttributesView } from './block-attributes.ts'
 import { BlockKeysWhileTyping, Blocks } from './blocks.ts'
 import CalloutView from './CalloutView.vue'
+import CodeBlockView from './CodeBlockView.vue'
 import { filterCommands, type SlashCommand, type SlashContext } from './commands.ts'
 import MentionList, { type MentionItem } from './MentionList.vue'
 import MentionView from './MentionView.vue'
@@ -42,6 +44,11 @@ import { Uploads } from './uploads.ts'
 import SlashList from './SlashList.vue'
 import { suggestionPopup } from './suggestion-popup.ts'
 import { PlaceholderMenu, PlaceholderWithView, TemplateBranchWithView, TemplateIf } from './template-nodes.ts'
+
+/** Code blocks, which draw Mermaid diagrams (CodeBlockView.vue). */
+const CodeBlockWithView = VastaCodeBlock.extend({
+  addNodeView: () => VueNodeViewRenderer(CodeBlockView),
+})
 
 const CalloutWithView = Callout.extend({
   addNodeView: () => VueNodeViewRenderer(CalloutView),
@@ -282,6 +289,7 @@ function offerWeblink(editor: Editor, url: string, from: number, to: number) {
 export function createExtensions(placeholder: string, text?: { doc: Y.Doc; field: string }, objectId?: string, template = false) {
   return [
     text ? VastaStarterKit.configure({ undoRedo: false }) : VastaStarterKit,
+    CodeBlockWithView,
     TaskList,
     TaskItemNested,
     VastaTableKit,

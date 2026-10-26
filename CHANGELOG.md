@@ -8,6 +8,9 @@ GitHub release page.
 
 ### Added
 
+- **Mermaid diagrams.** `/Diagram` (or typing ```` ```mermaid ````) adds one; it is drawn on the
+  page, in your colors and in dark mode, and its code shows when you click it. Agents read and
+  write diagrams as Mermaid code blocks.
 - **Import from Capacities in the app.** Settings › Import takes a Capacities full export (the ZIP
   of Markdown files), on Windows, Linux and macOS and without the Capacities app, into a new
   space or one you have. Types, properties, tags, links, daily notes and media come over, and a

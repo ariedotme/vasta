@@ -3,6 +3,7 @@
 // DocNodeType in @vasta/core. The web app extends these nodes with its views and plugins; a test
 // checks that both give the same schema, or a client would drop content the other one wrote.
 import { Extension, Node, getSchema, mergeAttributes, type AnyExtension } from '@tiptap/core'
+import { CodeBlock } from '@tiptap/extension-code-block'
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
 import Highlight from '@tiptap/extension-highlight'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
@@ -23,7 +24,11 @@ export const VastaStarterKit = StarterKit.configure({
   heading: { levels: [1, 2, 3, 4] },
   underline: false,
   link: { openOnClick: true, autolink: true, HTMLAttributes: { target: '_blank', rel: 'noopener noreferrer' } },
+  codeBlock: false,
 })
+
+/** Code blocks, outside the starter kit so the web app gives them a view (Mermaid diagrams) in the same place of the schema. */
+export const VastaCodeBlock = CodeBlock
 
 export const Callout = Node.create({
   name: 'callout',
@@ -267,6 +272,7 @@ export const VastaTableKit = TableKit.configure({ table: { resizable: false } })
 export function schemaExtensions(): AnyExtension[] {
   return [
     VastaStarterKit,
+    VastaCodeBlock,
     TaskList,
     TaskItemNested,
     VastaTableKit,
