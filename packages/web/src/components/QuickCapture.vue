@@ -5,10 +5,12 @@
 // weblinks); offline the local replica does, and it syncs later. "/" and a type's name make an
 // object of that type instead ("/Book Dune author:x"), embedded in the note; "/" lists the types,
 // and a relation's or a select's `name:` lists its objects or options. "/food …" logs what was
-// eaten on today's note instead, offering the foods at the cursor.
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { foodCommand, type ObjectSummary, type ObjectType } from '@vasta/core'
-import { captureSpace, captureText, completionSource, dayKey, openCapture, typesOf } from '../lib/actions.ts'
+// eaten on today's note instead, offering the foods at the cursor. With Settings › Desktop app ›
+// "Ask a template's questions", a "/Type …" line whose template asks something shows its
+// questions before it saves (Esc goes back to the text).
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { foodCommand, type ObjectSummary, type ObjectType, type TemplateAsk } from '@vasta/core'
+import { captureAsks, captureSpace, captureText, completionSource, dayKey, openCapture, typesOf } from '../lib/actions.ts'
 import { foodSourcesOf, previewFoodLine } from '../lib/nutrition.ts'
 import { isDesktop } from '../lib/platform.ts'
 import { meId, people } from '../lib/people.ts'
@@ -62,13 +64,35 @@ async function pick(item: Completion) {
   cursor.value = item.cursor
 }
 
+// The template's questions, once save found some open; answered before saving again.
+const asks = ref<TemplateAsk[] | null>(null)
+const answers = reactive<Record<string, string>>({})
+const questions = ref<HTMLElement>()
+
+async function ask(pending: TemplateAsk[]) {
+  for (const key of Object.keys(answers)) delete answers[key]
+  for (const a of pending) answers[a.label] = a.options?.[0] ?? ''
+  asks.value = pending
+  await nextTick()
+  questions.value?.querySelector<HTMLElement>('input, button')?.focus()
+}
+
+function backToText() {
+  asks.value = null
+  void nextTick(() => field.value?.focus())
+}
+
 /** Save; with `open` (Ctrl+Enter), then open what it made: the new object, else today's note. */
 async function save(open = false) {
   if (!text.value.trim() || !space.value || saving.value) return
   saving.value = true
   error.value = ''
   try {
-    const { space: saved, answer, food, made } = await captureText(text.value, isDesktop ? 'desktop' : 'app')
+    if (!asks.value) {
+      const pending = await captureAsks(text.value).catch(() => [])
+      if (pending.length) return void (await ask(pending))
+    }
+    const { space: saved, answer, food, made } = await captureText(text.value, isDesktop ? 'desktop' : 'app', asks.value ? { ...answers } : undefined)
     if (open) {
       close()
       await openCapture(saved, answer, made)
@@ -87,6 +111,23 @@ async function save(open = false) {
   } finally {
     saving.value = false
   }
+}
+
+/** Keys in the questions: Enter saves, Ctrl+Enter saves and opens, Esc goes back to the text. */
+function onQuestionKey(event: KeyboardEvent) {
+  if (event.isComposing) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    backToText()
+  } else if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement && !event.ctrlKey)) {
+    event.preventDefault()
+    void save(event.ctrlKey)
+  }
+}
+
+function pickAnswer(label: string, option: string, event?: KeyboardEvent) {
+  answers[label] = option
+  if (event) void save(event.ctrlKey)
 }
 
 function onKey(event: KeyboardEvent) {
@@ -124,7 +165,30 @@ function onKey(event: KeyboardEvent) {
 <template>
   <ModalDialog title="Quick capture" width="34rem" @close="close">
     <template #icon><AppIcon fallback="ph:lightning" class="text-ink-soft" /></template>
+    <div v-if="asks" ref="questions" class="space-y-3" data-testid="capture-questions" @keydown="onQuestionKey">
+      <p class="truncate text-sm text-ink-soft">{{ text.split('\n')[0] }}</p>
+      <div v-for="item in asks" :key="item.label">
+        <p class="mb-1 text-xs text-ink-faint">{{ item.label }}</p>
+        <div v-if="item.options?.length" class="flex flex-wrap gap-1.5" role="radiogroup" :aria-label="item.label">
+          <button
+            v-for="option in item.options"
+            :key="option"
+            role="radio"
+            :aria-checked="answers[item.label] === option"
+            class="rounded-lg border px-2.5 py-1 text-sm"
+            :class="answers[item.label] === option ? 'border-line-strong bg-hover text-ink' : 'border-line text-ink-soft hover:bg-hover'"
+            @click="pickAnswer(item.label, option)"
+            @keydown.enter.prevent="pickAnswer(item.label, option, $event)"
+          >
+            {{ option }}
+          </button>
+        </div>
+        <input v-else v-model="answers[item.label]" class="w-full rounded-xl border border-line bg-raised px-3 py-2 text-sm outline-none focus:border-line-strong" />
+      </div>
+      <p class="text-xs text-ink-faint">Enter saves, Ctrl+Enter saves and opens it, Esc goes back to the text.</p>
+    </div>
     <textarea
+      v-else
       ref="field"
       v-model="text"
       rows="4"
@@ -134,7 +198,7 @@ function onKey(event: KeyboardEvent) {
       @keyup="readCursor"
       @click="readCursor"
     />
-    <div v-if="shown.length" class="mt-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface p-1" role="listbox" aria-label="Suggestions">
+    <div v-if="!asks && shown.length" class="mt-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface p-1" role="listbox" aria-label="Suggestions">
       <button
         v-for="(item, i) in shown"
         :key="`${i}-${item.label}`"
@@ -151,7 +215,8 @@ function onKey(event: KeyboardEvent) {
       </button>
     </div>
     <p v-if="error" class="mt-2 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
-    <div v-if="foodPreview" class="mt-2 space-y-0.5 text-xs text-ink-faint" data-testid="capture-preview">
+    <template v-if="asks" />
+    <div v-else-if="foodPreview" class="mt-2 space-y-0.5 text-xs text-ink-faint" data-testid="capture-preview">
       <p class="text-ink-soft">{{ foodPreview.text }}</p>
       <p v-if="foodPreview.problem" class="text-amber-700 dark:text-amber-400">{{ foodPreview.problem }}</p>
     </div>
@@ -169,6 +234,7 @@ function onKey(event: KeyboardEvent) {
     </div>
     <p v-else class="mt-2 text-xs text-ink-faint">Goes to today’s note in {{ space?.name }}. Enter saves, Ctrl+Enter saves and opens it, Shift+Enter adds a line.</p>
     <template #footer>
+      <button v-if="asks" class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="backToText">Back</button>
       <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="close">Cancel</button>
       <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-50" :disabled="!text.trim() || saving" @click="save()">Capture</button>
     </template>

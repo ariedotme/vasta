@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // The desktop app (shown only inside it): its version, where updates come from, and the quick
-// capture shortcut, recorded here and handed to the app (set_shortcut), which registers it.
+// capture shortcut, recorded here and handed to the app (set_shortcut), which registers it; and
+// whether quick capture asks a template's questions before it saves (this device's choice).
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { desktop, formatShortcut, recordShortcut, recording, setShortcut } from '../../lib/platform.ts'
+import { ui } from '../../lib/state.ts'
 import SettingsSection from './SettingsSection.vue'
 import { errorText, field, label, secondary } from './styles.ts'
 
@@ -85,6 +87,13 @@ onBeforeUnmount(() => recordFrom(false))
       <p v-else class="text-ink-soft">
         <template v-if="desktop">Quick capture: {{ formatShortcut(desktop.shortcut) }}. </template>Update the app (Check for Updates… in the Vasta icon’s menu) to change the shortcut here.
       </p>
+      <label class="flex items-start gap-2">
+        <input v-model="ui.captureAsks" type="checkbox" class="mt-0.5 accent-[var(--color-accent)]" />
+        <span>
+          Ask a template’s questions in quick capture
+          <span class="mt-0.5 block text-xs text-ink-faint">A “/Type …” line made from a template that asks something (ask:, choose:, ask() in a formula) shows its questions before it saves, in the dialog and in the floating panel. A line can still answer them itself (body:yes). The floating panel asks from the desktop app after 0.4.0.</span>
+        </span>
+      </label>
     </div>
   </SettingsSection>
 </template>

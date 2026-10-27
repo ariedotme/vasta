@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Quick capture asks a template's questions.** With Settings › Desktop app › "Ask a template’s
+  questions in quick capture" (off by default), a `/Type …` line whose template asks something
+  shows those questions before it saves, in the dialog and in the desktop app's floating panel
+  (after updating the desktop app). Questions the line already answers (`body:yes`) are not asked.
+
 ### Fixed
 
 - **Templates: a formula with `{{…}}` or braces inside it** no longer lands in the new object as raw

@@ -2,8 +2,8 @@
 // replica work as in a browser, offline included), plus what a browser tab cannot do: a menu-bar
 // item, a global shortcut for quick capture, external links in the default browser, vasta:// links,
 // start at login, updates and reminders as system notifications (notifications.rs). The server's
-// pages get six commands (set_shortcut, from Settings; capture_result and capture_suggestions,
-// answers to the capture panel; update_app, the web app's "Update"; set_notify_token, the token
+// pages get seven commands (set_shortcut, from Settings; capture_result, capture_questions and
+// capture_suggestions, answers to the capture panel; update_app, the web app's "Update"; set_notify_token, the token
 // the app hears reminders with; notify, a reminder from a page, for web apps of 0.1.10); everything else runs in Rust and talks to the page by dispatching DOM events (see
 // packages/web/src/lib/platform.ts). Closing the window or ⌘Q keeps the app in the menu bar; only
 // Quit Vasta ends it. Without a server of their own, people can run one on this computer instead
@@ -113,8 +113,8 @@ fn open_local(app: &AppHandle, query: Option<&str>) {
     navigate(app, url);
 }
 
-/// Let the server's pages call set_shortcut (Settings › Desktop app), capture_result and
-/// capture_suggestions (answers to the capture panel), update_app (the web app's "Update"),
+/// Let the server's pages call set_shortcut (Settings › Desktop app), capture_result,
+/// capture_questions and capture_suggestions (answers to the capture panel), update_app (the web app's "Update"),
 /// set_notify_token and notify (reminders as system notifications), move
 /// the window from their bars (data-tauri-drag-region; macOS has no title bar), and nothing else.
 /// The server on this computer also gets use_server: its notes moved, the app switches over.
@@ -127,6 +127,7 @@ fn allow_server(app: &AppHandle, server: &Url) {
         .window(MAIN)
         .permission("allow-set-shortcut")
         .permission("allow-capture-result")
+        .permission("allow-capture-questions")
         .permission("allow-capture-suggestions")
         .permission("allow-update-app")
         .permission("allow-notify")
@@ -447,18 +448,29 @@ fn set_shortcut(app: AppHandle, shortcut: String) -> Result<String, String> {
 
 /// Hand the panel's text to the web app in the main window, which answers with capture_result.
 /// With `open` (Ctrl+Enter) the web app also opens what it made, and the window comes forward.
+/// `asks` tells the web app the panel can show a template's questions (it may answer with
+/// capture_questions instead); `answers` are the panel's answers to them, by question.
 #[tauri::command]
-fn submit_capture(app: AppHandle, text: String, open: Option<bool>) -> Result<(), String> {
+fn submit_capture(app: AppHandle, text: String, open: Option<bool>, answers: Option<serde_json::Value>) -> Result<(), String> {
     if !on_server(&app) {
         return Err("Vasta is not connected to its server yet. Open it first.".into());
     }
     let open = open.unwrap_or(false);
     *state(&app).open_capture.lock().unwrap() = open;
     let detail = serde_json::to_string(&text).unwrap();
+    let extra = serde_json::json!({ "open": open, "asks": true, "answers": answers });
     main_window(&app)
         .ok_or("Vasta has no window.")?
-        .eval(format!("window.dispatchEvent(Object.assign(new CustomEvent('vasta:capture-text', {{ detail: {detail} }}), {{ open: {open} }}))"))
+        .eval(format!("window.dispatchEvent(Object.assign(new CustomEvent('vasta:capture-text', {{ detail: {detail} }}), {extra}))"))
         .map_err(|error| error.to_string())
+}
+
+/// The questions of the template a panel's "/Type …" line starts from, which the web app wants
+/// answered before it captures (Settings › Desktop app); the panel shows them and submits again.
+#[tauri::command]
+fn capture_questions(app: AppHandle, asks: serde_json::Value) {
+    let Some(panel) = app.get_webview_window(CAPTURE) else { return };
+    let _ = panel.eval(format!("window.dispatchEvent(new CustomEvent('vasta:capture-asks', {{ detail: {asks} }}))"));
 }
 
 #[tauri::command]
@@ -853,7 +865,7 @@ fn main() {
             "app-quit" => app.exit(0),
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![startup, connect, use_local, use_server, set_shortcut, open_server, submit_capture, capture_result, close_capture, suggest_capture, capture_suggestions, fit_capture, update_app, notify, set_notify_token])
+        .invoke_handler(tauri::generate_handler![startup, connect, use_local, use_server, set_shortcut, open_server, submit_capture, capture_result, capture_questions, close_capture, suggest_capture, capture_suggestions, fit_capture, update_app, notify, set_notify_token])
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(AppState { settings: Mutex::new(Settings::load(&handle)), capture_item: Mutex::new(None), folder_item: Mutex::new(None), starting: Mutex::new(()), open_capture: Mutex::new(false) });

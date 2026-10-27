@@ -3,7 +3,10 @@
 // space, offline through the replica) and reports back; the app then hides this panel. Esc hides
 // it and keeps the draft; Ctrl+Enter (on macOS too) saves and opens what it made in the main window. While typing, the web app also says what to offer at the cursor ("/"
 // lists the types, a relation's `name:` its objects; suggest_capture → capture_suggestions) and
-// what a "/Type …" line will make; the panel grows to show the list.
+// what a "/Type …" line will make; the panel grows to show the list. When quick capture asks a
+// template's questions (Settings › Desktop app), the web app answers a submit with them
+// (capture_questions → vasta:capture-asks): the panel shows them in place of the text and submits
+// again with the answers; Esc goes back to the text.
 const invoke = (command, args) => window.__TAURI_INTERNALS__.invoke(command, args)
 const field = document.getElementById('text')
 const error = document.getElementById('error')
@@ -11,6 +14,8 @@ const list = document.getElementById('list')
 const preview = document.getElementById('preview')
 const hint = document.getElementById('hint')
 const openHint = document.getElementById('open-hint')
+const questions = document.getElementById('questions')
+const footer = document.querySelector('footer')
 const BASE_HEIGHT = 168
 let waiting = null
 let items = []
@@ -18,6 +23,9 @@ let active = 0
 let seq = 0
 let asked = { text: null, cursor: null }
 let height = BASE_HEIGHT
+/** The questions shown, and their answers by question; null while typing the text. */
+let asking = null
+let answers = {}
 
 /** Ask the web app what to offer, once per text and cursor position. */
 function suggest() {
@@ -64,7 +72,8 @@ function render() {
 
 /** Grow to show the list (the card fills the window), or go back. */
 function fit() {
-  const wanted = Math.ceil(BASE_HEIGHT + (items.length ? list.offsetHeight + 4 : 0))
+  // The body's padding and the card's border around the questions and the footer.
+  const wanted = asking ? Math.ceil(questions.offsetHeight + footer.offsetHeight + 38) : Math.ceil(BASE_HEIGHT + (items.length ? list.offsetHeight + 4 : 0))
   if (wanted === height) return
   height = wanted
   invoke('fit_capture', { height }).catch(() => {})
@@ -104,6 +113,81 @@ function fail(message) {
   done()
   error.textContent = message
   error.hidden = false
+  if (asking) questions.querySelector('input, button[aria-checked="true"]')?.focus()
+  else field.focus()
+}
+
+/** Show the template's questions in place of the text, the first answer of each choice picked. */
+function ask(asks) {
+  done()
+  asking = asks
+  answers = Object.fromEntries(asks.map((a) => [a.label, a.options?.[0] ?? '']))
+  const line = document.createElement('p')
+  line.className = 'line'
+  line.textContent = field.value.split('\n')[0]
+  questions.replaceChildren(
+    line,
+    ...asks.map((a) => {
+      const row = document.createElement('div')
+      row.className = 'ask'
+      const label = document.createElement('span')
+      label.className = 'label'
+      label.textContent = a.label
+      row.append(label)
+      if (a.options?.length) {
+        const options = document.createElement('div')
+        options.className = 'options'
+        options.setAttribute('role', 'radiogroup')
+        options.setAttribute('aria-label', a.label)
+        const buttons = a.options.map((option) => {
+          const button = document.createElement('button')
+          button.type = 'button'
+          button.setAttribute('role', 'radio')
+          button.textContent = option
+          button.addEventListener('click', () => choose(option))
+          return button
+        })
+        const choose = (option) => {
+          answers[a.label] = option
+          for (const b of buttons) b.setAttribute('aria-checked', String(b.textContent === option))
+        }
+        // Left and right move between the answers, as a radio group does.
+        options.addEventListener('keydown', (event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+          event.preventDefault()
+          const at = buttons.indexOf(document.activeElement)
+          const next = buttons[(at + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length]
+          next.focus()
+          choose(next.textContent)
+        })
+        choose(answers[a.label])
+        options.append(...buttons)
+        row.append(options)
+      } else {
+        const input = document.createElement('input')
+        input.addEventListener('input', () => (answers[a.label] = input.value))
+        row.append(input)
+      }
+      return row
+    })
+  )
+  field.hidden = true
+  items = []
+  list.hidden = true
+  questions.hidden = false
+  showPreview('Enter saves · Esc goes back to the text', null)
+  fit()
+  questions.querySelector('input, button[aria-checked="true"]')?.focus()
+}
+
+function backToText() {
+  asking = null
+  answers = {}
+  questions.hidden = true
+  questions.replaceChildren()
+  field.hidden = false
+  showPreview(null, null)
+  fit()
   field.focus()
 }
 
@@ -114,7 +198,7 @@ async function save(open = false) {
   field.disabled = true
   waiting = setTimeout(() => fail('Vasta did not answer. Open it and try again.'), 8000)
   try {
-    await invoke('submit_capture', { text, open })
+    await invoke('submit_capture', { text, open, answers: asking ? answers : null })
   } catch (failure) {
     fail(String(failure?.message ?? failure))
   }
@@ -155,6 +239,17 @@ field.addEventListener('keydown', (event) => {
   }
 })
 
+questions.addEventListener('keydown', (event) => {
+  if (event.isComposing) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    void save(event.ctrlKey)
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    backToText()
+  }
+})
+
 field.addEventListener('input', suggest)
 field.addEventListener('keyup', suggest)
 field.addEventListener('click', suggest)
@@ -170,12 +265,15 @@ window.addEventListener('vasta:capture-suggestions', (event) => {
 })
 window.addEventListener('vasta:open', () => {
   error.hidden = true
+  if (asking) return questions.querySelector('input, button[aria-checked="true"]')?.focus()
   field.focus()
   field.setSelectionRange(field.value.length, field.value.length)
 })
 window.addEventListener('vasta:capture-saved', () => {
   done()
+  if (asking) backToText()
   field.value = ''
   clearSuggestions()
 })
+window.addEventListener('vasta:capture-asks', (event) => event.detail?.length && ask(event.detail))
 window.addEventListener('vasta:capture-failed', (event) => fail(event.detail || 'The capture failed.'))

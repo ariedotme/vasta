@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-capture-questions"
+description = "Enables the capture_questions command without any pre-configured scope."
+commands.allow = ["capture_questions"]
+
+[[permission]]
+identifier = "deny-capture-questions"
+description = "Denies the capture_questions command without any pre-configured scope."
+commands.deny = ["capture_questions"]

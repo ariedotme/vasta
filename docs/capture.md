@@ -200,6 +200,18 @@ the item itself (`ClientStore.capture`, links stay links) and it syncs later. Bo
 the object of a `/Type …` line (the answer's `objects`, first the one made), else today's note
 (`openCapture` in `lib/actions.ts`). Enter only saves.
 
+**A template's questions** (Settings › Desktop app › "Ask a template's questions in quick
+capture", off by default, kept per device): a `/Type …` line whose template asks something
+(`{{ask:…}}`, `{{choose:…}}`, `ask()` in a formula) shows the questions the line leaves open
+before it saves: a field for each, buttons for a choice. Enter saves, Ctrl+Enter saves and opens,
+Esc goes back to the text. A line still answers them itself (`body:yes`), and a typed title
+replaces a template title made only of questions, so those are not asked
+(`lineAsks` in core's `capture-line.ts`). The answers go with the capture
+(`POST /api/spaces/:id/captures` with `answers`, by question; offline `ClientStore.captureObject`).
+The floating panel shows them too (desktop after 0.4.0): it submits with `asks`, the web app
+answers with `capture_questions` instead of saving, and the panel submits again with `answers`.
+Without the setting, or with an older panel, the line saves as before, answering nothing.
+
 **An object of a type**: a text that starts with `/` and a type's name makes an object of that
 type instead, and the note embeds it, as Telegram's `/new` does:
 

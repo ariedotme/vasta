@@ -1,12 +1,12 @@
-import { foodCommand, type FoodLineAnswer, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type Space } from '@vasta/core'
+import { foodCommand, lineAsks, type FoodLineAnswer, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type Space, type TemplateAsk } from '@vasta/core'
 import type { CaptureAnswer } from '@vasta/core/client'
 import { api } from './api.ts'
 import { clone } from './clone.ts'
 import { displayTitle } from './format.ts'
 import { confirmDialog, promptDialog, type MenuItem } from './overlays.ts'
 import { session } from './session.ts'
-import { forgetSummary, loadWorkspace, notice, primeFromObject, refreshCounts, replaceType, summaryOf, systemType, typesById, workspace } from './state.ts'
-import { typedLine, type CompletionSource } from './typed-line.ts'
+import { forgetSummary, loadWorkspace, notice, primeFromObject, refreshCounts, replaceType, summaryOf, systemType, typesById, ui, workspace } from './state.ts'
+import { previewLine, typedLine, type CompletionSource } from './typed-line.ts'
 import { people } from './people.ts'
 import { loadTemplates, templates } from './templates.ts'
 import { router } from '../router.ts'
@@ -62,7 +62,22 @@ export function completionSource(spaceId: Id, types: ObjectType[]): CompletionSo
  * A text that starts with a type, "/Book Dune author:x", makes an object of it from the first
  * line (the other lines are its body), and the note embeds it.
  */
-export async function captureText(text: string, channel: string): Promise<{ space: Space; answer: CaptureAnswer; food?: FoodLineAnswer; made?: Id }> {
+/**
+ * The template questions a quick capture should ask before it saves (Settings › Capture, off by
+ * default): those of the template a "/Type …" line starts from that the line leaves open.
+ */
+export async function captureAsks(text: string): Promise<TemplateAsk[]> {
+  const space = captureSpace()
+  if (!ui.captureAsks || !space || !text.startsWith('/')) return []
+  const typed = typedLine(await typesOf(space), text)
+  if (!typed) return []
+  const line = typed.rest.split('\n')[0] ?? ''
+  const list = await api.templates(space.id).catch(() => [])
+  return lineAsks(list, typed.type, line, !!previewLine(typed.type, line, dayKey(), [], undefined, list).title)
+}
+
+/** `answers`: to the questions of the template a "/Type …" line starts from (captureAsks). */
+export async function captureText(text: string, channel: string, answers?: Record<string, string>): Promise<{ space: Space; answer: CaptureAnswer; food?: FoodLineAnswer; made?: Id }> {
   const space = captureSpace()
   if (!space) throw new Error('There is no space to capture into.')
   // "/food …" logs what was eaten instead (core's nutrition.ts).
@@ -72,7 +87,7 @@ export async function captureText(text: string, channel: string): Promise<{ spac
     return { space, answer: { dailyNoteId: food.dailyNoteId ?? '', blockId: '', summary: food.summary }, food }
   }
   const typed = text.startsWith('/') ? typedLine(await typesOf(space), text) : undefined
-  const answer = await api.capture(space.id, typed ? typed.rest : text, channel, dayKey(), typed?.type.id)
+  const answer = await api.capture(space.id, typed ? typed.rest : text, channel, dayKey(), typed?.type.id, typed ? answers : undefined)
   return { space, answer, ...(typed && answer.objects?.[0] ? { made: answer.objects[0].id } : {}) }
 }
 

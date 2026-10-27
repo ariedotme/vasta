@@ -9,7 +9,7 @@ import type { DateValue, Doc, Id, IsoDateTime, ObjectRecord, ObjectType, Person,
 import { findOrCreateDailyNote, newObject } from './operations.ts'
 import { currentSprint } from './sprints.ts'
 import type { Store } from './store.ts'
-import { applyTemplate, defaultTemplate, findTemplate, templateAsks } from './templates.ts'
+import { applyTemplate, defaultTemplate, findTemplate, templateAsks, type TemplateAsk } from './templates.ts'
 import { textToBlocks } from './text-doc.ts'
 import { addDays, dayIn, instantOf, isValidDay } from './time.ts'
 
@@ -369,6 +369,22 @@ export function lineAnswers(line: string, type: ObjectType, asks: { label: strin
     else kept.push(token.raw)
   }
   return { answers, rest: kept.join(' ') }
+}
+
+/**
+ * The questions a capture line leaves open: the asks of its template (the one it names, else the
+ * type's default) that it does not answer as `key:value`. With `hasTitle`, asks only the template's
+ * title uses are left out, since a typed title takes the place of a title without `{{title}}`.
+ */
+export function lineAsks(templates: ObjectRecord[], type: ObjectType, line: string, hasTitle: boolean): TemplateAsk[] {
+  const named = leadingTemplate(line)
+  const template = named ? findTemplate(templates, type.id, named.name) : defaultTemplate(templates, type.id)
+  if (!template) return []
+  const asks = templateAsks(template)
+  const { answers } = lineAnswers(named ? named.rest : line, type, asks)
+  const titleReplaced = hasTitle && !/\{\{\s*title\s*\}\}/.test(template.title)
+  const outsideTitle = titleReplaced ? new Set(templateAsks({ ...template, title: '' }).map((a) => a.label)) : undefined
+  return asks.filter((a) => !(a.label in answers) && (!outsideTitle || outsideTitle.has(a.label)))
 }
 
 /** Types the app's quick capture and ⌘K offer after "/": the ones made from a title and properties alone. */

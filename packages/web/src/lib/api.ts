@@ -346,10 +346,10 @@ const http = {
   /**
    * Capture a text into today's note (`day` is the device's today, used when the capture is made
    * offline). With `typeId`, the first line is the title and properties of a new object of that
-   * type, the rest its body, and the note embeds it.
+   * type, the rest its body, and the note embeds it; `answers` answers its template's questions.
    */
-  capture: (spaceId: Id, text: string, channel: string, _day: string, typeId?: Id) =>
-    request<CaptureAnswer>('POST', `/api/spaces/${spaceId}/captures`, typeId ? { text, channel, typeId } : { text, channel }),
+  capture: (spaceId: Id, text: string, channel: string, _day: string, typeId?: Id, answers?: Record<string, string>) =>
+    request<CaptureAnswer>('POST', `/api/spaces/${spaceId}/captures`, typeId ? { text, channel, typeId, ...(answers ? { answers } : {}) } : { text, channel }),
   /** Spaces in the trash that the user owned. */
   deletedSpaces: () => request<(Space & { deletedAt: string })[]>('GET', '/api/deleted-spaces'),
   restoreSpace: (id: Id) => request<Space>('POST', `/api/deleted-spaces/${id}/restore`),
@@ -478,13 +478,13 @@ const local: Partial<Api> = {
   inbox: (spaceId, today, days) => callStore('inbox', spaceId, today, days),
   setCaptureDone: (noteId, captureId, done) => callStore('markCaptureDone', noteId, captureId, done, now()),
   // Online the server captures (it turns links into weblinks); offline the replica does.
-  capture: async (spaceId, text, channel, day, typeId) => {
+  capture: async (spaceId, text, channel, day, typeId, answers) => {
     try {
-      return await viaServer(http.capture)(spaceId, text, channel, day, typeId)
+      return await viaServer(http.capture)(spaceId, text, channel, day, typeId, answers)
     } catch (error) {
       if (!(error instanceof Error && error.message === OFFLINE_MESSAGE)) throw error
       const result = typeId
-        ? await callStore('captureObject', spaceId, typeId, text, channel, day, now(), timeZone())
+        ? await callStore('captureObject', spaceId, typeId, text, channel, day, now(), timeZone(), answers)
         : await callStore('capture', spaceId, text, channel, day, now())
       void syncNow()
       return result

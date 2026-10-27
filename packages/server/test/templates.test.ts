@@ -109,6 +109,32 @@ describe('templates', () => {
     expect(leadingType(store.listTypes('s'), '/Task:Bug Login breaks')).toMatchObject({ type: { id: task }, rest: ':Bug Login breaks' })
   })
 
+  it('says which questions a capture line leaves open, and takes their answers', async () => {
+    const { user, store } = setup()
+    const page = builtinTypeId('s', 'page')
+    const { lineAsks } = await import('@vasta/core')
+    const create = (data: unknown) => user.request('/api/objects', json(data))
+    const branch = { type: 'templateIf', content: [{ type: 'templateBranch', attrs: { condition: 'ask("Body", "Yes", "No") = "Yes"' }, content: [{ type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Quote' }] }] }] }] }
+    const author = { type: 'paragraph', content: [{ type: 'text', text: 'By {{ask:Author}}' }] }
+    await create({ typeId: page, title: '{{ask:Title}}', content: { body: { type: 'doc', content: [author, branch] } }, template: { kind: 'template', name: 'Echo', default: true } })
+    const templates = store.listTemplates('s')
+    const type = store.getType(page)!
+    const labels = (line: string, hasTitle: boolean) => lineAsks(templates, type, line, hasTitle).map((a) => a.label)
+    // A typed title takes the place of a title made only of questions.
+    expect(labels('Freedom', true)).toEqual(['Author', 'Body'])
+    expect(labels('', false)).toEqual(['Title', 'Author', 'Body'])
+    expect(labels('Freedom body:no', true)).toEqual(['Author'])
+    expect(lineAsks(templates, type, 'x', true)[1]).toEqual({ label: 'Body', options: ['Yes', 'No'] })
+
+    const capture = async (answers: Record<string, string>) => {
+      const answer = (await (await user.request('/api/spaces/s/captures', json({ text: 'Freedom', channel: 'desktop', typeId: page, answers }))).json()) as { objects: { id: string }[] }
+      const made = store.getObject(answer.objects[0]!.id)!
+      return [texts(made)[0], ...(made.content.body?.content ?? []).slice(1).map((n) => n.type)]
+    }
+    expect(await capture({ Author: 'Freire', Body: 'Yes' })).toEqual(['By Freire', 'blockquote'])
+    expect(await capture({ Author: 'Freire', Body: 'No' })).toEqual(['By Freire'])
+  })
+
   it('lets agents list templates and make objects from them', async () => {
     const { user, agent } = setup()
     const task = builtinTypeId('s', 'task')

@@ -1,7 +1,8 @@
 // The desktop app's capture panel page (packages/desktop/src/capture.html) in a browser, with the
 // app's commands faked: typing asks for suggestions, the answer shows as a list and a preview,
 // arrows and Enter pick one, Esc puts the list away, the panel asks to grow and shrink back, and
-// Ctrl+Enter saves asking to open what it made.
+// Ctrl+Enter saves asking to open what it made. A template's questions (vasta:capture-asks) show in
+// place of the text: a choice and a text field, Enter submits them with the answers, Esc goes back.
 // No server needed; the web app's side of it is in capture.mjs.
 import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
@@ -79,4 +80,33 @@ await page.keyboard.press('Control+Enter')
 const opened = await page.evaluate(() => window.calls.filter(([c]) => c === 'submit_capture').at(-1)?.[1])
 console.log('Ctrl+Enter submitted:', JSON.stringify(opened))
 if (opened?.open !== true || opened.text !== '/Livro Hyperion') throw new Error('Ctrl+Enter did not ask to open')
+
+// The web app answers with the template's questions instead of saving.
+const asks = [{ label: 'Author' }, { label: 'Body', options: ['Yes', 'No'] }]
+await page.evaluate((detail) => window.dispatchEvent(new CustomEvent('vasta:capture-asks', { detail })), asks)
+await page.waitForTimeout(100)
+console.log('questions:', await page.locator('#questions .label').allTextContents(), '| text hidden:', await field.isHidden(), '| fit:', (await fits()).at(-1))
+if (!(await field.isHidden())) throw new Error('the text still shows over the questions')
+await page.keyboard.type('Paulo Freire')
+await page.keyboard.press('Tab')
+await page.keyboard.press('ArrowRight')
+console.log('picked:', await page.locator('#questions button[aria-checked=true]').textContent())
+await page.keyboard.press('Escape')
+console.log('Esc: text back:', await field.isVisible(), JSON.stringify(await field.inputValue()))
+if (!(await field.isVisible())) throw new Error('Esc did not go back to the text')
+await page.evaluate((detail) => window.dispatchEvent(new CustomEvent('vasta:capture-asks', { detail })), asks)
+await page.waitForTimeout(100)
+await page.keyboard.type('Paulo Freire')
+await page.keyboard.press('Enter')
+const answered = await page.evaluate(() => window.calls.filter(([c]) => c === 'submit_capture').at(-1)?.[1])
+console.log('answered:', JSON.stringify(answered))
+if (answered?.answers?.Author !== 'Paulo Freire' || answered.answers.Body !== 'Yes' || answered.text !== '/Livro Hyperion') throw new Error('the answers did not go with the text')
+if (process.env.SHOTS) {
+  await page.evaluate(() => window.dispatchEvent(new Event('vasta:capture-failed')))
+  await page.setViewportSize({ width: 680, height: (await fits()).at(-1) })
+  await page.screenshot({ path: `${process.env.SHOTS}/panel-questions.png` })
+}
+await page.evaluate(() => window.dispatchEvent(new Event('vasta:capture-saved')))
+console.log('after saved: text back:', await field.isVisible(), JSON.stringify(await field.inputValue()))
+if (!(await field.isVisible()) || (await field.inputValue())) throw new Error('the panel did not go back to an empty text')
 await browser.close()

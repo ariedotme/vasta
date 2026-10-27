@@ -867,19 +867,22 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
    * Capture a text into today's note of the space ({ text, channel }), as the capture channels do
    * (links become weblinks); the desktop app's quick capture uses it when online. With `typeId`,
    * the text's first line is the title and properties of a new object of that type, the other
-   * lines its body, and the note embeds it.
+   * lines its body, and the note embeds it; `answers` answers its template's questions, by label.
    */
   api.post('/spaces/:id/captures', async (c) => {
     const space = store.getSpace(c.req.param('id'))
     if (!space) return c.json({ error: 'not found' }, 404)
-    const body = await c.req.json<{ text?: string; channel?: string; typeId?: string }>().catch(() => ({}) as { text?: string; channel?: string; typeId?: string })
+    type Body = { text?: string; channel?: string; typeId?: string; answers?: unknown }
+    const body = await c.req.json<Body>().catch(() => ({}) as Body)
     const channel = /^[a-z]{1,20}$/.test(body.channel ?? '') ? body.channel! : 'app'
     const text = String(body.text ?? '')
     if (body.typeId === undefined) return respond(c, () => capturesOf(c).note({ spaceId: space.id, text, channel }))
     const type = store.getType(String(body.typeId))
     if (!type || type.spaceId !== space.id) return c.json({ error: 'unknown type' }, 400)
     const [line = '', ...rest] = text.split('\n')
-    return respond(c, () => capturesOf(c).object({ spaceId: space.id, type: type.id, line, text: rest.join('\n'), channel }))
+    // Answers to the template's questions (the quick capture asks them): labels and texts only.
+    const answers = body.answers && typeof body.answers === 'object' ? Object.fromEntries(Object.entries(body.answers).filter((e): e is [string, string] => typeof e[1] === 'string')) : undefined
+    return respond(c, () => capturesOf(c).object({ spaceId: space.id, type: type.id, line, text: rest.join('\n'), channel, ...(answers ? { answers } : {}) }))
   })
 
   /** A line of food, as after /food: `{ text }` (core's logFoodLine, in the user's time zone). */

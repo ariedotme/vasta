@@ -1,5 +1,5 @@
 // Running inside the desktop app (packages/desktop)? The app gives the server's pages six commands
-// (set_shortcut, capture_result, capture_suggestions, update_app, set_notify_token, notify); it asks the web app for things by
+// (set_shortcut, capture_result, capture_questions, capture_suggestions, update_app, set_notify_token, notify); it asks the web app for things by
 // dispatching DOM events on window (vasta:capture, vasta:today, vasta:settings; vasta:capture-text
 // and vasta:capture-suggest from the floating capture panel), or, when the window was not showing the web app yet, by opening it with a query
 // (/?capture, /?today, /?settings). What the page knows about the app comes from an initialization script
@@ -7,7 +7,7 @@
 import { computed, ref } from 'vue'
 import { foodCommand, type ObjectSummary } from '@vasta/core'
 import { router } from '../router.ts'
-import { captureSpace, captureText, completionSource, dayKey, openCapture, openToday, typesOf } from './actions.ts'
+import { captureAsks, captureSpace, captureText, completionSource, dayKey, openCapture, openToday, typesOf } from './actions.ts'
 import { authApi } from './api.ts'
 import { foodSourcesOf, previewFoodLine } from './nutrition.ts'
 import { meId, people } from './people.ts'
@@ -178,12 +178,28 @@ function browserKeys(event: KeyboardEvent) {
 /** The capture space's foods while the panel is open with a line of food (loaded once per line). */
 let panelFoods: ObjectSummary[] | undefined
 
-/** The floating capture panel's text: captured here (online or on the replica), answered to the app. */
-async function captureFromPanel(text: string, open: boolean) {
+/** What the panel sends with its text: Ctrl+Enter, and (desktop after 0.4.0) that it can ask a template's questions and their answers. */
+interface PanelCapture {
+  open?: boolean
+  asks?: boolean
+  answers?: Record<string, string> | null
+}
+
+/**
+ * The floating capture panel's text: captured here (online or on the replica), answered to the
+ * app. When quick capture asks a template's questions and the panel can show them, the open ones
+ * go back to it first (capture_questions); it sends the text again with the answers.
+ */
+async function captureFromPanel(text: string, sent: PanelCapture) {
   panelFoods = undefined
   const answer = (ok: boolean, message: string | null = null) => window.__TAURI_INTERNALS__?.invoke('capture_result', { ok, message })
   try {
-    const { space, answer: captured, made } = await captureText(text, 'desktop')
+    if (sent.asks && !sent.answers) {
+      const asks = await captureAsks(text).catch(() => [])
+      if (asks.length) return void (await window.__TAURI_INTERNALS__?.invoke('capture_questions', { asks }))
+    }
+    const open = sent.open === true
+    const { space, answer: captured, made } = await captureText(text, 'desktop', sent.answers ?? undefined)
     // Ctrl+Enter (desktop 0.3.2): open what was made; the app then brings the window forward.
     if (open) await openCapture(space, captured, made).catch(() => {})
     await answer(true)
@@ -234,7 +250,7 @@ export function listenToDesktop() {
   for (const [name, run] of Object.entries(ACTIONS)) window.addEventListener(`vasta:${name}`, () => void run())
   // Desktop 0.1.3 sends this instead of vasta:capture whenever the window shows /settings.
   window.addEventListener('vasta:current-shortcut', () => void ACTIONS.capture!())
-  window.addEventListener('vasta:capture-text', (event) => void captureFromPanel((event as CustomEvent<string>).detail, (event as CustomEvent<string> & { open?: boolean }).open === true))
+  window.addEventListener('vasta:capture-text', (event) => void captureFromPanel((event as CustomEvent<string>).detail, event as CustomEvent<string> & PanelCapture))
   window.addEventListener('vasta:capture-suggest', (event) => void suggestForPanel((event as CustomEvent<{ text: string; cursor: number; seq: number }>).detail).catch(() => {}))
   const params = new URLSearchParams(location.search)
   const asked = Object.keys(ACTIONS).find((name) => params.has(name))

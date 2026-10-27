@@ -60,5 +60,15 @@ footer { display: flex; gap: 12px; padding: 6px 16px 10px; font-size: 12px; colo
 #list .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #list .emoji { width: 18px; text-align: center; }
 #list .detail { font-size: 12px; color: var(--muted); }
+/* A template's questions, asked before the capture saves (Settings › Desktop app). */
+#questions { flex: none; padding: 12px 16px 4px; }
+#questions .line { margin: 0 0 8px; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#questions .ask { margin-bottom: 10px; }
+#questions .label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--muted); }
+#questions input { width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; outline: none; background: transparent; color: inherit; font: inherit; }
+#questions input:focus { border-color: var(--muted); }
+#questions .options { display: flex; flex-wrap: wrap; gap: 6px; }
+#questions button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 14px; }
+#questions button[aria-checked="true"] { border-color: var(--muted); background: var(--hover); color: var(--ink); }
 .error { color: var(--error); }
 [hidden] { display: none !important; }

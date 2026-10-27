@@ -2,7 +2,9 @@
 // relation's `name:` lists its objects, the line's properties show before saving; quick capture
 // embeds the new object in today's note, ⌘K creates and opens it; the desktop capture panel's
 // questions (vasta:capture-suggest) get the same list; Ctrl+Enter, in the dialog or from the panel,
-// opens what it made. As the desktop app (its globals faked),
+// opens what it made; with Settings › Desktop app › "Ask a template's questions", a line whose
+// template asks something shows the questions first (in the dialog, and through the panel's
+// capture_questions). As the desktop app (its globals faked),
 // since only it opens quick capture.
 //   node capture.mjs [base]      MODE=json: with the replica turned off (HTTP mode)
 import { chromium } from 'playwright'
@@ -137,4 +139,56 @@ const note = await get(`/api/objects/${new URL(page.url()).pathname.split('/').p
 const saved = await page.evaluate(() => window.panelCalls.filter(([c]) => c === 'capture_result').at(-1)?.[1])
 console.log('panel Ctrl+Enter opened:', note.typeId, note.date?.start, '| answered:', JSON.stringify(saved))
 if (!note.typeId.startsWith('daily-note') || !JSON.stringify(note.content).includes('Ctrl+Enter from the panel') || saved?.ok !== true) throw new Error('the panel capture did not open today’s note')
+
+// A template that asks: off by default, the line saves as it is; turned on, the questions come first.
+const branch = { type: 'templateIf', content: [{ type: 'templateBranch', attrs: { condition: 'ask("Body", "Yes", "No") = "Yes"' }, content: [{ type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Quoted' }] }] }] }] }
+const body = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'By {{ask:Author}}' }] }, branch] }
+for (const book of books) await page.request.post(`${base}/api/objects`, { headers, data: { typeId: book.id, title: '{{ask:Title}}', content: { body }, template: { kind: 'template', name: 'Echo', default: true } } })
+const bookText = (object) => JSON.stringify(object.content)
+const madeBy = async (title) => {
+  await page.waitForTimeout(800)
+  for (const book of books) {
+    const found = (await get(`/api/types/${book.id}/objects`)).find((o) => o.title === title)
+    if (found) return get(`/api/objects/${found.id}`)
+  }
+}
+await page.evaluate(() => window.dispatchEvent(new Event('vasta:capture')))
+await field.waitFor()
+await field.fill(`/${name} Pedagogia`)
+await page.keyboard.press('Enter')
+await field.waitFor({ state: 'detached' })
+const plain = await madeBy('Pedagogia')
+console.log('setting off: saved without asking:', !!plain, bookText(plain).includes('Quoted'))
+if (!plain) throw new Error('with the setting off, the line did not save')
+
+await page.goto(`${base}/settings#desktop`)
+await page.getByText('Ask a template’s questions in quick capture').click()
+await page.goto(base)
+await page.waitForSelector('nav', { state: 'attached', timeout: 30000 })
+await page.waitForTimeout(1000)
+await page.evaluate(() => window.dispatchEvent(new Event('vasta:capture')))
+await field.waitFor()
+await field.fill(`/${name} Oprimido`)
+await page.keyboard.press('Enter')
+const questions = page.getByTestId('capture-questions')
+await questions.waitFor()
+console.log('questions:', clean(await questions.innerText()))
+await page.keyboard.type('Paulo Freire')
+await page.keyboard.press('Enter')
+await questions.waitFor({ state: 'detached' })
+const asked = await madeBy('Oprimido')
+console.log('answered:', bookText(asked).includes('By Paulo Freire'), bookText(asked).includes('Quoted'))
+if (!bookText(asked).includes('By Paulo Freire') || !bookText(asked).includes('Quoted')) throw new Error('the answers did not reach the template')
+
+// From the panel: the questions go back to it, then the text comes again with the answers.
+const before = await page.evaluate(() => window.panelCalls.length)
+await page.evaluate((text) => window.dispatchEvent(Object.assign(new CustomEvent('vasta:capture-text', { detail: text }), { open: false, asks: true, answers: null })), `/${name} Esperança body:no`)
+await page.waitForTimeout(800)
+const toPanel = await page.evaluate((from) => window.panelCalls.slice(from), before)
+console.log('panel asked:', JSON.stringify(toPanel))
+if (toPanel[0]?.[0] !== 'capture_questions' || JSON.stringify(toPanel[0][1].asks) !== JSON.stringify([{ label: 'Author' }])) throw new Error('the panel was not asked the open questions')
+await page.evaluate((text) => window.dispatchEvent(Object.assign(new CustomEvent('vasta:capture-text', { detail: text }), { open: false, asks: true, answers: { Author: 'bell hooks' } })), `/${name} Esperança body:no`)
+const hope = await madeBy('Esperança')
+console.log('panel answered:', bookText(hope).includes('By bell hooks'), bookText(hope).includes('Quoted'))
+if (!bookText(hope).includes('By bell hooks') || bookText(hope).includes('Quoted')) throw new Error('the panel’s answers did not reach the template')
 await browser.close()

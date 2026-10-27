@@ -84,6 +84,8 @@ export interface ObjectInput extends CaptureBase {
   /** Body text. */
   text?: string
   props?: Record<Id, PropertyValue>
+  /** Answers to the template's questions, by label (the line may answer them too, `with:lena`). */
+  answers?: Record<string, string>
 }
 
 export interface FoodInput extends Omit<CaptureBase, 'channel'> {
@@ -285,9 +287,9 @@ export class CaptureService {
     return findType(this.store.listTypes(spaceId), query)
   }
 
-  private fromLine(type: ObjectType, input: { title?: string; line?: string; text?: string; props?: Record<Id, PropertyValue> }): LineObject {
-    const { title, line, text, props } = input
-    return objectFromLine(this.store, { type, title, line, text, props, at: this.now(), context: this.lineContext(type.spaceId) })
+  private fromLine(type: ObjectType, input: { title?: string; line?: string; text?: string; props?: Record<Id, PropertyValue>; answers?: Record<string, string> }): LineObject {
+    const { title, line, text, props, answers } = input
+    return objectFromLine(this.store, { type, title, line, text, props, ...(answers ? { answers } : {}), at: this.now(), context: this.lineContext(type.spaceId) })
   }
 
   /** What capture lines are read against: today, the zone, and the space's members (`assignee:ana`). */

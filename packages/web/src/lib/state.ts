@@ -151,6 +151,7 @@ export function useSummaries(ids: Ref<Id[]>) {
 // UI flags shared across components
 
 const SIDEBAR_KEY = 'vasta.sidebar-collapsed'
+const CAPTURE_ASKS_KEY = 'vasta.capture-asks'
 
 function readFlag(key: string) {
   try {
@@ -171,6 +172,8 @@ export const ui = reactive({
   sidebarCollapsed: readFlag(SIDEBAR_KEY),
   /** The keyboard shortcuts dialog (⌘/). */
   shortcutsOpen: false,
+  /** Quick capture asks a template's questions before it saves (Settings › Capture), on this device. */
+  captureAsks: readFlag(CAPTURE_ASKS_KEY),
 })
 
 watch(
@@ -178,6 +181,15 @@ watch(
   (collapsed) => {
     try {
       localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0')
+    } catch {}
+  }
+)
+
+watch(
+  () => ui.captureAsks,
+  (on) => {
+    try {
+      localStorage.setItem(CAPTURE_ASKS_KEY, on ? '1' : '0')
     } catch {}
   }
 )

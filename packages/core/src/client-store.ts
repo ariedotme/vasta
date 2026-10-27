@@ -780,11 +780,11 @@ export class ClientStore extends Store {
    * Capture an object of a type into the day's note, offline: the text's first line is its title
    * and properties (capture-line.ts), the other lines its body, and the note embeds it.
    */
-  captureObject(spaceId: Id, typeId: Id, text: string, channel: string, day: string, at: IsoDateTime, timeZone: string): CaptureAnswer {
+  captureObject(spaceId: Id, typeId: Id, text: string, channel: string, day: string, at: IsoDateTime, timeZone: string, answers?: Record<string, string>): CaptureAnswer {
     const type = this.getType(typeId)
     if (!this.getSpace(spaceId) || !type || type.spaceId !== spaceId) throw new NotFoundError('not found')
     const [line = '', ...rest] = text.split('\n')
-    const made = objectFromLine(this, { type, line, text: rest.join('\n'), at, context: this.lineContext(spaceId, { today: day, timeZone }) })
+    const made = objectFromLine(this, { type, line, text: rest.join('\n'), ...(answers ? { answers } : {}), at, context: this.lineContext(spaceId, { today: day, timeZone }) })
     const capture = { id: crypto.randomUUID(), channel, at }
     const note = this.transaction(() => {
       this.writeLineObject(made)
