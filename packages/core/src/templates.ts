@@ -212,6 +212,8 @@ type Resolved = { kind: 'text'; text: string } | { kind: 'day'; day: string; tex
 interface Resolver {
   placeholder: (value: string) => Resolved | undefined
   text: (text: string) => string
+  /** One placeholder's text, from what is between its braces (which may hold braces of its own). */
+  value: (value: string) => string
   formula: (expression: string) => FormulaValue
 }
 
@@ -294,7 +296,7 @@ function resolver(context: TemplateContext, type: ObjectType, subject: () => For
         return resolved.text
     }
   }
-  return { placeholder, text: (text) => text.replace(PLACEHOLDER_TEXT, (_, value: string) => asText(value)), formula }
+  return { placeholder, text: (text) => text.replace(PLACEHOLDER_TEXT, (_, value: string) => asText(value)), value: asText, formula }
 }
 
 /** A deep copy of JSON data (structuredClone refuses the app's reactive proxies). */
@@ -305,7 +307,7 @@ const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLo
 /** A property value from a fill (`date:+7d`, `me`, `ask:Kind`), for the kind of property it fills. */
 function fillValue(def: PropertyDef, value: string, resolve: Resolver, context: TemplateContext): PropertyValue | undefined {
   const resolved = resolve.placeholder(value)
-  const text = resolved ? resolve.text(`{{${value}}}`).trim() : value.trim()
+  const text = resolved ? resolve.value(value).trim() : value.trim()
   switch (def.kind) {
     case 'date':
       if (resolved?.kind === 'date') return { kind: 'date', value: resolved.value }
@@ -391,7 +393,7 @@ function resolveInline(nodes: DocNode[], state: DocResolution, block: DocNode): 
         offset += 1
         continue
       }
-      const text = state.resolve.text(`{{${value}}}`)
+      const text = state.resolve.value(value)
       if (text) out.push({ type: 'text', text, ...marks })
       offset += text.length
       continue

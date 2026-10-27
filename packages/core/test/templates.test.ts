@@ -120,6 +120,18 @@ describe('applying a template', () => {
     expect(texts(applyTemplate(t, page, context({ answers: { Body: 'No', Mood: 'Good' } })).content.body)).toEqual(['🙂'])
   })
 
+  it('reads a formula with braces in it as one placeholder', () => {
+    const t = template(page, {
+      content: {
+        body: doc(
+          paragraph(chip('formula:if(ask("Body", "Yes", "No") = "Yes", "{ quote }", "")')),
+          paragraph(chip('formula:if(selection(“Body”).= “Yes", "> {{cursor}}", "")'))
+        ),
+      },
+    })
+    expect(texts(applyTemplate(t, page, context({ answers: { Body: 'Yes' } })).content.body)).toEqual(['{ quote }', ''])
+  })
+
   it('reads the properties it set in conditions', () => {
     const t = template(task, { content: { body: doc({ type: 'templateIf', content: [branch('has("Due") and not empty(prop("Due"))', paragraph(text('Has a due date')))] }) } }, { fills: { due: 'date:+1d' } })
     expect(texts(applyTemplate(t, task, context()).content.body)).toEqual(['Has a due date'])

@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **Templates: a formula with `{{…}}` or braces inside it** no longer lands in the new object as raw
+  text. It is read as one formula, and a formula that does not work leaves nothing.
+
 ## 0.4.0 (2026-10-26)
 
 ### Added
