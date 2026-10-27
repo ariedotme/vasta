@@ -181,13 +181,18 @@ body {
 .vasta-doc .selectedCell { background: color-mix(in oklab, var(--color-accent) 12%, transparent); }
 
 .vasta-doc div[data-type='details'] { display: flex; gap: 0.35rem; }
-.vasta-doc div[data-type='details'] > button { margin-top: 0.3rem; width: 1.2rem; height: 1.2rem; border-radius: 4px; display: grid; place-items: center; color: var(--color-ink-faint); }
-.vasta-doc div[data-type='details'] > button::before { content: '▸'; transition: transform 0.15s; }
+/* The toggle's arrow: as tall as the title's line, so it sits centered on it; a chevron (Phosphor's
+   caret-right) drawn in the text color through a mask. */
+.vasta-doc div[data-type='details'] > button { flex: none; width: 1.5rem; height: 1.6em; border-radius: 6px; display: grid; place-items: center; color: var(--color-ink-soft); cursor: pointer; }
+.vasta-doc div[data-type='details'] > button:hover { background: var(--color-hover); color: var(--color-ink); }
+.vasta-doc div[data-type='details'] > button::before {
+  content: ''; width: 0.95rem; height: 0.95rem; background: currentColor; transition: transform 0.15s;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M184.49 136.49l-80 80a12 12 0 0 1-17-17L159 128 87.51 56.49a12 12 0 1 1 17-17l80 80a12 12 0 0 1-.02 17z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .vasta-doc div[data-type='details'].is-open > button::before { transform: rotate(90deg); }
 .vasta-doc div[data-type='details'] > div { flex: 1; }
 .vasta-doc div[data-type='details'] summary { list-style: none; font-weight: 600; }
 .vasta-doc div[data-type='details'] summary::-webkit-details-marker { display: none; }
-.vasta-doc div[data-type='details'] div[data-type='detailsContent'] { padding-left: 0.2rem; }
 .vasta-doc div[data-type='details']:not(.is-open) div[data-type='detailsContent'] { display: none; }
 
 .vasta-doc .vasta-columns { display: grid; gap: 1.25rem; }
