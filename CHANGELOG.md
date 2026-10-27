@@ -12,9 +12,14 @@ GitHub release page.
   questions in quick capture" (off by default), a `/Type …` line whose template asks something
   shows those questions before it saves, in the dialog and in the desktop app's floating panel
   (after updating the desktop app). Questions the line already answers (`body:yes`) are not asked.
+- **Tab nests lines in toggles, as in Capacities.** Tab on a line puts it inside the toggle above
+  it, or turns the line above into a toggle holding it; Shift+Tab takes it back out (a toggle left
+  empty is a plain line again). Lists keep their own Tab.
 
 ### Fixed
 
+- **/Toggle on a line you already wrote** makes that line the toggle's title, instead of an empty
+  title with the line inside. "Turn into" in the block menu offers Toggle too.
 - **Templates: a formula with `{{…}}` or braces inside it** no longer lands in the new object as raw
   text. It is read as one formula, and a formula that does not work leaves nothing.
 

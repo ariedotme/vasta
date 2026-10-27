@@ -7,6 +7,7 @@ import { openMenuAt, type MenuItem } from '../lib/overlays.ts'
 import { systemType, typesById } from '../lib/state.ts'
 import { insertSnippet, insertTemplate, loadTemplates, snippetsFor, templates } from '../lib/templates.ts'
 import { insertCondition } from './template-nodes.ts'
+import { toggleFromLine } from './toggles.ts'
 import { pickImages } from './uploads.ts'
 
 export interface SlashCommand {
@@ -51,7 +52,7 @@ export const slashCommands: SlashCommand[] = [
     keywords: 'note info',
     run: (e, r) => chain(e, r).wrapIn('callout', { icon: { kind: 'emoji', value: '💡' } }).run(),
   },
-  { id: 'toggle', label: 'Toggle', icon: 'ph:caret-circle-right', keywords: 'details collapse', run: (e, r) => chain(e, r).setDetails().run() },
+  { id: 'toggle', label: 'Toggle', icon: 'ph:caret-circle-right', keywords: 'details collapse', run: (e, r) => chain(e, r).run() && toggleFromLine(e) },
   { id: 'group', label: 'Colored group', icon: 'ph:selection-background', keywords: 'box container', run: (e, r) => chain(e, r).wrapIn('group', { color: 'sky' }).run() },
   {
     id: 'columns',

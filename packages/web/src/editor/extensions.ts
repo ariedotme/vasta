@@ -44,6 +44,7 @@ import { Uploads } from './uploads.ts'
 import SlashList from './SlashList.vue'
 import { suggestionPopup } from './suggestion-popup.ts'
 import { PlaceholderMenu, PlaceholderWithView, TemplateBranchWithView, TemplateIf } from './template-nodes.ts'
+import { Toggles } from './toggles.ts'
 
 /** Code blocks, which draw Mermaid diagrams (CodeBlockView.vue). */
 const CodeBlockWithView = VastaCodeBlock.extend({
@@ -315,6 +316,7 @@ export function createExtensions(placeholder: string, text?: { doc: Y.Doc; field
     UrlPaste,
     Blocks.configure({ objectId }),
     BlockKeysWhileTyping,
+    Toggles,
     Placeholder.configure({ placeholder, includeChildren: false }),
     ...(text ? [Collaboration.configure({ document: text.doc, field: text.field })] : []),
   ]

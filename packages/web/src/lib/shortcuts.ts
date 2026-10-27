@@ -54,6 +54,8 @@ export const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
       { id: 'blocks', label: 'Insert a block', keys: ['/'] },
       { id: 'mention', label: 'Link an object', keys: ['@'] },
       { id: 'select', label: 'Select blocks', keys: ['Esc'] },
+      { id: 'indent', label: 'Nest under the line above (in a toggle)', keys: ['Tab'] },
+      { id: 'outdent', label: 'Take out of the toggle', keys: ['⇧Tab'] },
       { id: 'bold', label: 'Bold, italic, underline', keys: [`${mod}B`, `${mod}I`, `${mod}U`] },
     ],
   },

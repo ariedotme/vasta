@@ -25,6 +25,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node quotes.mjs [chromium|webkit] [base]   # save a passage as a quote, open it from the highlight, delete it (MODE=json too)
     node handover.mjs [base]     # a second tab takes the replica over when the first closes
     node capture.mjs [base]      # /Type in quick capture (embedded in today's note), a relation's values, ⌘K, the panel's bridge (MODE=json too)
+    node toggles.mjs [base]      # Tab nests under the line above (a toggle), ⇧Tab takes it out, /Toggle on a written line (MODE=json too)
     node blockrefs.mjs [base]    # @Title#… mentions a block, @@ embeds one read-only; it follows edits; links open the block (MODE=json too)
     node channels.mjs [base]     # Settings › Capture channels and Telegram's chats (the bot's state faked)
     node inbox.mjs [base]        # Settings › Inbox: the word for reviewed items, fading, in the inbox and the daily note

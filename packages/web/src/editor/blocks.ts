@@ -273,7 +273,7 @@ async function copyBlockLink(view: EditorView, objectId: string, pos: number) {
   }
 }
 
-const TURN_INTO = ['text', 'h1', 'h2', 'h3', 'bullet', 'numbered', 'todo', 'quote', 'callout', 'code']
+const TURN_INTO = ['text', 'h1', 'h2', 'h3', 'bullet', 'numbered', 'todo', 'quote', 'callout', 'toggle', 'code']
 
 /** The menu of the ⋮⋮ handle and of a right-click on selected blocks. */
 function openBlockMenu(editor: Editor, x: number, y: number, objectId: string | undefined) {
