@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.4.1 (2026-10-27)
+
 ### Added
 
 - **Quick capture asks a template's questions.** With Settings › Desktop app › "Ask a template’s
