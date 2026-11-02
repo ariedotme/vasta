@@ -35,6 +35,8 @@ export interface ToMarkdownOptions {
 }
 
 const escapeText = (text: string) => text.replace(/([\\`*_[\]<>~=|])/g, '\\$1')
+/** Undoes escapeText, for text the parser hands over as written (a mention's link text). */
+const unescapeText = (text: string) => text.replace(/\\([\\`*_[\]<>~=|])/g, '$1')
 /** Characters that would start a block at the beginning of a line. */
 const escapeLineStart = (line: string) => line.replace(/^(\s*)([#>+-])(?=\s|$)/, '$1\\$2').replace(/^(\s*\d+)([.)])(?=\s|$)/, '$1\\$2')
 
@@ -215,10 +217,11 @@ function inlineNodes(tokens: Token[] | undefined, marks: DocMark[] = []): DocNod
         const link = token as Tokens.Link
         const id = objectIdOfLink(link.href)
         const blockId = blockIdOfLink(link.href)
-        if (id && link.text.startsWith('@') && blockId) {
-          const [label = '', ...rest] = link.text.slice(1).split(BLOCK_SEPARATOR)
+        const linkText = unescapeText(link.text)
+        if (id && linkText.startsWith('@') && blockId) {
+          const [label = '', ...rest] = linkText.slice(1).split(BLOCK_SEPARATOR)
           out.push({ type: 'mention', attrs: { objectId: id, label, blockId, ...(rest.length ? { blockLabel: rest.join(BLOCK_SEPARATOR) } : {}) } })
-        } else if (id && link.text.startsWith('@')) out.push({ type: 'mention', attrs: { objectId: id, label: link.text.slice(1) } })
+        } else if (id && linkText.startsWith('@')) out.push({ type: 'mention', attrs: { objectId: id, label: linkText.slice(1) } })
         else if (link.href) out.push(...inlineNodes(link.tokens, [...marks, { type: 'link', attrs: { href: link.href } }]))
         else out.push(...inlineNodes(link.tokens, marks))
         break
