@@ -12,6 +12,8 @@ GitHub release page.
   properties, select options, views and the other things that get a new id again; browsers only
   offer `crypto.randomUUID` over HTTPS or localhost. Thanks to @natedwhite for finding the cause
   (#43).
+- **Mentions with Markdown characters in their title**, such as an underscore, no longer gain
+  backslashes each time an agent rewrites the page.
 
 ## 0.5.0 (2026-11-03)
 

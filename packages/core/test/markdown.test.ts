@@ -113,6 +113,23 @@ describe('markdown', () => {
     expect(markdownToDoc(markdown).content).toEqual(doc.content)
   })
 
+  it('keeps a mention whose title has Markdown characters the same over repeated rewrites', () => {
+    const doc: Doc = {
+      type: 'doc',
+      content: [
+        paragraph(
+          { type: 'mention', attrs: { objectId: 'o1', label: 'LOG_REVIEW [2026] a\\b' } },
+          text(' and '),
+          { type: 'mention', attrs: { objectId: 'o2', label: 'FIX_PLAN', blockId: 'abc123', blockLabel: 'Step_1' } }
+        ),
+      ],
+    }
+    const first = docToMarkdown(doc)
+    expect(first).toBe('[@LOG\\_REVIEW \\[2026\\] a\\\\b](vasta://o/o1) and [@FIX\\_PLAN › Step\\_1](vasta://o/o2#b-abc123)')
+    expect(markdownToDoc(first).content).toEqual(doc.content)
+    expect(docToMarkdown(markdownToDoc(docToMarkdown(markdownToDoc(first))))).toBe(first)
+  })
+
   it('keeps a Mermaid diagram as a mermaid code block, so agents read and write diagrams', () => {
     const diagram = '```mermaid\nflowchart LR\n  A[Idea] --> B[Note]\n```'
     const doc = markdownToDoc(diagram)
