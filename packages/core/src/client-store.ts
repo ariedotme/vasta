@@ -6,6 +6,7 @@
 // this device's HLC; the `stamped` and `textSaved` hooks put those fields (and objects whose text
 // changed) in the outbox. Pulled rows merge field by field, the newer HLC winning, so a local
 // change not pushed yet survives an older one from the server. Rich text merges through Yjs.
+import { newId } from './ids.ts'
 import { Y } from '@vasta/editor-schema/yjs'
 import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
 import { calendarEntries, parseCalendar, type ParsedCalendar } from './ics.ts'
@@ -644,7 +645,7 @@ export class ClientStore extends Store {
       return this.transaction(() => this.writeLineObject(made))
     }
     const { media: _media, ...rest } = data
-    return this.putObject(newObject(type, rest, crypto.randomUUID(), at))
+    return this.putObject(newObject(type, rest, newId(), at))
   }
 
   /**
@@ -661,7 +662,7 @@ export class ClientStore extends Store {
 
   createType(data: { spaceId: Id; name: string; pluralName?: string; icon?: Icon }, at: IsoDateTime): ObjectType {
     if (!data.spaceId || !this.getSpace(data.spaceId) || !data.name?.trim()) throw new InvalidError('spaceId and name are required')
-    const type = newType(data.spaceId, data, crypto.randomUUID(), at)
+    const type = newType(data.spaceId, data, newId(), at)
     this.putType(type)
     return type
   }
@@ -776,7 +777,7 @@ export class ClientStore extends Store {
   capture(spaceId: Id, text: string, channel: string, day: string, at: IsoDateTime, destinations?: CaptureDestinations): CaptureAnswer {
     if (!this.getSpace(spaceId)) throw new NotFoundError('not found')
     if (!text.trim()) throw new InvalidError('text is required')
-    const capture = { id: crypto.randomUUID(), channel, at }
+    const capture = { id: newId(), channel, at }
     const blocks = textToBlocks(text)
     return this.transaction(() => {
       const { dailyNote, page } = recordCapture(this, spaceId, day, capture, blocks, destinations)
@@ -795,7 +796,7 @@ export class ClientStore extends Store {
     if (!this.getSpace(spaceId) || !type || type.spaceId !== spaceId) throw new NotFoundError('not found')
     const [line = '', ...rest] = text.split('\n')
     const made = objectFromLine(this, { type, line, text: rest.join('\n'), ...(answers ? { answers } : {}), at, context: this.lineContext(spaceId, { today: day, timeZone }) })
-    const capture = { id: crypto.randomUUID(), channel, at }
+    const capture = { id: newId(), channel, at }
     const note = this.transaction(() => {
       this.writeLineObject(made)
       return recordCapture(this, spaceId, day, capture, [{ type: 'objectEmbed', attrs: { objectId: made.object.id, display: 'inline' } }], destinations)

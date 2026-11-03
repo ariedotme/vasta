@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { newId } from '@vasta/core'
 // Logging food on a day: search the foods and recipes (the ones eaten most lately first), pick
 // one, type an amount ("150", "2 slices", "1 serving"), Enter. The picker stays open for the next
 // item and lists what was added. A food not found can be made right here with its nutrition. A
@@ -78,7 +79,7 @@ async function logQuick() {
   busy.value = true
   try {
     const meal = chosenMeal.value
-    const note = await writeEntries(props.day, undefined, { [crypto.randomUUID()]: quickEntry(q.name, q.nutrients, entryTime(props.day, meal), meal?.id) })
+    const note = await writeEntries(props.day, undefined, { [newId()]: quickEntry(q.name, q.nutrients, entryTime(props.day, meal), meal?.id) })
     added.value.unshift({ name: q.name || 'Quick entry', amount: '', kcal: q.nutrients.kcal })
     emit('logged', note)
     query.value = ''

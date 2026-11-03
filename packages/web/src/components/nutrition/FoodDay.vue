@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { newId } from '@vasta/core'
 // A day's food, where the day is (the calendar's day, a daily note): the week's budget when the
 // goal shares its week, the day against its goal, and the meals with what was eaten. "+" on a meal
 // logs into it (FoodPicker); an entry opens to change its amount or meal; right click (long press)
@@ -164,7 +165,7 @@ async function copyMeal(meal: Meal, from = addDays(props.day, -1)) {
     return
   }
   const at = entryTime(props.day, meal)
-  await write(Object.fromEntries(items.map((item) => [crypto.randomUUID(), eatenAgain(item.entry, library.lookup, at, meal.id)])))
+  await write(Object.fromEntries(items.map((item) => [newId(), eatenAgain(item.entry, library.lookup, at, meal.id)])))
   notice.value = { message: `Copied ${items.length} ${items.length === 1 ? 'item' : 'items'} into ${meal.name}.` }
 }
 

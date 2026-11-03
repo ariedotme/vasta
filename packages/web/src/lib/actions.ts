@@ -1,3 +1,4 @@
+import { newId } from '@vasta/core'
 import { foodCommand, lineAsks, type FoodLineAnswer, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type Space, type TemplateAsk } from '@vasta/core'
 import type { CaptureAnswer } from '@vasta/core/client'
 import { api } from './api.ts'
@@ -277,7 +278,7 @@ export function pinToSidebar(id: Id, sectionId?: string) {
   return updateSidebar((space) => {
     let section = sectionId ? space.sidebar.find((s) => s.id === sectionId) : space.sidebar[0]
     if (!section) {
-      section = { id: crypto.randomUUID(), name: PINNED, items: [] }
+      section = { id: newId(), name: PINNED, items: [] }
       space.sidebar.unshift(section)
     }
     if (!section.items.includes(id)) section.items.push(id)
@@ -381,7 +382,7 @@ export async function newSectionFlow(withItem?: Id) {
   const name = await promptDialog({ title: 'New sidebar section', placeholder: 'Section name', confirmLabel: 'Create' })
   if (!name) return
   await updateSidebar((space) => {
-    space.sidebar.push({ id: crypto.randomUUID(), name, items: withItem ? [withItem] : [] })
+    space.sidebar.push({ id: newId(), name, items: withItem ? [withItem] : [] })
   })
 }
 

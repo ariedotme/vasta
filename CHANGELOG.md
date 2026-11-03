@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **Vasta at a plain-http address** (e.g. `http://192.168.1.10:3000` on your network) can add
+  properties, select options, views and the other things that get a new id again; browsers only
+  offer `crypto.randomUUID` over HTTPS or localhost. Thanks to @natedwhite for finding the cause
+  (#43).
+
 ## 0.5.0 (2026-11-03)
 
 ### Added

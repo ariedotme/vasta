@@ -3,6 +3,7 @@
 // entries are), so comments written on several devices and offline all arrive and merge one by
 // one. Only a comment's author changes or deletes it: the server's store refuses other writes
 // (Store.checkAuthorship). Members are mentioned as @username.
+import { newId } from './ids.ts'
 import type { Comment, Id, IsoDateTime, ObjectRecord, ObjectSummary, Person } from './model.ts'
 
 export const COMMENT_PREFIX = 'comment:'
@@ -35,7 +36,7 @@ function checkText(text: string): string {
 }
 
 /** Add a comment by `author` to `object` (changed in place). Returns its id. */
-export function addComment(object: Pick<ObjectRecord, 'props'>, author: Id, text: string, at: IsoDateTime, id: Id = crypto.randomUUID()): Id {
+export function addComment(object: Pick<ObjectRecord, 'props'>, author: Id, text: string, at: IsoDateTime, id: Id = newId()): Id {
   object.props[`${COMMENT_PREFIX}${id}`] = { kind: 'comment', value: { author, at, text: checkText(text) } }
   return id
 }

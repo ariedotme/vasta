@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout } from '@vasta/core'
@@ -112,7 +113,7 @@ function updateView(patch: Partial<ViewDef>) {
 
 async function addView() {
   if (!type.value) return
-  const id = crypto.randomUUID()
+  const id = newId()
   const name = await promptDialog({ title: 'New view', value: 'New view', confirmLabel: 'Create' })
   if (!name || !type.value) return
   const next = clone(type.value)
@@ -160,7 +161,7 @@ async function renameView() {
 
 function duplicateView() {
   menuOpen.value = false
-  const copy: ViewDef = { ...clone(view.value), id: crypto.randomUUID(), name: `${view.value.name} copy` }
+  const copy: ViewDef = { ...clone(view.value), id: newId(), name: `${view.value.name} copy` }
   saveViews((views) => views.push(copy))
   activeViewId.value = copy.id
 }

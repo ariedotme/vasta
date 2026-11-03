@@ -1,6 +1,7 @@
 // Operations the server's routes and the client's local store share, so a write made offline on a
 // device means the same as one made through the server: new objects and types, saving an edited
 // copy, daily notes, the inbox, running a query.
+import { newId } from './ids.ts'
 import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
 import { docReferences } from './doc.ts'
 import type { CaptureInfo, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, Person, QueryDef } from './model.ts'
@@ -151,7 +152,7 @@ export function createQuote(store: Store, sourceId: Id, input: { text: string; n
       props: { [SOURCE_PROPERTY_ID]: { kind: 'relation', value: [sourceId] } },
       content: note ? { [BODY_PROPERTY_ID]: { type: 'doc', content: textToBlocks(note) } } : {},
     },
-    crypto.randomUUID(),
+    newId(),
     at
   )
   return store.putObject(quote)
@@ -188,7 +189,7 @@ export function findOrCreateDailyNote(store: Store, spaceId: Id, day: string, at
   if (!type) throw new Error(`space ${spaceId} has no daily-note type`)
   // The day's note in the trash keeps its id; a new one then gets a random id, as before.
   const derived = dailyNoteId(spaceId, day)
-  const id = store.getObject(derived) ? crypto.randomUUID() : derived
+  const id = store.getObject(derived) ? newId() : derived
   // The type's default template, with what every device resolves the same (seed: no time, no asks).
   const template = defaultTemplate(store.listTemplates(spaceId), typeId)
   const types = new Map(store.listTypes(spaceId).map((t) => [t.id, t]))
@@ -306,7 +307,7 @@ export function recordCapture(store: Store, spaceId: Id, day: string, capture: C
 
 export function standaloneCapture(store: Store, spaceId: Id, text: string, at: IsoDateTime, blocks: DocNode[]): ObjectRecord {
   const title = text.trim().split('\n', 1)[0]!.slice(0, 100)
-  return store.putObject(newObject(store.getType(builtinTypeId(spaceId, 'page'))!, { title, content: { [BODY_PROPERTY_ID]: { type: 'doc', content: blocks } } }, crypto.randomUUID(), at))
+  return store.putObject(newObject(store.getType(builtinTypeId(spaceId, 'page'))!, { title, content: { [BODY_PROPERTY_ID]: { type: 'doc', content: blocks } } }, newId(), at))
 }
 
 function addCaptureBlock(store: Store, note: ObjectRecord, capture: CaptureInfo, blocks: DocNode[]): ObjectRecord {

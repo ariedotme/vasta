@@ -1,3 +1,4 @@
+import { newId } from '@vasta/core'
 import { evaluateFormula, type FormulaSubject, type FormulaValue, type PropertyDef } from '@vasta/core'
 import { formatDate } from './format.ts'
 import { queryContext } from './query.ts'
@@ -20,7 +21,7 @@ export const kindLabel = (kind: PropertyDef['kind']) => PROPERTY_KINDS.find((k) 
 
 /** A new property definition of the given kind with sensible defaults. */
 export function newPropertyDef(name: string, kind: PropertyDef['kind']): PropertyDef {
-  const base = { id: crypto.randomUUID(), name }
+  const base = { id: newId(), name }
   if (kind === 'select') return { ...base, kind, options: [], multiple: false }
   if (kind === 'relation') return { ...base, kind, targetTypeIds: [], multiple: true }
   if (kind === 'person') return { ...base, kind, multiple: false }
