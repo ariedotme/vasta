@@ -31,7 +31,25 @@ function apply() {
   }
 }
 
+export const BLOCK_SPACING = { compact: '0.25rem', comfortable: '0.75rem', spacious: '1.25rem' }
+type BlockSpacing = keyof typeof BLOCK_SPACING
+const BLOCK_SPACING_KEY = 'vasta.block-spacing'
+
+function storedBlockSpacing(): BlockSpacing {
+  try {
+    const value = localStorage.getItem(BLOCK_SPACING_KEY)
+    if (value === 'compact' || value === 'spacious') return value
+  } catch {}
+  return 'comfortable'
+}
+
+export const blockSpacing = ref<BlockSpacing>(storedBlockSpacing())
+
 export function installTheme() {
+  watch(blockSpacing, (value) => {
+    document.documentElement.style.setProperty('--vasta-block-spacing', BLOCK_SPACING[value])
+    try { localStorage.setItem(BLOCK_SPACING_KEY, value) } catch {}
+  }, { immediate: true })
   apply()
   osDark.addEventListener('change', apply)
   watch(theme, (value) => {

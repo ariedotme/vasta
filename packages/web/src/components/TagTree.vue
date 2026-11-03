@@ -113,7 +113,7 @@ async function newSubTag(parent: ObjectSummary) {
       >
         <AppIcon :fallback="folded.has(row.tag.id) && !shownIds ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
       </button>
-      <AppIcon :fallback="row.hasChildren ? (folded.has(row.tag.id) && !shownIds ? 'ph:folder-simple' : 'ph:folder-open') : 'ph:hash'" :size="15" class="shrink-0 text-ink-faint" />
+      <AppIcon :icon="row.tag.icon" :fallback="row.hasChildren ? (folded.has(row.tag.id) && !shownIds ? 'ph:folder-simple' : 'ph:folder-open') : 'ph:hash'" :size="15" class="shrink-0 text-ink-faint" />
       <RouterLink :to="`/o/${row.tag.id}`" class="min-w-0 truncate rounded-md px-2 py-0.5 text-sm font-medium hover:brightness-95" :class="chip(tagColor(row.tag))">
         {{ row.tag.title || 'Untitled' }}
       </RouterLink>

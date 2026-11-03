@@ -3,7 +3,7 @@
 // a file, delete for good, members, subscriptions) always goes to it, with the replica synced
 // before and after.
 import type { ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
-import { dayIn } from '@vasta/core'
+import { dayIn, type CaptureDestinations } from '@vasta/core'
 import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
 import { noteNetworkError, noteResponse } from './network.ts'
@@ -308,7 +308,7 @@ const http = {
   /** The space's templates and snippets, whole (core's templates.ts): nothing else lists them. */
   templates: (spaceId: Id) => request<ObjectRecord[]>('GET', `/api/spaces/${spaceId}/templates`),
   /** The daily note of a day ("YYYY-MM-DD"), created on first use. */
-  dailyNote: (spaceId: Id, day: string) => request<ObjectRecord>('POST', `/api/spaces/${spaceId}/daily-notes/${day}`),
+  dailyNote: (spaceId: Id, day: string, text?: string) => request<ObjectRecord>('POST', `/api/spaces/${spaceId}/daily-notes/${day}`, { text }),
   /** Change one occurrence of a repeating date, the series from it on, or all of it; `created` is the copy "this and following" makes. */
   changeOccurrence: (edit: OccurrenceEdit, timeZone: string) =>
     request<{ object: ObjectRecord; created?: ObjectRecord }>('POST', `/api/objects/${edit.objectId}/occurrences`, { ...edit, timeZone }),
@@ -348,8 +348,8 @@ const http = {
    * offline). With `typeId`, the first line is the title and properties of a new object of that
    * type, the rest its body, and the note embeds it; `answers` answers its template's questions.
    */
-  capture: (spaceId: Id, text: string, channel: string, _day: string, typeId?: Id, answers?: Record<string, string>) =>
-    request<CaptureAnswer>('POST', `/api/spaces/${spaceId}/captures`, typeId ? { text, channel, typeId, ...(answers ? { answers } : {}) } : { text, channel }),
+  capture: (spaceId: Id, text: string, channel: string, _day: string, typeId?: Id, answers?: Record<string, string>, destinations?: CaptureDestinations) =>
+    request<CaptureAnswer>('POST', `/api/spaces/${spaceId}/captures`, { text, channel, typeId, answers, destinations }),
   /** Spaces in the trash that the user owned. */
   deletedSpaces: () => request<(Space & { deletedAt: string })[]>('GET', '/api/deleted-spaces'),
   restoreSpace: (id: Id) => request<Space>('POST', `/api/deleted-spaces/${id}/restore`),
@@ -465,7 +465,7 @@ const local: Partial<Api> = {
   logFood: (spaceId, input) => callStore('logFood', spaceId, input, now()),
   deleteFoodEntry: (noteId, entryId) => callStore('deleteFoodEntry', noteId, entryId, now()),
   logFoodLine: (spaceId, text, today) => callStore('logFoodLine', spaceId, text, today, timeZone(), now()),
-  dailyNote: (spaceId, day) => callStore('dailyNote', spaceId, day, now()),
+  dailyNote: (spaceId, day, text) => callStore('dailyNote', spaceId, day, now(), text),
   templates: (spaceId) => callStore('listTemplates', spaceId),
   deleteObject: (id) => callStore('trashObject', id, now()),
   restoreObject: (id) => callStore('untrashObject', id, now()),
@@ -478,14 +478,14 @@ const local: Partial<Api> = {
   inbox: (spaceId, today, days) => callStore('inbox', spaceId, today, days),
   setCaptureDone: (noteId, captureId, done) => callStore('markCaptureDone', noteId, captureId, done, now()),
   // Online the server captures (it turns links into weblinks); offline the replica does.
-  capture: async (spaceId, text, channel, day, typeId, answers) => {
+  capture: async (spaceId, text, channel, day, typeId, answers, destinations) => {
     try {
-      return await viaServer(http.capture)(spaceId, text, channel, day, typeId, answers)
+      return await viaServer(http.capture)(spaceId, text, channel, day, typeId, answers, destinations)
     } catch (error) {
       if (!(error instanceof Error && error.message === OFFLINE_MESSAGE)) throw error
       const result = typeId
-        ? await callStore('captureObject', spaceId, typeId, text, channel, day, now(), timeZone(), answers)
-        : await callStore('capture', spaceId, text, channel, day, now())
+        ? await callStore('captureObject', spaceId, typeId, text, channel, day, now(), timeZone(), answers, destinations)
+        : await callStore('capture', spaceId, text, channel, day, now(), destinations)
       void syncNow()
       return result
     }

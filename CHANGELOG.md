@@ -6,6 +6,20 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- Set, inspect or remove object covers by URL and pin or unpin objects from MCP and the CLI.
+- Choose editor block spacing in Appearance settings, with a roomier default.
+- Independently opt into logging desktop quick captures in the daily note or showing them in the inbox.
+
+### Fixed
+
+- Opening a calendar day or reading it through MCP and the CLI no longer creates an empty daily note.
+- Markdown object links open their targets from headings and table cells, and imported task lists
+  can be checked as soon as the editor opens.
+- Instagram Reel weblinks use short titles and skip automatic readable-text extraction.
+- The Tags tree displays custom tag icons.
+
 ### Changed
 
 - **The toggle's arrow** is bigger and sits centered on the title's line; the lines inside line up

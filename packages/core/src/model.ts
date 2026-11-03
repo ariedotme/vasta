@@ -461,6 +461,8 @@ export interface CaptureInfo {
   /** Channel key, e.g. "telegram", "api", "shortcuts". */
   channel: string
   at: IsoDateTime
+  /** A capture logged only in the daily note. */
+  inbox?: false
   /** Dealt with ("Reviewed", or the user's word for it): the inbox hides it until shown again. */
   done?: boolean
 }

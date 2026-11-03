@@ -174,6 +174,8 @@ export const ui = reactive({
   shortcutsOpen: false,
   /** Quick capture asks a template's questions before it saves (Settings › Capture), on this device. */
   captureAsks: readFlag(CAPTURE_ASKS_KEY),
+  captureDaily: readFlag('vasta.capture-daily'),
+  captureInbox: readFlag('vasta.capture-inbox'),
 })
 
 watch(
@@ -184,6 +186,12 @@ watch(
     } catch {}
   }
 )
+
+for (const [flag, key] of [['captureDaily', 'vasta.capture-daily'], ['captureInbox', 'vasta.capture-inbox']] as const) {
+  watch(() => ui[flag], (on) => {
+    try { localStorage.setItem(key, on ? '1' : '0') } catch {}
+  })
+}
 
 watch(
   () => ui.captureAsks,

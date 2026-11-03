@@ -196,7 +196,7 @@ describe('local replica', () => {
 
   it('captures online through the server, links becoming weblinks', async () => {
     const { user } = setup()
-    const response = await user.request('/api/spaces/s/captures', json({ text: 'Read later https://example.org/post', channel: 'desktop' }))
+    const response = await user.request('/api/spaces/s/captures', json({ text: 'Read later https://example.org/post', channel: 'desktop', destinations: { daily: true, inbox: false } }))
     expect(response.status).toBe(201)
     const { dailyNoteId } = (await response.json()) as { dailyNoteId: string }
     const note = await serverObject(user.request, dailyNoteId)

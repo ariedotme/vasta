@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { BODY_PROPERTY_ID, createBuiltinTypes, type CaptureInfo, type ObjectRecord } from '@vasta/core'
+import { BODY_PROPERTY_ID, builtinTypeId, createBuiltinTypes, type CaptureInfo, type ObjectRecord } from '@vasta/core'
 import { NodeMediaStore } from '@vasta/core/media-node'
 import { NodeStore } from '@vasta/core/node'
 import { createApp } from '../src/app.ts'
@@ -46,21 +46,37 @@ describe('inbox', () => {
     expect(((await (await app.request('/api/spaces/s/inbox?today=2026-10-11&days=30')).json()) as Inbox).items).toHaveLength(3)
   })
 
+  it('handles the two desktop destinations independently', async () => {
+    const { app, store } = setup()
+    const post = (text: string, destinations?: { daily: boolean; inbox: boolean }) => app.request('/api/spaces/s/captures', {
+      method: 'POST', body: JSON.stringify({ text, channel: 'desktop', destinations }), headers: { 'content-type': 'application/json' },
+    })
+    const inbox = async () => ((await (await app.request('/api/spaces/s/inbox?today=2026-10-01')).json()) as Inbox).items
+    expect(await (await post('Private capture')).json()).toMatchObject({ dailyNoteId: '', objects: [{ title: 'Private capture' }] })
+    expect(await inbox()).toHaveLength(0)
+    expect(await (await post('Inbox capture', { daily: false, inbox: true })).json()).toMatchObject({ dailyNoteId: '' })
+    expect(store.listObjects(builtinTypeId('s', 'daily-note'))).toHaveLength(0)
+    expect(await inbox()).toHaveLength(1)
+    await post('Daily capture', { daily: true, inbox: false })
+    expect(store.listObjects(builtinTypeId('s', 'daily-note'))).toHaveLength(1)
+    expect(await inbox()).toHaveLength(1)
+  })
+
   it('marks an item done and back, in its daily note', async () => {
     const { app, capture, store } = setup()
     const result = await capture.note({ text: 'call the bank', channel: 'telegram' })
-    const url = `/api/objects/${result.dailyNote.id}/captures/${result.blockId}`
+    const url = `/api/objects/${result.dailyNote!.id}/captures/${result.blockId}`
     const put = (done: boolean) => app.request(url, { method: 'PUT', body: JSON.stringify({ done }), headers: { 'content-type': 'application/json' } })
-    const captureInNote = () => (store.getObject(result.dailyNote.id)!.content[BODY_PROPERTY_ID]!.content.find((n) => n.type === 'callout')!.attrs!.capture as CaptureInfo)
+    const captureInNote = () => (store.getObject(result.dailyNote!.id)!.content[BODY_PROPERTY_ID]!.content.find((n) => n.type === 'callout')!.attrs!.capture as CaptureInfo)
 
     expect((await put(true)).status).toBe(200)
     expect(captureInNote().done).toBe(true)
     const inbox = (await (await app.request('/api/spaces/s/inbox?today=2026-10-01')).json()) as Inbox
     expect(inbox.items[0]!.done).toBe(true)
-    expect(((await (await put(false)).json()) as ObjectRecord).id).toBe(result.dailyNote.id)
+    expect(((await (await put(false)).json()) as ObjectRecord).id).toBe(result.dailyNote!.id)
     expect(captureInNote().done).toBeUndefined()
 
-    expect((await app.request(`/api/objects/${result.dailyNote.id}/captures/nope`, { method: 'PUT', body: '{"done":true}' })).status).toBe(404)
+    expect((await app.request(`/api/objects/${result.dailyNote!.id}/captures/nope`, { method: 'PUT', body: '{"done":true}' })).status).toBe(404)
   })
 
   it('leaves out objects in the trash or deleted for good', async () => {
@@ -81,7 +97,7 @@ describe('inbox', () => {
     const { app, store, capture } = setup()
     const other = await capture.note({ text: 'not yours', spaceId: 'other' })
     expect((await app.request('/api/spaces/other/inbox')).status).toBe(404)
-    expect((await app.request(`/api/objects/${other.dailyNote.id}/captures/${other.blockId}`, { method: 'PUT', body: '{"done":true}' })).status).toBe(404)
-    expect(store.getObject(other.dailyNote.id)!.content[BODY_PROPERTY_ID]!.content.find((n) => n.type === 'callout')!.attrs!.capture).not.toHaveProperty('done')
+    expect((await app.request(`/api/objects/${other.dailyNote!.id}/captures/${other.blockId}`, { method: 'PUT', body: '{"done":true}' })).status).toBe(404)
+    expect(store.getObject(other.dailyNote!.id)!.content[BODY_PROPERTY_ID]!.content.find((n) => n.type === 'callout')!.attrs!.capture).not.toHaveProperty('done')
   })
 })

@@ -87,6 +87,14 @@ onBeforeUnmount(() => recordFrom(false))
       <p v-else class="text-ink-soft">
         <template v-if="desktop">Quick capture: {{ formatShortcut(desktop.shortcut) }}. </template>Update the app (Check for Updates… in the Vasta icon’s menu) to change the shortcut here.
       </p>
+      <label class="flex items-center gap-2">
+        <input v-model="ui.captureDaily" type="checkbox" class="accent-[var(--color-accent)]" />
+        Add quick captures to the daily note
+      </label>
+      <label class="flex items-center gap-2">
+        <input v-model="ui.captureInbox" type="checkbox" class="accent-[var(--color-accent)]" />
+        Show quick captures in the inbox
+      </label>
       <label class="flex items-start gap-2">
         <input v-model="ui.captureAsks" type="checkbox" class="mt-0.5 accent-[var(--color-accent)]" />
         <span>

@@ -104,7 +104,8 @@ async function save(open = false) {
       return
     }
     const unread = answer.unreadable?.length ? ` Could not read ${answer.unreadable.join('; ')}.` : ''
-    notice.value = { message: answer.summary ? `${answer.summary}, in today’s note in ${saved.name}.${unread}` : `Captured to today’s note in ${saved.name}` }
+    const destination = answer.dailyNoteId ? `today’s note in ${saved.name}` : saved.name
+    notice.value = { message: `${answer.summary || 'Capture saved'} in ${destination}.${unread}` }
     close()
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : String(failure)

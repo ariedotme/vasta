@@ -5,6 +5,14 @@ import type { Doc, DocNode } from '../src/model.ts'
 const text = (value: string, marks?: DocNode['marks']): DocNode => ({ type: 'text', text: value, ...(marks ? { marks } : {}) })
 const paragraph = (...content: DocNode[]): DocNode => ({ type: 'paragraph', content })
 
+it('keeps object references in headings and table cells and preserves editable task items', () => {
+  const doc = markdownToDoc('# [Target](vasta://o/target)\n\n| Related |\n| --- |\n| ![Target](vasta://o/target) |\n\n- [ ] Open\n- [x] Done')
+  const mention = { type: 'mention', attrs: { objectId: 'target', label: 'Target' } }
+  expect(doc.content[0]?.content).toEqual([mention])
+  expect(doc.content[1]?.content?.[1]?.content?.[0]?.content?.[0]?.content).toEqual([mention])
+  expect(doc.content[2]?.content?.map((item) => [item.type, item.attrs?.checked])).toEqual([['taskItem', false], ['taskItem', true]])
+})
+
 const sample = `# Title
 
 Some **bold**, _italic_, ~~gone~~, \`code\`, ==marked== and a [link](https://example.com/a_b).\\

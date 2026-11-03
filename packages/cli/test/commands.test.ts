@@ -82,7 +82,7 @@ describe('vasta CLI', () => {
     await vasta(['append', id], '- step one\n- step two')
     await vasta(['set', id, 'status=done', '--title', 'Write the agent docs'])
     expect(await vasta(['show', `https://notes.example/o/${id}`])).toBe(
-      [`# Write the agent docs`, `Task · Notes · https://notes.example/o/${id}`, 'Status: Done', 'Priority: High', '', 'For **agents**.', '', '- step one', '- step two'].join('\n')
+      [`# Write the agent docs`, `Task · Notes · https://notes.example/o/${id}`, 'Pinned: no', 'Status: Done', 'Priority: High', '', 'For **agents**.', '', '- step one', '- step two'].join('\n')
     )
     expect(await vasta(['search', 'agents'])).toBe(`Write the agent docs  · Task  ${id}`)
     expect(await vasta(['query', '--type', 'Task', '--where', 'status is Done'])).toBe(`Write the agent docs  · Task  ${id}`)

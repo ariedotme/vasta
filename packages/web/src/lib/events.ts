@@ -17,8 +17,8 @@ export type ChangeEvent =
   | { kind: 'calendar'; sourceId: Id; spaceId: Id }
   /** A type's definition changed on the server. */
   | { kind: 'type'; id: Id; spaceId: Id }
-  /** A space was renamed, joined or dropped (only from the replica). */
-  | { kind: 'space'; id: Id; spaceId?: undefined }
+  /** A space or its sidebar changed, or a space was joined or dropped. */
+  | { kind: 'space'; id: Id; spaceId?: Id }
 
 const listeners = new Set<(event: ChangeEvent) => void>()
 let source: EventSource | undefined

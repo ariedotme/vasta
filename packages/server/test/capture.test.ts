@@ -67,7 +67,7 @@ describe('capture service', () => {
     clock.at = '2026-10-18T12:05:00.000Z'
     const { dailyNote } = await capture.note({ text: 'second\nline two\n\nnew paragraph' })
 
-    const blocks = body(dailyNote)
+    const blocks = body(dailyNote!)
     expect(blocks.map((b) => b.type)).toEqual(['callout', 'callout', 'paragraph'])
     expect(blocks[0]!.attrs).toMatchObject({ icon: { kind: 'icon', value: 'ph:telegram-logo' }, capture: { channel: 'telegram', at: '2026-10-18T11:59:00.000Z' } })
     expect(captureOf(blocks[1]!)).toMatchObject({ channel: 'api', at: '2026-10-18T12:05:00.000Z' })
@@ -75,7 +75,7 @@ describe('capture service', () => {
       { type: 'paragraph', content: [{ type: 'text', text: 'second' }, { type: 'hardBreak' }, { type: 'text', text: 'line two' }] },
       { type: 'paragraph', content: [{ type: 'text', text: 'new paragraph' }] },
     ])
-    expect(events.flatMap((e) => (e.kind === 'object' && e.id === dailyNote.id ? [e.updatedAt] : [])).at(-1)).toBe('2026-10-18T12:05:00.000Z')
+    expect(events.flatMap((e) => (e.kind === 'object' && e.id === dailyNote!.id ? [e.updatedAt] : [])).at(-1)).toBe('2026-10-18T12:05:00.000Z')
   })
 
   it('starts a new daily note after local midnight', async () => {
@@ -83,8 +83,8 @@ describe('capture service', () => {
     const late = await capture.note({ text: 'late' })
     clock.at = '2026-10-19T03:10:00.000Z' // 00:10 the next day
     const early = await capture.note({ text: 'early' })
-    expect(late.dailyNote.date?.start).toBe('2026-10-18T00:00:00.000Z')
-    expect(early.dailyNote.date?.start).toBe('2026-10-19T00:00:00.000Z')
+    expect(late.dailyNote!.date?.start).toBe('2026-10-18T00:00:00.000Z')
+    expect(early.dailyNote!.date?.start).toBe('2026-10-19T00:00:00.000Z')
   })
 
   it('saves URLs in a note as weblinks, reusing one saved before', async () => {
@@ -96,7 +96,7 @@ describe('capture service', () => {
     expect(weblinks).toHaveLength(1)
     expect(weblinks[0]).toMatchObject({ title: 'Title of /post', media: { url: 'https://example.com/post', host: 'example.com', previewImageUrl: 'https://img.example/p.png' } })
     expect(first.objects[0]!.id).toBe(weblinks[0]!.id)
-    const [withText, onlyLink] = body(second.dailyNote).filter((b) => b.type === 'callout')
+    const [withText, onlyLink] = body(second.dailyNote!).filter((b) => b.type === 'callout')
     expect(withText!.content!.map((b) => b.type)).toEqual(['paragraph', 'objectEmbed'])
     expect(withText!.content![0]!.content![1]).toMatchObject({ text: 'https://example.com/post', marks: [{ type: 'link', attrs: { href: 'https://example.com/post' } }] })
     expect(onlyLink!.content).toEqual([{ type: 'objectEmbed', attrs: { objectId: weblinks[0]!.id, display: 'wide-card' } }])
@@ -127,7 +127,7 @@ describe('capture service', () => {
     const image = result.objects[0]!
     expect(image.typeId).toBe(builtinTypeId('s', 'image'))
     expect(media.pathOf(image.media!.file!.key)).toMatch(/\.jpg$/)
-    expect(body(result.dailyNote)[0]!.content!.map((b) => b.type)).toEqual(['paragraph', 'objectEmbed'])
+    expect(body(result.dailyNote!)[0]!.content!.map((b) => b.type)).toEqual(['paragraph', 'objectEmbed'])
   })
 })
 

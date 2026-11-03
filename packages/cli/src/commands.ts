@@ -15,11 +15,13 @@ export const USAGE = `vasta — your Vasta notes from the terminal (for you, scr
   vasta search <words…>             find objects
   vasta show <id|link>              an object, its text as Markdown
   vasta today [YYYY-MM-DD]          a day's note (today by default)
-  vasta new <type> <title…>         create an object; its text with --text (--text - reads stdin);
+  vasta new <type> <title…>         create an object; --cover-url <url>; --text - reads Markdown from stdin;
                                     --template <name|blank> (the type's default otherwise)
   vasta templates                   the space's templates and snippets, with their questions
   vasta append <id|today> [text…]   add Markdown to an object's text (or stdin)
-  vasta set <id> name=value…        change properties (name= clears one); --title renames
+  vasta set <id> name=value…        change properties (name= clears one); --title renames; --cover-url <url> or --remove-cover
+  vasta pin <id|link>              pin an object in the sidebar
+  vasta unpin <id|link>            remove an object from all sidebar sections
   vasta capture <text…>             capture into today's note, like the quick capture
   vasta inbox [--days N]            what was captured lately
   vasta habits [YYYY-MM-DD]         your habits: done today (or that day), streaks
@@ -81,6 +83,8 @@ interface Shown {
   date?: string
   tags?: string[]
   link?: string
+  coverUrl?: string | null
+  pinned?: boolean
   properties?: Record<string, unknown>
   text: Record<string, string>
   backlinks?: { id: string; title: string }[]
@@ -96,7 +100,10 @@ const valueText = (value: unknown): string =>
         : String(value)
 
 function show(object: Shown): string {
+  if (object.id === null && object.day) return `No daily note for ${object.day}.`
   const lines = [`# ${object.title || 'Untitled'}`, `${object.type} · ${object.space} · ${object.url}`]
+  if (object.coverUrl) lines.push(`Cover: ${object.coverUrl}`)
+  if (object.pinned !== undefined) lines.push(`Pinned: ${object.pinned ? 'yes' : 'no'}`)
   if (object.date) lines.push(`Date: ${object.date}`)
   if (object.link) lines.push(`Link: ${object.link}`)
   for (const [name, value] of Object.entries(object.properties ?? {})) lines.push(`${name}: ${valueText(value)}`)
@@ -123,6 +130,8 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
       template: { type: 'string' },
       answer: { type: 'string', multiple: true },
       title: { type: 'string' },
+      'cover-url': { type: 'string' },
+      'remove-cover': { type: 'boolean' },
       field: { type: 'string' },
       mode: { type: 'string' },
       type: { type: 'string', multiple: true },
@@ -165,6 +174,7 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
       const created = await call('create_object', {
         type,
         title: title.join(' '),
+        ...(values['cover-url'] !== undefined ? { coverUrl: values['cover-url'] } : {}),
         ...space,
         ...(values.prop?.length ? { properties: parseProps(values.prop) } : {}),
         ...(markdown.trim() ? { markdown } : {}),
@@ -187,20 +197,30 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
       if (!rest[0]) throw new UsageError('vasta append <id|today> [text…]')
       const markdown = await text()
       if (!markdown.trim()) throw new UsageError('nothing to append: give the text or pipe it in')
-      const id = rest[0] === 'today' ? ((await call('get_daily_note', space)) as Shown).id : idOf(rest[0])
       const mode = values.mode ?? 'append'
       if (!['append', 'prepend', 'replace'].includes(mode)) throw new UsageError('--mode is append, prepend or replace')
-      const changed = await call('update_object', { id, markdown, mode, ...(values.field ? { field: values.field } : {}) })
+      const today = rest[0] === 'today'
+      const note = today && mode !== 'append' ? await call('get_daily_note', space) as { id: string | null } : undefined
+      if (today && !note?.id) return out(await call('write_daily_note', { markdown, ...space }), show)
+      const changed = await call('update_object', { id: note?.id ?? idOf(rest[0]), markdown, mode, ...(values.field ? { field: values.field } : {}) })
       return out(changed, (o: Shown) => `Updated ${o.title || o.type}: ${o.url}`)
     }
     case 'set': {
-      if (!rest[0] || (rest.length < 2 && values.title === undefined)) throw new UsageError('vasta set <id> name=value… [--title new title]')
+      if (values['remove-cover'] && values['cover-url'] !== undefined) throw new UsageError('use one of --cover-url and --remove-cover')
+      const coverUrl = values['remove-cover'] ? null : values['cover-url']
+      if (!rest[0] || (rest.length < 2 && values.title === undefined && coverUrl === undefined)) throw new UsageError('vasta set <id> name=value… [--title new title]')
       const changed = await call('update_object', {
         id: idOf(rest[0]),
+        ...(coverUrl !== undefined ? { coverUrl } : {}),
         ...(values.title !== undefined ? { title: values.title } : {}),
         ...(rest.length > 1 ? { properties: parseProps(rest.slice(1)) } : {}),
       })
       return out(changed, show)
+    }
+    case 'pin':
+    case 'unpin': {
+      if (!rest[0]) throw new UsageError(`vasta ${command} <id|link>`)
+      return out(await call('set_pinned', { id: idOf(rest[0]), pinned: command === 'pin' }), show)
     }
     case 'capture': {
       const captured = rest.length ? rest.join(' ') : (values.text ?? (await stdin()))

@@ -89,7 +89,6 @@ async function load() {
     if (id !== requestId) return
     primeSummaries(data.objects)
     entries.value = data.entries
-    if (view.value === 'day') void startTodaysNote()
   } catch (error) {
     lastError.value = (error as Error).message
   } finally {
@@ -252,11 +251,11 @@ const started = reactive(new Map<string, Id>())
 const noteOf = (day: string) => entries.value.find((e) => e.kind === 'daily-note' && e.startDay === day)?.objectId ?? started.get(day)
 const starting = ref(false)
 
-async function startNote(day = anchor.value) {
+async function startNote(text: string, day = anchor.value) {
   if (!workspace.space || starting.value) return
   starting.value = true
   try {
-    const note = await api.dailyNote(workspace.space.id, day)
+    const note = await api.dailyNote(workspace.space.id, day, text)
     primeFromObject(note)
     started.set(day, note.id)
     void refreshCounts()
@@ -265,11 +264,6 @@ async function startNote(day = anchor.value) {
   } finally {
     starting.value = false
   }
-}
-
-/** Today's page starts today's note, as opening Today always did; other days wait for a click. */
-async function startTodaysNote() {
-  if (anchor.value === dayKey() && !noteOf(anchor.value)) await startNote(anchor.value)
 }
 
 // The small month beside the week and day views ---------------------------------------
@@ -434,7 +428,7 @@ const openNote = (day: string) => {
           :habits="!showPanel"
           @details="showDetails"
           @create="(element) => createInMonth(anchor, element)"
-          @start-note="startNote()"
+          @start-note="startNote"
         />
         <TimeGrid
           v-else

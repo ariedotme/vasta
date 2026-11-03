@@ -29,6 +29,14 @@ Set these in `.env` at the repository root (`pnpm dev` reads it; see `.env.examp
 Captures belong to a Vasta user: the owner of the token, or the user a Telegram account is linked
 to. They land in that user's capture space and day. See [accounts.md](accounts.md).
 
+### Desktop quick-capture destinations
+
+In Settings › Desktop app, choose whether the shortcut adds captures to the daily note and
+whether it shows them in the inbox. Both options start off. A typed capture still creates its
+object, a bare URL saves its Weblink, and other text is saved as a Page when both options are
+off. Inbox-only entries are grouped in a separate Captures page for the day. External channels
+continue to add captures to the daily note and inbox.
+
 ## Telegram
 
 1. In Telegram, talk to **@BotFather**, send `/newbot`, and copy the token into `TELEGRAM_BOT_TOKEN`.
