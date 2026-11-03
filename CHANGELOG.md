@@ -13,7 +13,7 @@ GitHub release page.
   offer `crypto.randomUUID` over HTTPS or localhost. Thanks to @natedwhite for finding the cause
   (#43).
 - **Mentions with Markdown characters in their title**, such as an underscore, no longer gain
-  backslashes each time an agent rewrites the page.
+  backslashes each time an agent rewrites the page. Thanks to @bokehsec (#46).
 
 ## 0.5.0 (2026-11-03)
 
