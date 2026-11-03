@@ -43,14 +43,16 @@ Code and Codex).
 | `add_comment` | A comment on an object, as the user (@username mentions a member) |
 | `list_types` | A space's types with their properties, select options and object counts |
 | `search` | Full-text search over titles and text |
-| `get_object` | An object: type, properties in words, tags, text fields as Markdown, backlinks |
-| `get_daily_note` | A day's note (today by default, in the user's time zone), made if missing |
+| `get_object` | An object: type, properties in words, tags, text fields as Markdown, backlinks, `coverUrl` and `pinned` |
+| `get_daily_note` | A day's note (today by default, in the user's time zone), or `id: null` when it does not exist |
+| `write_daily_note` | Append Markdown to a day’s note, creating it with that text if needed |
 | `query` | Objects of some types, filtered and sorted like a query in the app |
 | `list_inbox` | Items captured lately (Telegram, quick capture, agents…) |
 | `list_templates` | The space's templates (by type, the default marked) and snippets, with the questions they ask |
 | `create_object` | A new object of a type, with properties and Markdown text; it starts from the type's default template, or `template` by name (`"blank"`: none), its questions answered by `answers` |
 | `update_object` | Title, properties (null clears one) and text: append (default), prepend or replace |
-| `capture` | A note into today's daily note, like the quick capture (channel "agent") |
+| `set_pinned` | Pin an object in the first sidebar section or unpin it from every section |
+| `capture` | Add a capture to today’s daily note and the inbox (channel "agent") |
 | `list_habits` | The habits: done on a day (today by default; the amount for daily goals), weekdays, streaks, rates, the last days |
 | `log_habit` | Mark a habit done or not on a day, or set or add to its amount toward a daily goal |
 | `log_food` | Log what was eaten (a space that tracks food): a line as after `/food` ([capture.md](capture.md#food); an item with kcal, "muffin ~350 kcal 12 g protein", is logged by its numbers, without a food, e.g. an estimate from a photo of a plate), or one `food` with an `amount` and `meal`; `day` for another day |
@@ -76,13 +78,37 @@ JSON; objects carry a `url` to open them in the app (`VASTA_WEB_URL`, else the r
 Writes go through the store like the app's own saves: the change feed tells open pages, and the
 rich text is written to the object's Yjs document, so devices merge it with their own edits.
 
+### Covers and pins
+
+Pass an HTTP(S) image URL as `coverUrl` to `create_object` or `update_object`. Pass
+`coverUrl: null` to `update_object` to clear it. Use `get_object` to inspect the current cover
+and pin status.
+
+| MCP tool | Example input |
+| --- | --- |
+| `create_object` | `{"type":"Page","title":"Trip","coverUrl":"https://example.com/trip.jpg"}` |
+| `update_object` | `{"id":"page-id","coverUrl":"https://example.com/new.jpg"}` |
+| `update_object` | `{"id":"page-id","coverUrl":null}` |
+| `set_pinned` | `{"id":"page-id","pinned":true}` |
+| `set_pinned` | `{"id":"page-id","pinned":false}` |
+| `get_object` | `{"id":"page-id"}` |
+
+The app uploads a local cover through the existing image upload flow. It stores the image as
+a media object and sets the cover to its authenticated `/media/<key>` URL. CLI and MCP cover
+writes currently accept remote URLs. Local-file support would need an authenticated upload
+operation that receives the bytes. An MCP server cannot resolve paths on the client's device.
+
+Read a daily note with `get_daily_note` using `{"day":"2026-11-03"}`. To write the first
+entry or append to an existing note, call `write_daily_note` with
+`{"day":"2026-11-03","markdown":"## Morning\n\nA first entry."}`. Omit the date to use today.
+
 ### Markdown
 
 Text goes in and out as Markdown (`packages/core/src/markdown.ts`): paragraphs, headings, lists,
 to-dos (`- [ ]`, `- [x]`), quotes, code blocks, rules, tables, line breaks; bold, italic, strike,
 code, `==highlight==` and links. Vasta's own pieces:
 
-- a mention: `[@Title](vasta://o/<id>)`; of one block: `[@Title › its text](vasta://o/<id>#b-<block>)`
+- a mention: `[Title](vasta://o/<id>)` or `[@Title](vasta://o/<id>)`, including in headings and table cells; of one block: `[@Title › its text](vasta://o/<id>#b-<block>)`
 - an embedded object (a card, an image): `![Title](vasta://o/<id>)`; one block of it (read-only,
   following the original): `![Title](vasta://o/<id>#b-<block>)`
 - a callout: a quote that starts with `[!NOTE]`
@@ -113,6 +139,12 @@ vasta new Task "Login breaks" --template Bug --answer "Who saw it?=Lena"
 vasta templates                            # templates and snippets, with their questions
 echo "- read chapter 3" | vasta append today
 vasta set <id> status=done --title "Done it"
+vasta new Page Trip --cover-url https://example.com/trip.jpg
+vasta set page-id --cover-url https://example.com/new.jpg
+vasta set page-id --remove-cover
+vasta pin page-id
+vasta unpin page-id
+vasta show page-id                         # current cover and pin status
 vasta capture "call the dentist"
 vasta inbox --days 3
 vasta habits                               # ✓ done today, ○ not yet, – day off; streaks

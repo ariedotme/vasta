@@ -195,6 +195,18 @@ describe('weblinks API', () => {
 })
 
 describe('captured links', () => {
+  it('uses a short Reel title and skips automatic extraction', async () => {
+    const { store, media, weblinks, fetched } = setup()
+    const capture = new CaptureService({ store, media, weblinks, saveReadable: true, timeZone: 'UTC' })
+    const { objects } = await capture.note({ text: 'https://www.instagram.com/reel/example/' })
+    await weblinks.idle()
+    const link = store.getObject(objects[0]!.id)!
+    expect(link.title).toBe('Instagram Reel')
+    expect(link.media?.previewImageFile).toBeDefined()
+    expect(link.content[ARTICLE_PROPERTY_ID]).toBeUndefined()
+    expect(fetched).toEqual([])
+  })
+
   it('get their preview image and, when enabled, readable text in the background', async () => {
     const { store, media, weblinks } = setup()
     const capture = new CaptureService({ store, media, weblinks, saveReadable: true, timeZone: 'UTC', now: () => '2026-10-18T12:00:00.000Z' })

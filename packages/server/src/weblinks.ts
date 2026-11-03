@@ -189,7 +189,8 @@ export class WeblinkService {
       const meta = { ...old.meta, ...fresh.meta }
       const media: MediaInfo = { ...old, ...fresh, ...(Object.keys(meta).length ? { meta } : {}), ...(keepFile ? { previewImageFile } : {}) }
       if (!fresh.previewImageUrl && !keepFile) delete media.previewImageUrl
-      return { ...object, media }
+      const title = this.isReel(url) && object.title === old.meta?.title ? String(fresh.meta?.title ?? object.title) : object.title
+      return { ...object, title, media }
     })
     await this.storePreviewImage(id)
     return this.store.getObject(id) ?? updated
@@ -227,7 +228,8 @@ export class WeblinkService {
   enrich(id: Id, { readable = false } = {}) {
     const run = (async () => {
       await this.storePreviewImage(id)
-      if (readable && this.fetchPage) await this.saveReadable(id).catch(() => {})
+      const url = this.store.getObject(id)?.media?.url
+      if (readable && this.fetchPage && url && !this.isReel(url)) await this.saveReadable(id).catch(() => {})
     })()
       .catch((error) => console.warn(`weblink ${id}: ${(error as Error).message}`))
       .finally(() => this.pending.delete(run))
@@ -248,9 +250,19 @@ export class WeblinkService {
     return object
   }
 
+  private isReel(url: string) {
+    const address = new URL(url)
+    return /^(?:www\.)?instagram\.com$/i.test(address.hostname) && /^\/reels?\//i.test(address.pathname)
+  }
+
   private async pageMedia(url: string): Promise<MediaInfo> {
     const page = (await this.fetchMeta?.(url)) ?? {}
-    return { url, host: new URL(url).host, ...page }
+    const meta = { ...page.meta }
+    if (this.isReel(url)) {
+      const account = /^(@[\w.]+)\b/.exec(String(meta.title ?? ''))?.[1]
+      meta.title = account ? `Instagram Reel · ${account}` : 'Instagram Reel'
+    }
+    return { url, host: new URL(url).host, ...page, ...(Object.keys(meta).length ? { meta } : {}) }
   }
 
   private async storePreviewImage(id: Id) {

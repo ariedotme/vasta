@@ -6,11 +6,12 @@
 // this device's HLC; the `stamped` and `textSaved` hooks put those fields (and objects whose text
 // changed) in the outbox. Pulled rows merge field by field, the newer HLC winning, so a local
 // change not pushed yet survives an older one from the server. Rich text merges through Yjs.
+import { newId } from './ids.ts'
 import { Y } from '@vasta/editor-schema/yjs'
 import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
 import { calendarEntries, parseCalendar, type ParsedCalendar } from './ics.ts'
 import type { CalendarEntry, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, Person, Space } from './model.ts'
-import { QuoteError, appendCapture, applyEdit, createQuote, findOrCreateDailyNote, listInbox, newObject, newType, querySpace, setCaptureDone, type InboxItem } from './operations.ts'
+import { QuoteError, recordCapture, standaloneCapture, type CaptureDestinations, applyEdit, createQuote, findOrCreateDailyNote, writeDailyText, listInbox, newObject, newType, querySpace, setCaptureDone, type InboxItem } from './operations.ts'
 import { NutritionError, deleteFoodEntry, foodLineAnswer, logFood, logFoodLine, normalizeNutritionSettings, setNutritionEnabled, type FoodLineAnswer, type LogFoodInput } from './nutrition.ts'
 import { SprintError, setSprints } from './sprints.ts'
 import { textToBlocks } from './text-doc.ts'
@@ -76,6 +77,7 @@ export type ReplicaChange =
 /** What a capture into a daily note answers (the server's capture routes answer the same). */
 export interface CaptureAnswer {
   dailyNoteId: Id
+  sourceId?: Id
   blockId: Id
   /** What an object capture made, in words: "Book “Dune”, author Frank Herbert". */
   summary?: string
@@ -643,7 +645,7 @@ export class ClientStore extends Store {
       return this.transaction(() => this.writeLineObject(made))
     }
     const { media: _media, ...rest } = data
-    return this.putObject(newObject(type, rest, crypto.randomUUID(), at))
+    return this.putObject(newObject(type, rest, newId(), at))
   }
 
   /**
@@ -660,7 +662,7 @@ export class ClientStore extends Store {
 
   createType(data: { spaceId: Id; name: string; pluralName?: string; icon?: Icon }, at: IsoDateTime): ObjectType {
     if (!data.spaceId || !this.getSpace(data.spaceId) || !data.name?.trim()) throw new InvalidError('spaceId and name are required')
-    const type = newType(data.spaceId, data, crypto.randomUUID(), at)
+    const type = newType(data.spaceId, data, newId(), at)
     this.putType(type)
     return type
   }
@@ -756,8 +758,12 @@ export class ClientStore extends Store {
     return note
   }
 
-  dailyNote(spaceId: Id, day: string, at: IsoDateTime): ObjectRecord {
+  dailyNote(spaceId: Id, day: string, at: IsoDateTime, text?: string): ObjectRecord {
     if (!this.getSpace(spaceId)) throw new NotFoundError('not found')
+    if (text !== undefined) {
+      if (!text.trim()) throw new InvalidError('daily note text is required')
+      return writeDailyText(this, spaceId, day, at, textToBlocks(text))
+    }
     return findOrCreateDailyNote(this, spaceId, day, at).note
   }
 
@@ -768,32 +774,37 @@ export class ClientStore extends Store {
   }
 
   /** Capture a text into the day's note, offline (online, the server does it and turns links into weblinks). */
-  capture(spaceId: Id, text: string, channel: string, day: string, at: IsoDateTime): CaptureAnswer {
+  capture(spaceId: Id, text: string, channel: string, day: string, at: IsoDateTime, destinations?: CaptureDestinations): CaptureAnswer {
     if (!this.getSpace(spaceId)) throw new NotFoundError('not found')
     if (!text.trim()) throw new InvalidError('text is required')
-    const capture = { id: crypto.randomUUID(), channel, at }
-    const note = this.transaction(() => appendCapture(this, spaceId, day, capture, textToBlocks(text)))
-    return { dailyNoteId: note.id, blockId: capture.id }
+    const capture = { id: newId(), channel, at }
+    const blocks = textToBlocks(text)
+    return this.transaction(() => {
+      const { dailyNote, page } = recordCapture(this, spaceId, day, capture, blocks, destinations)
+      if (page) return { dailyNoteId: dailyNote?.id ?? '', blockId: capture.id, ...(!dailyNote ? { sourceId: page.id } : {}) }
+      const { id, typeId, title } = standaloneCapture(this, spaceId, text, at, blocks)
+      return { dailyNoteId: '', blockId: '', objects: [{ id, typeId, title }] }
+    })
   }
 
   /**
    * Capture an object of a type into the day's note, offline: the text's first line is its title
    * and properties (capture-line.ts), the other lines its body, and the note embeds it.
    */
-  captureObject(spaceId: Id, typeId: Id, text: string, channel: string, day: string, at: IsoDateTime, timeZone: string, answers?: Record<string, string>): CaptureAnswer {
+  captureObject(spaceId: Id, typeId: Id, text: string, channel: string, day: string, at: IsoDateTime, timeZone: string, answers?: Record<string, string>, destinations?: CaptureDestinations): CaptureAnswer {
     const type = this.getType(typeId)
     if (!this.getSpace(spaceId) || !type || type.spaceId !== spaceId) throw new NotFoundError('not found')
     const [line = '', ...rest] = text.split('\n')
     const made = objectFromLine(this, { type, line, text: rest.join('\n'), ...(answers ? { answers } : {}), at, context: this.lineContext(spaceId, { today: day, timeZone }) })
-    const capture = { id: crypto.randomUUID(), channel, at }
+    const capture = { id: newId(), channel, at }
     const note = this.transaction(() => {
       this.writeLineObject(made)
-      return appendCapture(this, spaceId, day, capture, [{ type: 'objectEmbed', attrs: { objectId: made.object.id, display: 'inline' } }])
+      return recordCapture(this, spaceId, day, capture, [{ type: 'objectEmbed', attrs: { objectId: made.object.id, display: 'inline' } }], destinations)
     })
     const names = new Map(this.people(spaceId).map((p) => [p.id, p.name]))
     const summary = describeCapture(made.type ?? type, made.object, made.parsed, timeZone, (id) => this.getObject(id)?.title ?? '?', (id) => names.get(id) ?? '?')
     const objects = [made.object, ...made.related].map((o) => ({ id: o.id, typeId: o.typeId, title: o.title }))
-    return { dailyNoteId: note.id, blockId: capture.id, summary, objects, ...(made.parsed?.errors.length ? { unreadable: made.parsed.errors } : {}) }
+    return { dailyNoteId: note.dailyNote?.id ?? '', blockId: note.page ? capture.id : '', ...(note.page && !note.dailyNote ? { sourceId: note.page.id } : {}), summary, objects, ...(made.parsed?.errors.length ? { unreadable: made.parsed.errors } : {}) }
   }
 
   private writeLineObject(made: LineObject): ObjectRecord {

@@ -1,6 +1,7 @@
 // Operations the server's routes and the client's local store share, so a write made offline on a
 // device means the same as one made through the server: new objects and types, saving an edited
 // copy, daily notes, the inbox, running a query.
+import { newId } from './ids.ts'
 import { ADDED_BUILTIN_PROPERTIES, BODY_PROPERTY_ID, SOURCE_PROPERTY_ID, builtinProperty, builtinTypeId, missingBuiltinTypes } from './builtin-types.ts'
 import { docReferences } from './doc.ts'
 import type { CaptureInfo, DocNode, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, Person, QueryDef } from './model.ts'
@@ -151,7 +152,7 @@ export function createQuote(store: Store, sourceId: Id, input: { text: string; n
       props: { [SOURCE_PROPERTY_ID]: { kind: 'relation', value: [sourceId] } },
       content: note ? { [BODY_PROPERTY_ID]: { type: 'doc', content: textToBlocks(note) } } : {},
     },
-    crypto.randomUUID(),
+    newId(),
     at
   )
   return store.putObject(quote)
@@ -188,7 +189,7 @@ export function findOrCreateDailyNote(store: Store, spaceId: Id, day: string, at
   if (!type) throw new Error(`space ${spaceId} has no daily-note type`)
   // The day's note in the trash keeps its id; a new one then gets a random id, as before.
   const derived = dailyNoteId(spaceId, day)
-  const id = store.getObject(derived) ? crypto.randomUUID() : derived
+  const id = store.getObject(derived) ? newId() : derived
   // The type's default template, with what every device resolves the same (seed: no time, no asks).
   const template = defaultTemplate(store.listTemplates(spaceId), typeId)
   const types = new Map(store.listTypes(spaceId).map((t) => [t.id, t]))
@@ -269,10 +270,48 @@ export const channelIcon = (channel: string): Icon => ({ kind: 'icon', value: CH
 
 const isEmptyParagraph = (node: DocNode) => node.type === 'paragraph' && !node.content?.length
 
-/** Add a captured item to the end of the day's note (made if needed). Run it in a transaction with the objects it embeds. */
+/** Append the first or subsequent blocks of a day's note in one write transaction. */
+export function writeDailyText(store: Store, spaceId: Id, day: string, at: IsoDateTime, blocks: DocNode[]): ObjectRecord {
+  return store.transaction(() => {
+    const { note } = findOrCreateDailyNote(store, spaceId, day, at)
+    const current = [...(note.content[BODY_PROPERTY_ID]?.content ?? [])]
+    while (current.length && isEmptyParagraph(current.at(-1)!)) current.pop()
+    return store.putObject({ ...note, content: { ...note.content, [BODY_PROPERTY_ID]: { type: 'doc', content: [...current, ...blocks] } }, updatedAt: at })
+  })
+}
+
+/** Add a captured item to the end of the day’s note, creating it if needed. */
 export function appendCapture(store: Store, spaceId: Id, day: string, capture: CaptureInfo, blocks: DocNode[]): ObjectRecord {
-  const callout: DocNode = { type: 'callout', attrs: { icon: channelIcon(capture.channel), capture }, content: blocks.length ? blocks : [{ type: 'paragraph' }] }
   const { note } = findOrCreateDailyNote(store, spaceId, day, capture.at)
+  return addCaptureBlock(store, note, capture, blocks)
+}
+
+export interface CaptureDestinations {
+  daily: boolean
+  inbox: boolean
+}
+
+const inboxPageId = (spaceId: Id, day: string) => `capture-inbox-${spaceId}-${day}`
+
+export function recordCapture(store: Store, spaceId: Id, day: string, capture: CaptureInfo, blocks: DocNode[], destinations: CaptureDestinations = { daily: true, inbox: true }) {
+  if (destinations.daily) {
+    const dailyNote = appendCapture(store, spaceId, day, destinations.inbox ? capture : { ...capture, inbox: false }, blocks)
+    return { dailyNote, page: dailyNote }
+  }
+  if (!destinations.inbox) return {}
+  const id = inboxPageId(spaceId, day)
+  const current = store.getObject(id)
+  const page = current && !current.deletedAt ? current : newObject(store.getType(builtinTypeId(spaceId, 'page'))!, { title: `Captures · ${day}` }, id, capture.at)
+  return { page: addCaptureBlock(store, page, capture, blocks) }
+}
+
+export function standaloneCapture(store: Store, spaceId: Id, text: string, at: IsoDateTime, blocks: DocNode[]): ObjectRecord {
+  const title = text.trim().split('\n', 1)[0]!.slice(0, 100)
+  return store.putObject(newObject(store.getType(builtinTypeId(spaceId, 'page'))!, { title, content: { [BODY_PROPERTY_ID]: { type: 'doc', content: blocks } } }, newId(), at))
+}
+
+function addCaptureBlock(store: Store, note: ObjectRecord, capture: CaptureInfo, blocks: DocNode[]): ObjectRecord {
+  const callout: DocNode = { type: 'callout', attrs: { icon: channelIcon(capture.channel), capture }, content: blocks.length ? blocks : [{ type: 'paragraph' }] }
   const body = note.content[BODY_PROPERTY_ID] ?? { type: 'doc', content: [] }
   const content = [...body.content]
   while (content.length && isEmptyParagraph(content.at(-1)!)) content.pop()
@@ -282,13 +321,11 @@ export function appendCapture(store: Store, spaceId: Id, day: string, capture: C
 }
 
 // Inbox -----------------------------------------------------------------------
-// Every item captured into the daily notes of the last days (callouts carrying `attrs.capture`,
-// written by the server's CaptureService), newest first. An item can be marked done, which the
-// inbox and the daily note show; the item itself stays in its note.
+// Capture callouts from daily notes and inbox-only pages, newest first. Review status stays on the callout.
 
 export interface InboxItem extends CaptureInfo {
   done: boolean
-  /** The daily note holding it, and its day ("YYYY-MM-DD"). */
+  /** The source object holding the callout, and its day ("YYYY-MM-DD"). */
   noteId: Id
   day: string
   /** The callout's blocks. */
@@ -320,16 +357,19 @@ export function listInbox(store: Store, spaceId: Id, today: string, days: number
     return day !== undefined && day >= since && day <= addDays(today, 1)
   })
   const items: InboxItem[] = []
-  for (const summary of notes) {
-    const note = store.getObject(summary.id)
-    if (!note) continue
+  const sources = notes.map((note) => ({ id: note.id, day: note.date!.start.slice(0, 10) }))
+  for (let day = since; day <= addDays(today, 1); day = addDays(day, 1)) sources.push({ id: inboxPageId(spaceId, day), day })
+  for (const source of sources) {
+    const note = store.getObject(source.id)
+    if (!note || note.deletedAt) continue
     for (const { capture, node } of findCaptures(note.content[BODY_PROPERTY_ID]?.content)) {
+      if (capture.inbox === false) continue
       const content = node.content ?? []
       items.push({
         ...capture,
         done: !!capture.done,
         noteId: note.id,
-        day: note.date!.start.slice(0, 10),
+        day: source.day,
         content,
         objectIds: [...new Set(docReferences({ type: 'doc', content }).map((r) => r.objectId))],
       })

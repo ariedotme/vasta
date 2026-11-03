@@ -9,6 +9,7 @@ export type ChangeEvent =
   | { kind: 'calendar'; sourceId: Id; spaceId: Id }
   /** A type's definition changed on the server (e.g. a built-in field was added). */
   | { kind: 'type'; id: Id; spaceId: Id }
+  | { kind: 'space'; id: Id; spaceId: Id }
   /** A synced row of the space changed (any write): sync clients pull. Sent as SSE event `rev`. */
   | { kind: 'rev'; spaceId: Id; rev: number }
 

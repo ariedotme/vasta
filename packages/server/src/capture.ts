@@ -5,7 +5,9 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import {
   NutritionError,
-  appendCapture,
+  recordCapture,
+  standaloneCapture,
+  type CaptureDestinations,
   applyCaptureLine,
   describeCapture,
   findType,
@@ -47,6 +49,7 @@ export interface CaptureBase {
   channel?: string
   /** Space to capture into; defaults to the configured capture space. */
   spaceId?: Id
+  destinations?: CaptureDestinations
 }
 
 export interface NoteInput extends CaptureBase {
@@ -102,7 +105,8 @@ export interface FileInput extends CaptureBase {
 }
 
 export interface CaptureResult {
-  dailyNote: ObjectRecord
+  dailyNote?: ObjectRecord
+  sourceId?: Id
   /** Id of the callout block added to the daily note. */
   blockId: Id
   /** Objects the capture created or reused (weblinks, tasks, media…). */
@@ -214,7 +218,7 @@ export class CaptureService {
       ...(onlyLink ? [] : textToBlocks(text, input.spans)),
       ...links.map((link) => this.embed(link.id, 'wide-card')),
     ]
-    return this.commit(spaceId, input.channel, links, blocks)
+    return this.commit(spaceId, input.channel, links, blocks, false, input.destinations, text)
   }
 
   async weblink(input: WeblinkInput): Promise<CaptureResult> {
@@ -251,7 +255,7 @@ export class CaptureService {
     const type = this.resolveType(spaceId, input.type ?? '')
     if (!type) throw new CaptureError(`unknown type "${input.type}"`)
     if (type.system === 'daily-note') throw new CaptureError('use the note capture for daily notes')
-    return this.commitLine(spaceId, input.channel, type, this.fromLine(type, input))
+    return this.commitLine(spaceId, input.channel, type, this.fromLine(type, input), input.destinations)
   }
 
   /**
@@ -298,9 +302,9 @@ export class CaptureService {
     return { today: this.today(), timeZone: this.timeZone, people: this.store.people(spaceId), ...(me ? { me } : {}) }
   }
 
-  private commitLine(spaceId: Id, channel: string | undefined, type: ObjectType, made: LineObject): CaptureResult {
+  private commitLine(spaceId: Id, channel: string | undefined, type: ObjectType, made: LineObject, destinations?: CaptureDestinations): CaptureResult {
     if (made.type) this.writeType(type, made.type)
-    const result = this.commit(spaceId, channel, [made.object, ...made.related], [this.embed(made.object.id, 'inline')], true)
+    const result = this.commit(spaceId, channel, [made.object, ...made.related], [this.embed(made.object.id, 'inline')], true, destinations)
     const titles = new Map(result.objects.map((o) => [o.id, o.title]))
     const summary = describeCapture(type, made.object, made.parsed, this.timeZone, (id) => titles.get(id) ?? this.store.getObject(id)?.title ?? '?', (id) => this.store.getUser(id)?.name ?? '?')
     return { ...result, summary, ...(made.parsed?.errors.length ? { unreadable: made.parsed.errors } : {}) }
@@ -367,7 +371,7 @@ export class CaptureService {
    * Write the new objects and append the capture block to today's daily note. Runs without
    * awaiting, so concurrent captures cannot interleave between reading and writing the note.
    */
-  private commit(spaceId: Id, channel = 'api', objects: ObjectRecord[], blocks: DocNode[], alwaysNew = false): CaptureResult {
+  private commit(spaceId: Id, channel = 'api', objects: ObjectRecord[], blocks: DocNode[], alwaysNew = false, destinations?: CaptureDestinations, text?: string): CaptureResult {
     const at = this.now()
     const capture: CaptureInfo = { id: randomUUID(), channel, at }
     const created: ObjectRecord[] = []
@@ -376,13 +380,17 @@ export class CaptureService {
         // Reused weblinks already exist; only new objects (or ones the caller marks new) are written.
         if (alwaysNew || !this.store.getObject(object.id)) (this.store.putObject(object), created.push(object))
       }
-      const dailyNote = appendCapture(this.store, spaceId, localDay(at, this.timeZone), capture, blocks)
-      return { dailyNote, blockId: capture.id, objects }
+      const { dailyNote, page } = recordCapture(this.store, spaceId, localDay(at, this.timeZone), capture, blocks, destinations)
+      const standalone = !page && text && (objects.length === 0 || blocks.some((block) => block.type !== 'objectEmbed'))
+        ? standaloneCapture(this.store, spaceId, text, at, blocks)
+        : undefined
+      return { ...(dailyNote ? { dailyNote } : {}), page, blockId: page ? capture.id : '', objects: standalone ? [standalone, ...objects] : objects }
     })
-    for (const object of objects) this.changed(object)
-    this.changed(result.dailyNote)
+    for (const object of result.objects) this.changed(object)
+    const { page, ...answer } = result
+    if (page) this.changed(page)
     for (const object of created) if (object.typeId === builtinTypeId(spaceId, 'weblink')) this.weblinks.enrich(object.id, { readable: this.saveReadable })
-    return result
+    return { ...answer, ...(page && !answer.dailyNote ? { sourceId: page.id } : {}) }
   }
 
   private changed(object: ObjectRecord) {

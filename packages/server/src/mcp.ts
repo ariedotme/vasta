@@ -183,11 +183,22 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'get_daily_note',
     {
       title: 'Get daily note',
-      description: "A day's note (today by default, in the user's time zone), created if it does not exist yet. Captured items are in its text.",
+      description: "A day's note (today by default, in the user's time zone), with id null when the note has not been started.",
       inputSchema: { day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD'), space },
-      annotations: { ...READ, readOnlyHint: false },
+      annotations: READ,
     },
     ({ day, space }) => run(() => tools.dailyNote({ ...(day ? { day } : {}), ...(space ? { space } : {}) }))
+  )
+
+  server.registerTool(
+    'write_daily_note',
+    {
+      title: 'Write daily note',
+      description: "Append Markdown to a day's note, creating it with that text if needed.",
+      inputSchema: { markdown: z.string().min(1), day: z.string().optional(), space },
+      annotations: WRITE,
+    },
+    ({ markdown, day, space }) => run(() => tools.writeDailyNote(markdown, space, day))
   )
 
   server.registerTool(
@@ -236,6 +247,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
         'A new object of a type (name or id, e.g. "Page", "Task", "Book"), with a title, properties and text in Markdown. It starts from the type\'s default template, or the one "template" names ("blank" for none; list_templates lists them and their questions, answered by "answers"); what you give wins over the template. Returns it like get_object.',
       inputSchema: {
         type: z.string(),
+        coverUrl: z.string().optional().describe("HTTP(S) cover image URL"),
         title: z.string().optional(),
         space,
         properties,
@@ -266,6 +278,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
       description: 'Change an object: its title, properties (null clears one), and its text: Markdown appended (default), put before the text ("prepend"), or replacing it ("replace"). "field" picks a text field by name when the type has several.',
       inputSchema: {
         id: z.string(),
+        coverUrl: z.string().nullable().optional().describe("HTTP(S) cover image URL, or null to remove it"),
         title: z.string().optional(),
         properties,
         markdown: z.string().optional(),
@@ -275,6 +288,17 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
       annotations: { ...WRITE, destructiveHint: true },
     },
     (input) => run(() => tools.updateObject(strip(input)))
+  )
+
+  server.registerTool(
+    'set_pinned',
+    {
+      title: 'Set pinned',
+      description: 'Pin an object in the first sidebar section, or unpin it from all sections.',
+      inputSchema: { id: z.string(), pinned: z.boolean() },
+      annotations: WRITE,
+    },
+    ({ id, pinned }) => run(() => tools.setPinned(id, pinned))
   )
 
   server.registerTool(

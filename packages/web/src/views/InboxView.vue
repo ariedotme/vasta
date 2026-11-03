@@ -90,7 +90,7 @@ const openInNote = (item: InboxItem) => router.push({ path: `/o/${item.noteId}`,
 
 function itemMenu(event: MouseEvent, item: InboxItem) {
   openContextMenu(event, [
-    { label: 'Open in the daily note', icon: 'ph:arrow-square-out', run: () => openInNote(item) },
+    { label: 'Open capture source', icon: 'ph:arrow-square-out', run: () => openInNote(item) },
     item.done
       ? { label: `Mark not ${reviewed.value.lower}`, icon: 'ph:circle', run: () => setDone(item, false) }
       : { label: `Mark ${reviewed.value.lower}`, icon: 'ph:check-circle', run: () => setDone(item, true) },
@@ -148,7 +148,7 @@ async function showOlder() {
               <AppIcon :fallback="channelIconName(item.channel)" :size="14" class="text-ink-soft" />
               <span class="tabular-nums">{{ formatCaptureTime(item.at) }}</span>
               <span>· {{ formatChannel(item.channel) }}</span>
-              <button class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-hover hover:text-ink max-md:py-1.5" title="Open in the daily note" @click="openInNote(item)">
+              <button class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-hover hover:text-ink max-md:py-1.5" title="Open capture source" @click="openInNote(item)">
                 <span class="max-sm:hidden">Open in note</span>
                 <AppIcon fallback="ph:arrow-up-right" :size="13" />
               </button>

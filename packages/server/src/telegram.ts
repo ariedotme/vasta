@@ -294,9 +294,9 @@ export class TelegramBot {
       if (name === 'start' || name === 'help') return this.reply(message, HELP)
       if (name === 'id') return this.reply(message, this.ids(message))
       if (name === 'today') {
-        const day = capture.todayNote()
-        const url = this.options.webUrl ? `${this.options.webUrl.replace(/\/$/, '')}/o/${day.id}` : undefined
-        return this.reply(message, url ? `Today's note: ${url}` : `Today's note is ${capture.today()}. Set VASTA_WEB_URL to get a link.`)
+        const day = capture.today()
+        const url = this.options.webUrl ? `${this.options.webUrl.replace(/\/$/, '')}/calendar?view=day&date=${day}` : undefined
+        return this.reply(message, url ? `Today's note: ${url}` : `Today's note is ${day}. Set VASTA_WEB_URL to get a link.`)
       }
       if (name === 'task') {
         const result = await capture.task({ channel: CHANNEL, line: firstLine, ...(note ? { note } : {}) })

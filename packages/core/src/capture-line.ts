@@ -4,6 +4,7 @@
 // sets that property; every other word stays in the title, so "Re: meeting" is left alone. Quotes
 // allow spaces in a value. Used by the Telegram bot, the capture API (`line`), agents, and the app's
 // quick capture and ⌘K (`/Book Dune author:…`), online and offline.
+import { newId } from './ids.ts'
 import { BODY_PROPERTY_ID, builtinTypeId } from './builtin-types.ts'
 import type { DateValue, Doc, Id, IsoDateTime, ObjectRecord, ObjectType, Person, PropertyDef, PropertyValue, SelectOption } from './model.ts'
 import { findOrCreateDailyNote, newObject } from './operations.ts'
@@ -262,7 +263,7 @@ function applyValue(result: ParsedLine, def: PropertyDef, text: string, context:
           continue
         }
         // An option the type does not have yet is created, like typing it in the app.
-        const created: SelectOption = { id: crypto.randomUUID(), label, color: 'gray' }
+        const created: SelectOption = { id: newId(), label, color: 'gray' }
         result.newOptions.push({ propertyId: def.id, option: created })
         ids.push(created.id)
       }
@@ -429,7 +430,7 @@ export function applyCaptureLine(store: Store, spaceId: Id, type: ObjectType, pa
       if (existing) return existing.id
       const target = def.targetTypeIds.map((id) => store.getType(id)).find((t) => t && !t.deletedAt && t.spaceId === spaceId) ?? store.getType(builtinTypeId(spaceId, 'page'))
       if (!target) return undefined
-      const created = newObject(target, { title }, crypto.randomUUID(), at)
+      const created = newObject(target, { title }, newId(), at)
       related.push(created)
       return created.id
     })
@@ -507,7 +508,7 @@ export function objectFromLine(store: Store, input: LineObjectInput): LineObject
   if (blocks.length) content[BODY_PROPERTY_ID] = { type: 'doc', content: [...(content[BODY_PROPERTY_ID]?.content ?? []), ...blocks] }
   const extra = template ? { tagIds: [...template.tagIds], ...(template.icon ? { icon: template.icon } : {}) } : {}
   const props = { ...status, ...made?.props, ...line.props, ...input.props }
-  const object = newObject(type, { ...extra, title: made?.title ?? typedTitle, props, content }, crypto.randomUUID(), input.at)
+  const object = newObject(type, { ...extra, title: made?.title ?? typedTitle, props, content }, newId(), input.at)
   return { object, related: line.related, ...(line.type ? { type: line.type } : {}), ...(parsed ? { parsed } : {}), ...(template ? { template } : {}) }
 }
 

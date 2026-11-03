@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { newId } from '@vasta/core'
 // Edit a type: identity (name, icon, color, description) and its property definitions.
 // Changes are made on a draft and saved together.
 import { computed, reactive, ref } from 'vue'
@@ -77,7 +78,7 @@ function addProperty() {
 
 function addOption(def: PropertyDef, label: string) {
   if (def.kind !== 'select' || !label.trim()) return
-  const option: SelectOption = { id: crypto.randomUUID(), label: label.trim(), color: colorNames[(def.options.length * 5) % colorNames.length] }
+  const option: SelectOption = { id: newId(), label: label.trim(), color: colorNames[(def.options.length * 5) % colorNames.length] }
   def.options.push(option)
 }
 

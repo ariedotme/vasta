@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { newId } from '@vasta/core'
 // Food tracking in the open space: on (the Food, Recipe and Nutrition goal types appear, and a
 // Food block in each day) or off (hidden; nothing is deleted), and the meals of the day with their
 // usual times. Meals save as soon as they change.
@@ -37,7 +38,7 @@ function save() {
 }
 
 function add() {
-  draft.value.push({ id: crypto.randomUUID().slice(0, 8), name: 'Meal' })
+  draft.value.push({ id: newId().slice(0, 8), name: 'Meal' })
   return save()
 }
 

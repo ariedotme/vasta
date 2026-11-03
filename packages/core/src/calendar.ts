@@ -1,6 +1,7 @@
 // Calendar entries: everything dated in a space, expanded into occurrences within a range of days.
 // Exported as `@vasta/core/calendar` (not from the package root) because it loads ical.js for
 // recurrence rules, which the web app does not need.
+import { newId } from './ids.ts'
 import ICAL from 'ical.js'
 import type { CalendarEntry, DateException, DateValue, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType } from './model.ts'
 import { copyObject } from './operations.ts'
@@ -355,7 +356,7 @@ export function changeOccurrence(store: Store, edit: OccurrenceEdit, at: IsoDate
     const before = store.putObject({ ...withDate(object, edit.field, split.before), updatedAt: at })
     if (!split.after) return { object: before }
     const type = store.getType(object.typeId)!
-    const created = store.putObject(withDate(copyObject(object, type, crypto.randomUUID(), at, true), edit.field, split.after))
+    const created = store.putObject(withDate(copyObject(object, type, newId(), at, true), edit.field, split.after))
     return { object: before, created }
   })
 }

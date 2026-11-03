@@ -1,3 +1,4 @@
+import { newId } from '@vasta/core'
 import { foodCommand, lineAsks, type FoodLineAnswer, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type Space, type TemplateAsk } from '@vasta/core'
 import type { CaptureAnswer } from '@vasta/core/client'
 import { api } from './api.ts'
@@ -87,16 +88,16 @@ export async function captureText(text: string, channel: string, answers?: Recor
     return { space, answer: { dailyNoteId: food.dailyNoteId ?? '', blockId: '', summary: food.summary }, food }
   }
   const typed = text.startsWith('/') ? typedLine(await typesOf(space), text) : undefined
-  const answer = await api.capture(space.id, typed ? typed.rest : text, channel, dayKey(), typed?.type.id, typed ? answers : undefined)
-  return { space, answer, ...(typed && answer.objects?.[0] ? { made: answer.objects[0].id } : {}) }
+  const answer = await api.capture(space.id, typed ? typed.rest : text, channel, dayKey(), typed?.type.id, typed ? answers : undefined, channel === 'desktop' ? { daily: ui.captureDaily, inbox: ui.captureInbox } : undefined)
+  return { space, answer, ...((typed || !answer.dailyNoteId) && answer.objects?.[0] ? { made: answer.objects[0].id } : {}) }
 }
 
 /** Open what a capture made (Ctrl+Enter): the object of a "/Type …" line, else the day's note, in the capture space. */
 export async function openCapture(space: Space, answer: CaptureAnswer, made?: Id) {
-  const id = made ?? answer.dailyNoteId
+  const id = made ?? (answer.dailyNoteId || answer.sourceId)
   if (!id) return
   if (workspace.space?.id !== space.id) await loadWorkspace(space.id)
-  await router.push(`/o/${id}`)
+  await router.push({ path: `/o/${id}`, ...(id === answer.sourceId ? { query: { capture: answer.blockId } } : {}) })
 }
 
 /**
@@ -117,13 +118,9 @@ export async function tagFromPath(path: string): Promise<ObjectRecord | ObjectSu
   return parent
 }
 
-/** Open the daily note of a day; the server creates it the first time. */
+/** Open the day without writing a daily note. */
 export async function openDay(day: string, replace = false) {
-  if (!workspace.space) return
-  const note = await api.dailyNote(workspace.space.id, day)
-  primeFromObject(note)
-  void refreshCounts()
-  return replace ? router.replace(`/o/${note.id}`) : router.push(`/o/${note.id}`)
+  return replace ? router.replace(todayRoute(day)) : router.push(todayRoute(day))
 }
 
 /** Today: the calendar's day view, with today's daily note in it. */
@@ -281,7 +278,7 @@ export function pinToSidebar(id: Id, sectionId?: string) {
   return updateSidebar((space) => {
     let section = sectionId ? space.sidebar.find((s) => s.id === sectionId) : space.sidebar[0]
     if (!section) {
-      section = { id: crypto.randomUUID(), name: PINNED, items: [] }
+      section = { id: newId(), name: PINNED, items: [] }
       space.sidebar.unshift(section)
     }
     if (!section.items.includes(id)) section.items.push(id)
@@ -385,7 +382,7 @@ export async function newSectionFlow(withItem?: Id) {
   const name = await promptDialog({ title: 'New sidebar section', placeholder: 'Section name', confirmLabel: 'Create' })
   if (!name) return
   await updateSidebar((space) => {
-    space.sidebar.push({ id: crypto.randomUUID(), name, items: withItem ? [withItem] : [] })
+    space.sidebar.push({ id: newId(), name, items: withItem ? [withItem] : [] })
   })
 }
 

@@ -221,7 +221,7 @@ function inlineNodes(tokens: Token[] | undefined, marks: DocMark[] = []): DocNod
         if (id && linkText.startsWith('@') && blockId) {
           const [label = '', ...rest] = linkText.slice(1).split(BLOCK_SEPARATOR)
           out.push({ type: 'mention', attrs: { objectId: id, label, blockId, ...(rest.length ? { blockLabel: rest.join(BLOCK_SEPARATOR) } : {}) } })
-        } else if (id && linkText.startsWith('@')) out.push({ type: 'mention', attrs: { objectId: id, label: linkText.slice(1) } })
+        } else if (id) out.push({ type: 'mention', attrs: { objectId: id, label: linkText.replace(/^@/, ''), ...(blockId ? { blockId } : {}) } })
         else if (link.href) out.push(...inlineNodes(link.tokens, [...marks, { type: 'link', attrs: { href: link.href } }]))
         else out.push(...inlineNodes(link.tokens, marks))
         break
@@ -231,8 +231,8 @@ function inlineNodes(tokens: Token[] | undefined, marks: DocMark[] = []): DocNod
         const image = token as Tokens.Image
         const id = objectIdOfLink(image.href)
         const blockId = blockIdOfLink(image.href)
-        if (id && blockId) out.push({ type: 'objectEmbed', attrs: { objectId: id, display: 'block', blockId } })
-        else if (id) out.push({ type: 'objectEmbed', attrs: { objectId: id, display: 'card' } })
+        if (id && blockId) out.push({ type: 'objectEmbed', attrs: { objectId: id, display: 'block', blockId, label: image.text } })
+        else if (id) out.push({ type: 'objectEmbed', attrs: { objectId: id, display: 'card', label: image.text } })
         else out.push({ type: 'text', text: image.text || image.href, marks: [...marks, { type: 'link', attrs: { href: image.href } }] })
         break
       }
@@ -247,9 +247,12 @@ function inlineNodes(tokens: Token[] | undefined, marks: DocMark[] = []): DocNod
 }
 
 /** Adjacent text with the same marks as one node (escapes and entities come as pieces of their own). */
-function inlineContent(tokens: Token[] | undefined): DocNode[] {
+function inlineContent(tokens: Token[] | undefined, allowEmbeds = false): DocNode[] {
   const out: DocNode[] = []
-  for (const node of inlineNodes(tokens)) {
+  for (const raw of inlineNodes(tokens)) {
+    const node: DocNode = raw.type === 'objectEmbed' && !allowEmbeds
+      ? { type: 'mention', attrs: { objectId: raw.attrs?.objectId, label: raw.attrs?.label ?? '', ...(raw.attrs?.blockId ? { blockId: raw.attrs.blockId } : {}) } }
+      : raw
     const last = out.at(-1)
     if (node.type === 'text' && last?.type === 'text' && JSON.stringify(last.marks ?? []) === JSON.stringify(node.marks ?? [])) last.text += node.text ?? ''
     else out.push(node.type === 'text' ? { ...node } : node)
@@ -272,10 +275,11 @@ function paragraphBlocks(tokens: Token[] | undefined): DocNode[] {
     if (run.some((n) => n.type !== 'text' || n.text?.trim())) out.push({ type: 'paragraph', content: run })
     run = []
   }
-  for (const node of inlineContent(tokens)) {
+  for (const node of inlineContent(tokens, true)) {
     if (node.type === 'objectEmbed') {
       flush()
-      out.push(node)
+      const { label: _label, ...attrs } = node.attrs ?? {}
+      out.push({ ...node, attrs })
     } else run.push(node)
   }
   flush()

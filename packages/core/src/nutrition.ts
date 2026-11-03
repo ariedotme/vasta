@@ -4,6 +4,7 @@
 // An entry keeps a snapshot of its name and nutrients, so editing a food later does not rewrite
 // past days. Goals are objects too, each starting on its own date: the goal of a day is the latest
 // one starting on or before it, so a new goal never changes the days before it.
+import { newId } from './ids.ts'
 import {
   BRAND_PROPERTY_ID,
   CARBS_PCT_PROPERTY_ID,
@@ -684,7 +685,7 @@ export interface LogFoodInput {
 }
 
 /** Log something eaten on a day's daily note (made if needed). Returns the note and the entry's id. */
-export function logFood(store: Store, spaceId: Id, input: LogFoodInput, now: IsoDateTime, id: Id = crypto.randomUUID()): { note: ObjectRecord; entryId: Id; entry: FoodEntry } {
+export function logFood(store: Store, spaceId: Id, input: LogFoodInput, now: IsoDateTime, id: Id = newId()): { note: ObjectRecord; entryId: Id; entry: FoodEntry } {
   const space = store.getSpace(spaceId)
   if (!space) throw new NutritionError('not found')
   const meals = space.nutrition?.meals ?? DEFAULT_MEALS
@@ -1056,7 +1057,7 @@ export function logFoodLine(store: Store, spaceId: Id, text: string, context: { 
   const problems: string[] = []
   for (const item of parsed.items) {
     if (item.nutrients) {
-      logged.push({ entryId: crypto.randomUUID(), entry: quickEntry(item.name, item.nutrients, new Date(Date.parse(at) + logged.length).toISOString(), meal?.id) })
+      logged.push({ entryId: newId(), entry: quickEntry(item.name, item.nutrients, new Date(Date.parse(at) + logged.length).toISOString(), meal?.id) })
       continue
     }
     if (item.ambiguous) {
@@ -1066,7 +1067,7 @@ export function logFoodLine(store: Store, spaceId: Id, text: string, context: { 
     let source = item.source
     if (!source) {
       const name = item.name.trim().replace(/^./, (c) => c.toUpperCase())
-      const food = newObject(foodType, { title: name }, crypto.randomUUID(), now)
+      const food = newObject(foodType, { title: name }, newId(), now)
       created.push(food)
       source = { ...food }
       made.set(food.id, source)
@@ -1087,7 +1088,7 @@ export function logFoodLine(store: Store, spaceId: Id, text: string, context: { 
       // Not worked out yet: logged as written, without grams, to fill in from the food later.
       entry = { sourceId: source.id, name: source.title, amount, grams: 0, ...(meal ? { meal: meal.id } : {}), at: eaten }
     }
-    logged.push({ entryId: crypto.randomUUID(), entry })
+    logged.push({ entryId: newId(), entry })
   }
   if (!logged.length) throw new NutritionError(problems.join('; '))
   const note = store.transaction(() => {

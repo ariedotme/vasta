@@ -9,7 +9,7 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/vue-3'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import type { Doc } from '@vasta/core'
 import { compactDoc } from '@vasta/editor-schema'
-import { onBeforeUnmount, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type * as Y from 'yjs'
 import AppIcon from '../components/AppIcon.vue'
@@ -69,6 +69,16 @@ const editor = useEditor({
     emit('change', lastEmitted)
   },
 })
+
+const bubbleMenu = ref()
+watch(bubbleMenu, () => {
+  requestAnimationFrame(() => {
+    const current = editor.value
+    if (current && !current.isDestroyed && current.state.plugins !== current.view.state.plugins) {
+      current.view.dispatch(current.state.tr)
+    }
+  })
+}, { flush: 'post' })
 
 let lastEmitted: Doc | undefined
 
@@ -201,7 +211,8 @@ const marks: { name: string; title: string; icon: string; run: () => unknown }[]
        part of this box so the pointer can travel from a block to its handle without leaving it;
        it borrows the page's own padding, so the text does not move. -->
   <div class="relative -ml-6 pl-6 md:-ml-10 md:pl-10" data-block-gutter>
-    <BubbleMenu v-if="editor" :editor="editor" class="flex gap-0.5 rounded-lg border border-line bg-surface p-0.5 shadow-lg">
+    <EditorContent :editor="editor" />
+    <BubbleMenu v-if="editor" ref="bubbleMenu" :editor="editor" class="flex gap-0.5 rounded-lg border border-line bg-surface p-0.5 shadow-lg">
       <button
         v-for="mark in marks"
         :key="mark.name"
@@ -216,6 +227,5 @@ const marks: { name: string; title: string; icon: string; run: () => unknown }[]
         <AppIcon fallback="ph:link-break" />
       </button>
     </BubbleMenu>
-    <EditorContent :editor="editor" />
   </div>
 </template>

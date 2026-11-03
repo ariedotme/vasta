@@ -82,7 +82,7 @@ describe('MCP endpoint', () => {
   it('offers the tools, limited to the token user’s spaces', async () => {
     const { client, call } = await setup()
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['add_comment', 'capture', 'create_object', 'delete_food_entry', 'get_daily_note', 'get_object', 'list_habits', 'list_inbox', 'list_spaces', 'list_templates', 'list_types', 'log_food', 'log_habit', 'nutrition_day', 'query', 'save_food', 'search', 'update_object'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['add_comment', 'capture', 'create_object', 'delete_food_entry', 'get_daily_note', 'get_object', 'list_habits', 'list_inbox', 'list_spaces', 'list_templates', 'list_types', 'log_food', 'log_habit', 'nutrition_day', 'query', 'save_food', 'search', 'set_pinned', 'update_object', 'write_daily_note'])
     expect(await call('list_spaces')).toEqual([{ id: 's', name: 'Notes', default: true }])
     const types = await call('list_types')
     expect(types.find((t: { name: string }) => t.name === 'Book').properties.find((p: { name: string }) => p.name === 'Genre')).toEqual({ id: 'genre', name: 'Genre', kind: 'select', multiple: false, options: ['Sci-fi'] })
@@ -152,6 +152,20 @@ describe('MCP endpoint', () => {
     // The formula reads the related author, which the query loads for it.
     expect(await titles({ where: [{ field: 'By', operator: 'contains', value: 'herbert' }] })).toEqual(['Dune'])
     await expect(call('update_object', { id: dune.id, properties: { score: 3 } })).rejects.toThrow('computed by a formula')
+  })
+
+  it('sets and clears covers, pins and unpins, and writes a daily note only on demand', async () => {
+    const { call } = await setup()
+    const object = await call('create_object', { type: 'Page', title: 'Covered', coverUrl: 'https://example.com/cover.png' })
+    expect(object).toMatchObject({ coverUrl: 'https://example.com/cover.png', pinned: false })
+    await call('set_pinned', { id: object.id, pinned: true })
+    expect(await call('get_object', { id: object.id })).toMatchObject({ pinned: true, coverUrl: object.coverUrl })
+    await call('set_pinned', { id: object.id, pinned: false })
+    expect(await call('update_object', { id: object.id, coverUrl: null })).toMatchObject({ pinned: false, coverUrl: null })
+    expect(await call('get_daily_note')).toMatchObject({ id: null })
+    await expect(call('write_daily_note', { markdown: '  ' })).rejects.toThrow('daily note text is required')
+    expect(await call('get_daily_note')).toMatchObject({ id: null })
+    expect(await call('write_daily_note', { markdown: 'First entry' })).toMatchObject({ text: { Notes: 'First entry' } })
   })
 
   it('captures into today’s note, lists the inbox and reads daily notes', async () => {

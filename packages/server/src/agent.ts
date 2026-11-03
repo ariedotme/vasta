@@ -13,6 +13,7 @@ import {
   templateAsks,
   typeTemplates,
   builtinTypeId,
+  writeDailyText,
   CommentError,
   addComment,
   commentsOf,
@@ -70,7 +71,7 @@ import type { NodeStore } from '@vasta/core/node'
 import { checkDoc } from '@vasta/editor-schema/yjs'
 import type { AccountService } from './accounts.ts'
 import type { CaptureService } from './capture.ts'
-import { findOrCreateDailyNote, isValidDay } from './daily.ts'
+import { isValidDay } from './daily.ts'
 import type { ChangeFeed } from './events.ts'
 import { listInbox } from './inbox.ts'
 
@@ -193,6 +194,30 @@ export class AgentTools {
   }
 
   /** An object with its properties in words and its text as Markdown. */
+  private coverUrl(value: string): string {
+    const url = URL.parse(value.trim())
+    if (!url || !['http:', 'https:'].includes(url.protocol)) throw new AgentError('coverUrl must be an HTTP(S) URL')
+    return url.href
+  }
+
+  setPinned(id: Id, pinned: boolean) {
+    const object = this.object(id)
+    const space = this.store.getSpace(object.spaceId)!
+    const alreadyPinned = space.sidebar.some((section) => section.items.includes(id))
+    if (pinned && !alreadyPinned) {
+      const section = space.sidebar[0] ?? { id: randomUUID(), name: 'Pinned', items: [] }
+      if (!space.sidebar.length) space.sidebar.push(section)
+      section.items.push(id)
+    } else if (!pinned && alreadyPinned) {
+      for (const section of space.sidebar) section.items = section.items.filter((item) => item !== id)
+    }
+    if (pinned !== alreadyPinned) {
+      this.store.putSpace(space)
+      this.options.feed.emit({ kind: 'space', id: space.id, spaceId: space.id })
+    }
+    return this.getObject(id)
+  }
+
   getObject(id: Id) {
     const object = this.object(id)
     const type = this.store.getType(object.typeId)
@@ -225,6 +250,8 @@ export class AgentTools {
       type: type?.name ?? '',
       space: this.store.getSpace(object.spaceId)?.name ?? '',
       url: this.url(object.id),
+      coverUrl: object.coverUrl ?? null,
+      pinned: this.store.getSpace(object.spaceId)?.sidebar.some((section) => section.items.includes(id)) ?? false,
       createdAt: object.createdAt,
       updatedAt: object.updatedAt,
       ...(object.createdBy ? { createdBy: this.personName(object.createdBy) } : {}),
@@ -240,13 +267,21 @@ export class AgentTools {
     }
   }
 
-  /** A day's note ("YYYY-MM-DD", today by default, in the user's calendar), created if needed. */
+  /** A day's note ("YYYY-MM-DD", today by default, in the user's calendar). */
   dailyNote(options: { day?: string; space?: string } = {}) {
     const space = this.space(options.space)
     const day = options.day ?? this.captures.today()
     if (!isValidDay(day)) throw new AgentError('day must be YYYY-MM-DD')
-    const { note, created } = findOrCreateDailyNote(this.store, space.id, day, this.options.now())
-    if (created) this.changed(note)
+    const note = this.store.findObjectOnDay(builtinTypeId(space.id, 'daily-note'), day)
+    return note ? { day, ...this.getObject(note.id) } : { day, id: null }
+  }
+
+  writeDailyNote(markdown: string, spaceQuery?: string, day = this.captures.today()) {
+    if (!isValidDay(day)) throw new AgentError('day must be YYYY-MM-DD')
+    const blocks = this.doc(markdown).content
+    if (!blocks.some((block) => block.type !== 'paragraph' || block.content?.length)) throw new AgentError('daily note text is required')
+    const note = writeDailyText(this.store, this.space(spaceQuery).id, day, this.options.now(), blocks)
+    this.changed(note)
     return { day, ...this.getObject(note.id) }
   }
 
@@ -359,10 +394,10 @@ export class AgentTools {
    * ("blank" for none), its questions answered by `answers`; the given title, properties and
    * Markdown win over the template's (the Markdown goes after its text).
    */
-  createObject(input: { type: string; title?: string; space?: string; properties?: Record<string, unknown>; markdown?: string; template?: string; answers?: Record<string, string> }) {
+  createObject(input: { type: string; coverUrl?: string; title?: string; space?: string; properties?: Record<string, unknown>; markdown?: string; template?: string; answers?: Record<string, string> }) {
     const space = this.space(input.space)
     const type = this.type(space.id, input.type)
-    if (type.system === 'daily-note') throw new AgentError('daily notes are made by get_daily_note')
+    if (type.system === 'daily-note') throw new AgentError('daily notes are written by write_daily_note')
     const { props: given, related } = this.props(type, input.properties ?? {})
     const templates = this.store.listTemplates(space.id)
     const wanted = input.template?.trim()
@@ -389,7 +424,7 @@ export class AgentTools {
     if (input.markdown?.trim()) content[field] = { type: 'doc' as const, content: [...(content[field]?.content ?? []), ...this.doc(input.markdown).content] }
     const props = { ...made?.props, ...given }
     const extra = template ? { tagIds: [...template.tagIds], ...(template.icon ? { icon: template.icon } : {}) } : {}
-    const object = newObject(type, { ...extra, title: made?.title ?? input.title?.trim() ?? '', props, content }, randomUUID(), at)
+    const object = newObject(type, { ...extra, ...(input.coverUrl !== undefined ? { coverUrl: this.coverUrl(input.coverUrl) } : {}), title: made?.title ?? input.title?.trim() ?? '', props, content }, randomUUID(), at)
     const stored = this.store.transaction(() => {
       for (const other of related) this.store.putObject(other)
       return this.store.putObject(object)
@@ -418,11 +453,13 @@ export class AgentTools {
     return { id: saved.id, comments: commentsOf(saved).length, url: this.url(saved.id) }
   }
 
-  updateObject(input: { id: Id; title?: string; properties?: Record<string, unknown>; markdown?: string; mode?: 'append' | 'prepend' | 'replace'; field?: string }) {
+  updateObject(input: { id: Id; coverUrl?: string | null; title?: string; properties?: Record<string, unknown>; markdown?: string; mode?: 'append' | 'prepend' | 'replace'; field?: string }) {
     const existing = this.object(input.id)
     const type = this.store.getType(existing.typeId)
     if (!type) throw new AgentError(`no type for ${input.id}`)
     const object: ObjectRecord = { ...existing, props: { ...existing.props }, content: { ...existing.content } }
+    if (input.coverUrl === null) delete object.coverUrl
+    else if (input.coverUrl !== undefined) object.coverUrl = this.coverUrl(input.coverUrl)
     if (input.title !== undefined) object.title = input.title.trim()
     let related: ObjectRecord[] = []
     if (input.properties) {
@@ -688,7 +725,7 @@ export class AgentTools {
   async capture(input: { text: string; space?: string }) {
     const space = this.space(input.space)
     const result = await this.captures.note({ text: input.text, spaceId: space.id, channel: 'agent' })
-    return { dailyNoteId: result.dailyNote.id, url: this.url(result.dailyNote.id), objects: result.objects.map((o) => ({ id: o.id, title: o.title })) }
+    return { dailyNoteId: result.dailyNote!.id, url: this.url(result.dailyNote!.id), objects: result.objects.map((o) => ({ id: o.id, title: o.title })) }
   }
 }
 

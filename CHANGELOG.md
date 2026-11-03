@@ -6,15 +6,35 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **Vasta at a plain-http address** (e.g. `http://192.168.1.10:3000` on your network) can add
+  properties, select options, views and the other things that get a new id again; browsers only
+  offer `crypto.randomUUID` over HTTPS or localhost. Thanks to @natedwhite for finding the cause
+  (#43).
+- **Mentions with Markdown characters in their title**, such as an underscore, no longer gain
+  backslashes each time an agent rewrites the page.
+
+## 0.5.0 (2026-11-03)
+
+### Added
+
+- Set, inspect or remove object covers by URL and pin or unpin objects from MCP and the CLI.
+- Choose editor block spacing in Appearance settings, with a roomier default.
+- Independently opt into logging desktop quick captures in the daily note or showing them in the inbox.
+
+### Fixed
+
+- Opening a calendar day or reading it through MCP and the CLI no longer creates an empty daily note.
+- Markdown object links open their targets from headings and table cells, and imported task lists
+  can be checked as soon as the editor opens.
+- Instagram Reel weblinks use short titles and skip automatic readable-text extraction.
+- The Tags tree displays custom tag icons.
+
 ### Changed
 
 - **The toggle's arrow** is bigger and sits centered on the title's line; the lines inside line up
   with the title.
-
-### Fixed
-
-- **Mentions with Markdown characters in their title**, such as an underscore, no longer gain
-  backslashes each time an agent rewrites the page.
 
 ## 0.4.1 (2026-10-27)
 

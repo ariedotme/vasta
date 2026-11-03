@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { newId } from '@vasta/core'
 // Editor for one property value, chosen by the property's kind.
 import { computed, ref } from 'vue'
 import type { ObjectSummary, PropertyDef, PropertyValue, SelectOption, SelectPropertyDef } from '@vasta/core'
@@ -47,7 +48,7 @@ const newOption = ref('')
 function createOption() {
   const label = newOption.value.trim()
   if (!label) return
-  const option: SelectOption = { id: crypto.randomUUID(), label, color: colorNames[(options.value.length * 5) % colorNames.length] }
+  const option: SelectOption = { id: newId(), label, color: colorNames[(options.value.length * 5) % colorNames.length] }
   emit('addOption', option)
   newOption.value = ''
   toggleOption(option.id)

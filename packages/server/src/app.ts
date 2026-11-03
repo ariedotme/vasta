@@ -40,6 +40,8 @@ import {
   setNutritionEnabled,
   setSprints,
   SprintError,
+  textToBlocks,
+  writeDailyText,
 } from '@vasta/core'
 import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, type OccurrenceEdit } from '@vasta/core/calendar'
 import { checkMediaKey, mediaKey, RangeNotSatisfiableError, type MediaStore } from '@vasta/core/media'
@@ -792,11 +794,18 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   })
 
   /** Open a daily note by date ("YYYY-MM-DD", in the client's calendar), creating it on first use. */
-  api.post('/spaces/:id/daily-notes/:day', (c) => {
+  api.post('/spaces/:id/daily-notes/:day', async (c) => {
     const space = store.getSpace(c.req.param('id'))
     const day = c.req.param('day')
     if (!space) return c.json({ error: 'not found' }, 404)
     if (!isValidDay(day)) return c.json({ error: 'day must be YYYY-MM-DD' }, 400)
+    const body = await c.req.json<{ text?: string }>().catch(() => null)
+    if (body?.text !== undefined) {
+      if (typeof body.text !== 'string' || !body.text.trim()) return c.json({ error: 'daily note text is required' }, 400)
+      const note = writeDailyText(store, space.id, day, now(), textToBlocks(body.text))
+      changed(note)
+      return c.json(note)
+    }
     const { note, created } = findOrCreateDailyNote(store, space.id, day, now())
     if (created) changed(note)
     return c.json(note, created ? 201 : 200)
@@ -872,17 +881,18 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   api.post('/spaces/:id/captures', async (c) => {
     const space = store.getSpace(c.req.param('id'))
     if (!space) return c.json({ error: 'not found' }, 404)
-    type Body = { text?: string; channel?: string; typeId?: string; answers?: unknown }
+    type Body = { text?: string; channel?: string; typeId?: string; answers?: unknown; destinations?: { daily?: boolean; inbox?: boolean } }
     const body = await c.req.json<Body>().catch(() => ({}) as Body)
     const channel = /^[a-z]{1,20}$/.test(body.channel ?? '') ? body.channel! : 'app'
     const text = String(body.text ?? '')
-    if (body.typeId === undefined) return respond(c, () => capturesOf(c).note({ spaceId: space.id, text, channel }))
+    const options = channel === 'desktop' ? { destinations: { daily: body.destinations?.daily === true, inbox: body.destinations?.inbox === true } } : {}
+    if (body.typeId === undefined) return respond(c, () => capturesOf(c).note({ spaceId: space.id, text, channel, ...options }))
     const type = store.getType(String(body.typeId))
     if (!type || type.spaceId !== space.id) return c.json({ error: 'unknown type' }, 400)
     const [line = '', ...rest] = text.split('\n')
     // Answers to the template's questions (the quick capture asks them): labels and texts only.
     const answers = body.answers && typeof body.answers === 'object' ? Object.fromEntries(Object.entries(body.answers).filter((e): e is [string, string] => typeof e[1] === 'string')) : undefined
-    return respond(c, () => capturesOf(c).object({ spaceId: space.id, type: type.id, line, text: rest.join('\n'), channel, ...(answers ? { answers } : {}) }))
+    return respond(c, () => capturesOf(c).object({ spaceId: space.id, type: type.id, line, text: rest.join('\n'), channel, ...options, ...(answers ? { answers } : {}) }))
   })
 
   /** A line of food, as after /food: `{ text }` (core's logFoodLine, in the user's time zone). */
@@ -1420,7 +1430,8 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       const result = await run()
       return c.json(
         {
-          dailyNoteId: result.dailyNote.id,
+          dailyNoteId: result.dailyNote?.id ?? '',
+          ...(result.sourceId ? { sourceId: result.sourceId } : {}),
           blockId: result.blockId,
           objects: result.objects.map((o) => ({ id: o.id, typeId: o.typeId, title: o.title })),
           ...(result.summary ? { summary: result.summary } : {}),

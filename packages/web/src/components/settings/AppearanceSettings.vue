@@ -2,7 +2,7 @@
 // Light, dark or the system's, and how type icons look, on this device; and the keyboard shortcuts.
 import { keysOf } from '../../lib/shortcuts.ts'
 import { ui } from '../../lib/state.ts'
-import { iconStyle, theme, THEME_ICONS, type IconStyle, type Theme } from '../../lib/theme.ts'
+import { blockSpacing, iconStyle, theme, THEME_ICONS, type IconStyle, type Theme } from '../../lib/theme.ts'
 import TypeIcon from '../TypeIcon.vue'
 import { iconBoxClasses, iconTextClasses } from '../../lib/colors.ts'
 import AppIcon from '../AppIcon.vue'
@@ -45,6 +45,14 @@ const OPTIONS: { value: Theme; label: string }[] = [
           </button>
         </div>
       </div>
+      <label class="block">
+        <span :class="label">Editor block spacing</span>
+        <select v-model="blockSpacing" class="mt-1.5 block rounded-md border border-line bg-surface px-2 py-1.5 text-sm">
+          <option value="compact">Compact</option>
+          <option value="comfortable">Comfortable</option>
+          <option value="spacious">Spacious</option>
+        </select>
+      </label>
       <div>
         <span :class="label">Type icons</span>
         <div class="mt-1.5 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Type icons">
