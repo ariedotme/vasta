@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.5.0 (2026-11-03)
+
 ### Added
 
 - Set, inspect or remove object covers by URL and pin or unpin objects from MCP and the CLI.
