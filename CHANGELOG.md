@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.5.1 (2026-11-04)
+
 ### Fixed
 
 - **Vasta at a plain-http address** (e.g. `http://192.168.1.10:3000` on your network) can add
