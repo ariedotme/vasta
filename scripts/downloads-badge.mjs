@@ -35,4 +35,4 @@ const [releases, image] = await Promise.all([releaseDownloads(), imagePulls()])
 const total = releases + image
 console.error(`release files (without latest.json): ${releases}, server image pulls: ${image}, total: ${total}`)
 const message = Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(total).toLowerCase()
-console.log(JSON.stringify({ schemaVersion: 1, label: 'downloads', message, labelColor: '222222', color: 'A371F7' }))
+console.log(JSON.stringify({ schemaVersion: 1, label: 'downloads + updates', message, labelColor: '222222', color: 'A371F7' }))
