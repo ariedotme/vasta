@@ -97,4 +97,28 @@ describe('vasta CLI', () => {
     await expect(vasta(['show', 'missing'])).rejects.toThrow('no object missing')
     expect(JSON.parse(await vasta(['tool', 'list_spaces']))).toEqual([{ id: 's', name: 'Notes', default: true }])
   })
+
+  it('tags objects and sets their icon and color', async () => {
+    const { store, vasta } = await setup()
+    const shown = async (id: string) => JSON.parse(await vasta(['show', id, '--json'])) as { tags?: string[]; icon: string | null; color: string | null }
+    const tag = JSON.parse(await vasta(['new', 'Tag', 'Books', '--json'])).id as string
+
+    const id = JSON.parse(await vasta(['new', 'Page', 'Dune', '--tag', 'books', '--tag', 'reading/2026', '--json'])).id as string
+    expect((await shown(id)).tags).toEqual(['Books', 'reading/2026'])
+    expect(store.getObject(id)!.tagIds[0]).toBe(tag)
+
+    await vasta(['set', id, '--tag', 'sci-fi', '--remove-tag', 'Books'])
+    expect((await shown(id)).tags).toEqual(['reading/2026', 'sci-fi'])
+    await vasta(['set', id, '--set-tags', 'Books, sci-fi'])
+    expect((await shown(id)).tags).toEqual(['Books', 'sci-fi'])
+    expect(store.listObjects('tag:s')).toHaveLength(4)
+
+    expect(await vasta(['set', tag, '--icon', 'ph:star', '--color', 'amber'])).toContain('Icon: ph:star\nColor: amber')
+    expect(await shown(tag)).toMatchObject({ icon: 'ph:star', color: 'amber' })
+    await vasta(['set', tag, '--color', 'none'])
+    expect(await shown(tag)).toMatchObject({ icon: 'ph:star', color: null })
+
+    await expect(vasta(['set', id, '--set-tags', 'a', '--tag', 'b'])).rejects.toThrow('--set-tags replaces')
+    await expect(vasta(['set', id, '--icon', 'ph:nope'])).rejects.toThrow('unknown icon')
+  })
 })

@@ -4,7 +4,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { z } from 'zod'
+import { COLOR_NAMES } from '@vasta/core'
 import { AgentError, type AgentTools } from './agent.ts'
+import { ICON_HELP } from './icons.ts'
 
 const INSTRUCTIONS = `Vasta is a notes app: everything is an object (a page, a daily note, a task, a book…) of a type,
 with properties and rich text, in spaces. Text comes and goes as Markdown; [@Title](vasta://o/<id>)
@@ -28,6 +30,10 @@ const properties = z
   .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]))
   .optional()
   .describe('Values by property name: text, numbers, true/false, dates ("2026-10-25", "2026-10-25T15:00:00Z", "friday 15h"), option labels, related objects by title, people by username or name ("me": the user) (a list for several). null clears one.')
+
+const tags = z.array(z.string()).optional().describe('Tag titles; a path like "recipe/breakfast" names a nested tag. Tags the space does not have yet are created.')
+const icon = z.string().nullable().optional().describe(`Its icon: ${ICON_HELP}. null removes it.`)
+const color = z.enum(COLOR_NAMES).nullable().optional().describe(`Its color (a tag's chips): ${COLOR_NAMES.join(', ')}. null goes back to the default.`)
 
 type Result = { content: { type: 'text'; text: string }[]; isError?: boolean }
 
@@ -172,7 +178,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'get_object',
     {
       title: 'Get object',
-      description: "An object: type, properties, tags, its text fields as Markdown, and what links to it (backlinks). The id is in vasta://o/<id> links and in other tools' results.",
+      description: "An object: type, icon, color, properties, tags (nested ones as paths, \"recipe/breakfast\"), its text fields as Markdown, and what links to it (backlinks). The id is in vasta://o/<id> links and in other tools' results.",
       inputSchema: { id: z.string() },
       annotations: READ,
     },
@@ -244,7 +250,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     {
       title: 'Create object',
       description:
-        'A new object of a type (name or id, e.g. "Page", "Task", "Book"), with a title, properties and text in Markdown. It starts from the type\'s default template, or the one "template" names ("blank" for none; list_templates lists them and their questions, answered by "answers"); what you give wins over the template. Returns it like get_object.',
+        'A new object of a type (name or id, e.g. "Page", "Task", "Book"), with a title, properties and text in Markdown. It starts from the type\'s default template, or the one "template" names ("blank" for none; list_templates lists them and their questions, answered by "answers"); what you give wins over the template (tags are added to the template\'s). Returns it like get_object.',
       inputSchema: {
         type: z.string(),
         coverUrl: z.string().optional().describe("HTTP(S) cover image URL"),
@@ -254,6 +260,9 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
         markdown: z.string().optional().describe('Its text, in Markdown (after the template\'s)'),
         template: z.string().optional().describe('A template of the type by name, or "blank"'),
         answers: z.record(z.string(), z.string()).optional().describe("Answers to the template's questions, by question"),
+        tags,
+        icon,
+        color,
       },
       annotations: WRITE,
     },
@@ -275,7 +284,8 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'update_object',
     {
       title: 'Update object',
-      description: 'Change an object: its title, properties (null clears one), and its text: Markdown appended (default), put before the text ("prepend"), or replacing it ("replace"). "field" picks a text field by name when the type has several.',
+      description:
+        'Change an object: its title, icon, color, properties (null clears one), its tags (added by default; "tagsMode" "remove" takes them off, "replace" sets exactly these), and its text: Markdown appended (default), put before the text ("prepend"), or replacing it ("replace"). "field" picks a text field by name when the type has several.',
       inputSchema: {
         id: z.string(),
         coverUrl: z.string().nullable().optional().describe("HTTP(S) cover image URL, or null to remove it"),
@@ -284,6 +294,10 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
         markdown: z.string().optional(),
         mode: z.enum(['append', 'prepend', 'replace']).optional(),
         field: z.string().optional(),
+        tags,
+        tagsMode: z.enum(['add', 'remove', 'replace']).optional().describe('What "tags" does: add them (default), remove them, or replace all the tags with them'),
+        icon,
+        color,
       },
       annotations: { ...WRITE, destructiveHint: true },
     },

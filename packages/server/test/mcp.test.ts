@@ -253,4 +253,45 @@ describe('MCP endpoint', () => {
     const { secret } = asUser(app, store, { username: 'reader' })
     expect((await app.request('/mcp', { headers: { authorization: `Bearer ${secret}`, accept: 'text/event-stream' } })).status).toBe(405)
   })
+
+  it('tags objects, and sets and clears their icon and color', async () => {
+    const { store, call } = await setup()
+    const existing = await call('create_object', { type: 'Tag', title: 'Books' })
+    const tagCount = () => store.listObjects('tag:s').length
+    const before = tagCount()
+
+    // A tag the space has is reused, whatever the case.
+    const book = await call('create_object', { type: 'Book', title: 'Dune', tags: ['books'] })
+    expect(book.tags).toEqual(['Books'])
+    expect(store.getObject(book.id)!.tagIds).toEqual([existing.id])
+    expect(tagCount()).toBe(before)
+
+    // New tags are made, nested ones level by level; adding keeps the tags it had.
+    await call('update_object', { id: book.id, tags: ['sci-fi', 'reading/2026'] })
+    expect((await call('get_object', { id: book.id })).tags).toEqual(['Books', 'sci-fi', 'reading/2026'])
+    expect(tagCount()).toBe(before + 3)
+
+    // Removing takes off only those; a nested tag by path or by its own title.
+    await call('update_object', { id: book.id, tags: ['Books', '2026'], tagsMode: 'remove' })
+    expect((await call('get_object', { id: book.id })).tags).toEqual(['sci-fi'])
+    await call('update_object', { id: book.id, tags: ['Books', 'reading/2026'], tagsMode: 'replace' })
+    expect((await call('get_object', { id: book.id })).tags).toEqual(['Books', 'reading/2026'])
+    expect(tagCount()).toBe(before + 3)
+
+    // Icon and color, on a tag and on any object; null clears the color.
+    await call('update_object', { id: existing.id, icon: 'ph:book-open', color: 'emerald' })
+    let tag = await call('get_object', { id: existing.id })
+    expect([tag.icon, tag.color]).toEqual(['ph:book-open', 'emerald'])
+    await call('update_object', { id: existing.id, color: null })
+    tag = await call('get_object', { id: existing.id })
+    expect([tag.icon, tag.color]).toEqual(['ph:book-open', null])
+    const emoji = await call('update_object', { id: book.id, icon: '📚', color: 'rose' })
+    expect([emoji.icon, emoji.color]).toEqual(['📚', 'rose'])
+    expect(store.getObject(book.id)!.icon).toEqual({ kind: 'emoji', value: '📚' })
+
+    await expect(call('update_object', { id: book.id, icon: 'ph:not-an-icon' })).rejects.toThrow(/unknown icon "ph:not-an-icon".*phosphoricons\.com/)
+    await expect(call('update_object', { id: book.id, icon: 'bookz' })).rejects.toThrow(/unknown icon/)
+    await expect(call('update_object', { id: book.id, icon: 'My books' })).rejects.toThrow(/is not an icon/)
+    await expect(call('update_object', { id: book.id, color: 'mauve' })).rejects.toThrow(/color/)
+  })
 })

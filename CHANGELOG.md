@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- Tag objects and set their icon and color from MCP and the CLI: `tags` (with `tagsMode` add,
+  remove or replace), `icon` (an emoji or `ph:<name>`) and `color` on `create_object` and
+  `update_object`; `--tag`, `--remove-tag`, `--set-tags`, `--icon` and `--color` on `vasta new`
+  and `vasta set`. Missing tags are created, nested ones by path (`recipe/breakfast`).
+
 ## 0.5.1 (2026-11-04)
 
 ### Fixed

@@ -43,14 +43,14 @@ Code and Codex).
 | `add_comment` | A comment on an object, as the user (@username mentions a member) |
 | `list_types` | A space's types with their properties, select options and object counts |
 | `search` | Full-text search over titles and text |
-| `get_object` | An object: type, properties in words, tags, text fields as Markdown, backlinks, `coverUrl` and `pinned` |
+| `get_object` | An object: type, properties in words, tags (nested ones as paths), text fields as Markdown, backlinks, `coverUrl`, `icon`, `color` and `pinned` |
 | `get_daily_note` | A day's note (today by default, in the user's time zone), or `id: null` when it does not exist |
 | `write_daily_note` | Append Markdown to a day’s note, creating it with that text if needed |
 | `query` | Objects of some types, filtered and sorted like a query in the app |
 | `list_inbox` | Items captured lately (Telegram, quick capture, agents…) |
 | `list_templates` | The space's templates (by type, the default marked) and snippets, with the questions they ask |
-| `create_object` | A new object of a type, with properties and Markdown text; it starts from the type's default template, or `template` by name (`"blank"`: none), its questions answered by `answers` |
-| `update_object` | Title, properties (null clears one) and text: append (default), prepend or replace |
+| `create_object` | A new object of a type, with properties and Markdown text; it starts from the type's default template, or `template` by name (`"blank"`: none), its questions answered by `answers`; `tags`, `icon` and `color` too |
+| `update_object` | Title, properties (null clears one), tags (`tagsMode` add, remove or replace), icon, color and text: append (default), prepend or replace |
 | `set_pinned` | Pin an object in the first sidebar section or unpin it from every section |
 | `capture` | Add a capture to today’s daily note and the inbox (channel "agent") |
 | `list_habits` | The habits: done on a day (today by default; the amount for daily goals), weekdays, streaks, rates, the last days |
@@ -98,6 +98,29 @@ a media object and sets the cover to its authenticated `/media/<key>` URL. CLI a
 writes currently accept remote URLs. Local-file support would need an authenticated upload
 operation that receives the bytes. An MCP server cannot resolve paths on the client's device.
 
+### Tags, icons and colors
+
+`create_object` and `update_object` take `tags`, a list of tag titles. A path like
+`recipe/breakfast` names a nested tag, level by level as the app does, and tags the space does not
+have yet are made. On `update_object`, `tagsMode` says what the list does: `add` (the default, so
+an update never drops tags unless asked), `remove`, or `replace`. Removing by a one-part name also
+takes off a nested tag of that title. `get_object` lists tags by path.
+
+`icon` is an emoji or a [Phosphor](https://phosphoricons.com) icon as `ph:<name>` (`ph:star`,
+`ph:book-open`; weights as `ph:star-fill`, `-bold`, `-duotone`, `-light`, `-thin`), the set the
+app's icon picker offers; unknown names are refused with a pointer to the list. `color` is one of
+the app's palette: gray, red, orange, amber, yellow, lime, green, emerald, teal, cyan, sky, blue,
+indigo, violet, purple, fuchsia, pink, rose. A tag's color colors its chips (and its sub-tags'
+without one). `null` removes either.
+
+| MCP tool | Example input |
+| --- | --- |
+| `create_object` | `{"type":"Book","title":"Dune","tags":["books","reading/2026"],"icon":"📚"}` |
+| `update_object` | `{"id":"book-id","tags":["sci-fi"]}` |
+| `update_object` | `{"id":"book-id","tags":["books"],"tagsMode":"remove"}` |
+| `update_object` | `{"id":"tag-id","icon":"ph:book-open","color":"emerald"}` |
+| `update_object` | `{"id":"tag-id","color":null}` |
+
 Read a daily note with `get_daily_note` using `{"day":"2026-11-03"}`. To write the first
 entry or append to an existing note, call `write_daily_note` with
 `{"day":"2026-11-03","markdown":"## Morning\n\nA first entry."}`. Omit the date to use today.
@@ -142,6 +165,11 @@ vasta set <id> status=done --title "Done it"
 vasta new Page Trip --cover-url https://example.com/trip.jpg
 vasta set page-id --cover-url https://example.com/new.jpg
 vasta set page-id --remove-cover
+vasta new Book Dune --tag books --tag reading/2026 --icon 📚
+vasta set book-id --tag sci-fi --remove-tag books   # add and remove tags
+vasta set book-id --set-tags books,sci-fi           # exactly these tags
+vasta set tag-id --icon ph:book-open --color emerald
+vasta set tag-id --color none                       # back to the default color
 vasta pin page-id
 vasta unpin page-id
 vasta show page-id                         # current cover and pin status

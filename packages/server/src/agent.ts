@@ -3,9 +3,14 @@
 // (@vasta/core/markdown). Every write goes through the store and the change feed like the HTTP
 // routes, so open apps and synced devices see it. See docs/agents.md.
 import { randomUUID } from 'node:crypto'
-import type { DateValue, Doc, Filter, FilterOperator, FormulaValue, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QueryDef, User } from '@vasta/core'
+import type { ColorName, DateValue, Doc, Filter, FilterOperator, FormulaValue, Icon, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QueryDef, User } from '@vasta/core'
 import {
   BODY_PROPERTY_ID,
+  COLOR_NAMES,
+  childTag,
+  isColorName,
+  tagPath,
+  tagPathParts,
   addDays,
   applyTemplate,
   defaultTemplate,
@@ -73,6 +78,7 @@ import type { AccountService } from './accounts.ts'
 import type { CaptureService } from './capture.ts'
 import { isValidDay } from './daily.ts'
 import type { ChangeFeed } from './events.ts'
+import { parseIcon } from './icons.ts'
 import { listInbox } from './inbox.ts'
 
 export class AgentError extends Error {}
@@ -200,6 +206,66 @@ export class AgentTools {
     return url.href
   }
 
+  private icon(value: string): Icon {
+    const icon = parseIcon(value)
+    if ('error' in icon) throw new AgentError(icon.error)
+    return icon
+  }
+
+  private color(value: string): ColorName {
+    const color = value.trim().toLowerCase()
+    if (!isColorName(color)) throw new AgentError(`unknown color "${value}": use ${COLOR_NAMES.join(', ')} (null for the default)`)
+    return color
+  }
+
+  /** Icon and color as given (null clears one), onto an object. */
+  private looks(object: ObjectRecord, input: { icon?: string | null; color?: string | null }) {
+    if (input.icon === null) delete object.icon
+    else if (input.icon !== undefined) object.icon = this.icon(input.icon)
+    if (input.color === null) delete object.color
+    else if (input.color !== undefined) object.color = this.color(input.color)
+  }
+
+  /**
+   * The ids of the tags paths name ("recipe/breakfast"), level by level as the app does; missing
+   * levels are made (into `made`, to be saved with the object) unless `made` is not given, when a
+   * path that names no tag is left out.
+   */
+  private tagIds(spaceId: Id, paths: string[], made?: ObjectRecord[]): Id[] {
+    const tagType = this.store.getType(builtinTypeId(spaceId, 'tag'))
+    if (!tagType) throw new AgentError('this space has no tags')
+    const tags: Pick<ObjectRecord, 'id' | 'title' | 'parentId'>[] = [...this.store.listObjects(tagType.id), ...(made ?? [])]
+    const ids: Id[] = []
+    for (const path of paths) {
+      const parts = tagPathParts(path)
+      if (!parts.length) throw new AgentError(`"${path}" is not a tag`)
+      let parentId: Id | undefined
+      for (const title of parts) {
+        let tag = childTag(tags, parentId, title)
+        if (!tag && made) {
+          const created = newObject(tagType, { title, ...(parentId ? { parentId } : {}) }, randomUUID(), this.options.now())
+          made.push(created)
+          tags.push(created)
+          tag = created
+        }
+        parentId = tag?.id
+        if (!tag) break
+      }
+      if (parentId && !ids.includes(parentId)) ids.push(parentId)
+    }
+    return ids
+  }
+
+  /** An object's tags after a change: added, removed or replaced by paths. */
+  private retag(object: ObjectRecord, paths: string[], mode: 'add' | 'remove' | 'replace', made: ObjectRecord[]): Id[] {
+    if (mode === 'replace') return this.tagIds(object.spaceId, paths, made)
+    if (mode === 'add') return [...new Set([...object.tagIds, ...this.tagIds(object.spaceId, paths, made)])]
+    // A one-part path also removes a nested tag of that title ("breakfast" for recipe/breakfast).
+    const titles = new Set(paths.map(tagPathParts).filter((p) => p.length === 1).map((p) => p[0]!.toLowerCase()))
+    const gone = new Set(this.tagIds(object.spaceId, paths))
+    return object.tagIds.filter((id) => !gone.has(id) && !titles.has((this.titleOf(id) ?? '').trim().toLowerCase()))
+  }
+
   setPinned(id: Id, pinned: boolean) {
     const object = this.object(id)
     const space = this.store.getSpace(object.spaceId)!
@@ -251,13 +317,15 @@ export class AgentTools {
       space: this.store.getSpace(object.spaceId)?.name ?? '',
       url: this.url(object.id),
       coverUrl: object.coverUrl ?? null,
+      icon: object.icon?.value ?? null,
+      color: object.color ?? null,
       pinned: this.store.getSpace(object.spaceId)?.sidebar.some((section) => section.items.includes(id)) ?? false,
       createdAt: object.createdAt,
       updatedAt: object.updatedAt,
       ...(object.createdBy ? { createdBy: this.personName(object.createdBy) } : {}),
       ...(object.updatedBy ? { updatedBy: this.personName(object.updatedBy) } : {}),
       ...(object.date ? { date: dateText(object.date) } : {}),
-      ...(object.tagIds.length ? { tags: titles(object.tagIds).map((t) => t.title) } : {}),
+      ...(object.tagIds.length ? { tags: object.tagIds.map((id) => tagPath(id, (at) => this.store.getObjectSummaries([at])[0])) } : {}),
       ...(object.media?.url ? { link: object.media.url } : {}),
       ...(Object.keys(properties).length ? { properties } : {}),
       ...(commentsOf(object).length ? { comments: commentsOf(object).map((c) => ({ by: this.personName(c.author), at: c.at, text: c.text })) } : {}),
@@ -394,7 +462,7 @@ export class AgentTools {
    * ("blank" for none), its questions answered by `answers`; the given title, properties and
    * Markdown win over the template's (the Markdown goes after its text).
    */
-  createObject(input: { type: string; coverUrl?: string; title?: string; space?: string; properties?: Record<string, unknown>; markdown?: string; template?: string; answers?: Record<string, string> }) {
+  createObject(input: { type: string; coverUrl?: string; title?: string; space?: string; properties?: Record<string, unknown>; markdown?: string; template?: string; answers?: Record<string, string>; tags?: string[]; icon?: string | null; color?: string | null }) {
     const space = this.space(input.space)
     const type = this.type(space.id, input.type)
     if (type.system === 'daily-note') throw new AgentError('daily notes are written by write_daily_note')
@@ -425,11 +493,14 @@ export class AgentTools {
     const props = { ...made?.props, ...given }
     const extra = template ? { tagIds: [...template.tagIds], ...(template.icon ? { icon: template.icon } : {}) } : {}
     const object = newObject(type, { ...extra, ...(input.coverUrl !== undefined ? { coverUrl: this.coverUrl(input.coverUrl) } : {}), title: made?.title ?? input.title?.trim() ?? '', props, content }, randomUUID(), at)
+    this.looks(object, input)
+    const tags: ObjectRecord[] = []
+    if (input.tags?.length) object.tagIds = this.retag(object, input.tags, 'add', tags)
     const stored = this.store.transaction(() => {
-      for (const other of related) this.store.putObject(other)
+      for (const other of [...tags, ...related]) this.store.putObject(other)
       return this.store.putObject(object)
     })
-    for (const other of related) this.changed(other)
+    for (const other of [...tags, ...related]) this.changed(other)
     this.changed(stored)
     return this.getObject(stored.id)
   }
@@ -453,7 +524,19 @@ export class AgentTools {
     return { id: saved.id, comments: commentsOf(saved).length, url: this.url(saved.id) }
   }
 
-  updateObject(input: { id: Id; coverUrl?: string | null; title?: string; properties?: Record<string, unknown>; markdown?: string; mode?: 'append' | 'prepend' | 'replace'; field?: string }) {
+  updateObject(input: {
+    id: Id
+    coverUrl?: string | null
+    title?: string
+    properties?: Record<string, unknown>
+    markdown?: string
+    mode?: 'append' | 'prepend' | 'replace'
+    field?: string
+    tags?: string[]
+    tagsMode?: 'add' | 'remove' | 'replace'
+    icon?: string | null
+    color?: string | null
+  }) {
     const existing = this.object(input.id)
     const type = this.store.getType(existing.typeId)
     if (!type) throw new AgentError(`no type for ${input.id}`)
@@ -461,6 +544,9 @@ export class AgentTools {
     if (input.coverUrl === null) delete object.coverUrl
     else if (input.coverUrl !== undefined) object.coverUrl = this.coverUrl(input.coverUrl)
     if (input.title !== undefined) object.title = input.title.trim()
+    this.looks(object, input)
+    const tags: ObjectRecord[] = []
+    if (input.tags) object.tagIds = this.retag(object, input.tags, input.tagsMode ?? 'add', tags)
     let related: ObjectRecord[] = []
     if (input.properties) {
       const changes = this.props(type, input.properties)
@@ -485,6 +571,7 @@ export class AgentTools {
       }
     }
     object.updatedAt = this.options.now()
+    related = [...tags, ...related]
     const stored = this.store.transaction(() => {
       for (const other of related) this.store.putObject(other)
       return this.store.putObject(object)

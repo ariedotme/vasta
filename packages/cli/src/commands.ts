@@ -7,6 +7,16 @@ export type Call = (tool: string, args?: Record<string, unknown>) => Promise<unk
 
 export class UsageError extends Error {}
 
+/** The app's palette (core's COLOR_NAMES); the server checks colors and icons too. */
+const COLOR_NAMES = ['gray', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose']
+const COMMON_ICONS = ['ph:star', 'ph:heart', 'ph:bookmark', 'ph:book-open', 'ph:lightbulb', 'ph:flag', 'ph:folder', 'ph:rocket']
+
+/** --icon and --color as tool arguments: "none" (or "default", "null") removes one. */
+function looks(values: { icon?: string | undefined; color?: string | undefined }): Record<string, string | null> {
+  const value = (text: string) => (['none', 'default', 'null'].includes(text.trim().toLowerCase()) ? null : text)
+  return { ...(values.icon !== undefined ? { icon: value(values.icon) } : {}), ...(values.color !== undefined ? { color: value(values.color) } : {}) }
+}
+
 export const USAGE = `vasta — your Vasta notes from the terminal (for you, scripts and agents)
 
   vasta login <server> [token]      save the server and an api token (asked for when not given)
@@ -16,10 +26,12 @@ export const USAGE = `vasta — your Vasta notes from the terminal (for you, scr
   vasta show <id|link>              an object, its text as Markdown
   vasta today [YYYY-MM-DD]          a day's note (today by default)
   vasta new <type> <title…>         create an object; --cover-url <url>; --text - reads Markdown from stdin;
-                                    --template <name|blank> (the type's default otherwise)
+                                    --template <name|blank> (the type's default otherwise); --tag, --icon, --color
   vasta templates                   the space's templates and snippets, with their questions
   vasta append <id|today> [text…]   add Markdown to an object's text (or stdin)
-  vasta set <id> name=value…        change properties (name= clears one); --title renames; --cover-url <url> or --remove-cover
+  vasta set <id> name=value…        change properties (name= clears one); --title renames; --cover-url <url> or --remove-cover;
+                                    --tag <name> adds a tag, --remove-tag <name> takes one off, --set-tags a,b,c
+                                    replaces them all; --icon, --color (none removes either)
   vasta pin <id|link>              pin an object in the sidebar
   vasta unpin <id|link>            remove an object from all sidebar sections
   vasta capture <text…>             capture into today's note, like the quick capture
@@ -33,7 +45,11 @@ export const USAGE = `vasta — your Vasta notes from the terminal (for you, scr
 
 Options: --space <name|id> (default: your capture space), --json, --limit N, --prop name=value
 and --answer "Question=answer" (new), --field <text field>, --mode append|prepend|replace (append). Settings: $VASTA_URL and
-$VASTA_TOKEN, else ~/.config/vasta/cli.json (vasta login). Tokens: Settings › Capture tokens, scope api.`
+$VASTA_TOKEN, else ~/.config/vasta/cli.json (vasta login). Tokens: Settings › Capture tokens, scope api.
+
+Tags: --tag repeats (--tag books --tag recipe/breakfast: a path names a nested tag); tags the space
+does not have yet are created. Icons: an emoji ("📚") or ph:<name>, a Phosphor icon (${COMMON_ICONS.join(', ')}…;
+every name at https://phosphoricons.com). Colors: ${COLOR_NAMES.join(', ')}.`
 
 const OPERATORS = ['is', 'is-not', 'contains', 'not-contains', 'starts-with', 'is-empty', 'is-not-empty', 'is-checked', 'is-not-checked', 'gt', 'gte', 'lt', 'lte', 'before', 'after']
 
@@ -58,6 +74,9 @@ export function parseProps(pairs: string[]): Record<string, unknown> {
   }
   return props
 }
+
+/** "a, b,c" → ["a", "b", "c"]; nothing when not given. */
+const splitTags = (text: string | undefined) => (text ?? '').split(',').map((t) => t.trim()).filter(Boolean)
 
 /** The id in a link to an object (https://…/o/<id>, vasta://o/<id>) or the id itself. */
 export const idOf = (text: string) => /\/o\/([^/?#\s]+)/.exec(text)?.[1] ?? text
@@ -84,6 +103,8 @@ interface Shown {
   tags?: string[]
   link?: string
   coverUrl?: string | null
+  icon?: string | null
+  color?: string | null
   pinned?: boolean
   properties?: Record<string, unknown>
   text: Record<string, string>
@@ -103,6 +124,8 @@ function show(object: Shown): string {
   if (object.id === null && object.day) return `No daily note for ${object.day}.`
   const lines = [`# ${object.title || 'Untitled'}`, `${object.type} · ${object.space} · ${object.url}`]
   if (object.coverUrl) lines.push(`Cover: ${object.coverUrl}`)
+  if (object.icon) lines.push(`Icon: ${object.icon}`)
+  if (object.color) lines.push(`Color: ${object.color}`)
   if (object.pinned !== undefined) lines.push(`Pinned: ${object.pinned ? 'yes' : 'no'}`)
   if (object.date) lines.push(`Date: ${object.date}`)
   if (object.link) lines.push(`Link: ${object.link}`)
@@ -132,6 +155,11 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
       title: { type: 'string' },
       'cover-url': { type: 'string' },
       'remove-cover': { type: 'boolean' },
+      tag: { type: 'string', multiple: true },
+      'remove-tag': { type: 'string', multiple: true },
+      'set-tags': { type: 'string' },
+      icon: { type: 'string' },
+      color: { type: 'string' },
       field: { type: 'string' },
       mode: { type: 'string' },
       type: { type: 'string', multiple: true },
@@ -180,6 +208,8 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
         ...(markdown.trim() ? { markdown } : {}),
         ...(values.template ? { template: values.template } : {}),
         ...(values.answer?.length ? { answers: Object.fromEntries(values.answer.map((a) => [a.slice(0, a.indexOf('=')).trim(), a.slice(a.indexOf('=') + 1).trim()])) } : {}),
+        ...(values.tag?.length || values['set-tags'] ? { tags: [...(values.tag ?? []), ...splitTags(values['set-tags'])] } : {}),
+        ...looks(values),
       })
       return out(created, (o: Shown) => `Created ${o.title || o.type}: ${o.url}`)
     }
@@ -208,13 +238,19 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
     case 'set': {
       if (values['remove-cover'] && values['cover-url'] !== undefined) throw new UsageError('use one of --cover-url and --remove-cover')
       const coverUrl = values['remove-cover'] ? null : values['cover-url']
-      if (!rest[0] || (rest.length < 2 && values.title === undefined && coverUrl === undefined)) throw new UsageError('vasta set <id> name=value… [--title new title]')
-      const changed = await call('update_object', {
-        id: idOf(rest[0]),
-        ...(coverUrl !== undefined ? { coverUrl } : {}),
-        ...(values.title !== undefined ? { title: values.title } : {}),
-        ...(rest.length > 1 ? { properties: parseProps(rest.slice(1)) } : {}),
-      })
+      const setTags = values['set-tags']
+      if (setTags !== undefined && (values.tag?.length || values['remove-tag']?.length)) throw new UsageError('--set-tags replaces all the tags: use it without --tag and --remove-tag')
+      const tagChanges: Record<string, unknown>[] = [
+        ...(setTags !== undefined ? [{ tags: splitTags(setTags), tagsMode: 'replace' }] : []),
+        ...(values.tag?.length ? [{ tags: values.tag, tagsMode: 'add' }] : []),
+        ...(values['remove-tag']?.length ? [{ tags: values['remove-tag'], tagsMode: 'remove' }] : []),
+      ]
+      const changes = { ...(coverUrl !== undefined ? { coverUrl } : {}), ...(values.title !== undefined ? { title: values.title } : {}), ...looks(values), ...(rest.length > 1 ? { properties: parseProps(rest.slice(1)) } : {}) }
+      if (!rest[0] || (!Object.keys(changes).length && !tagChanges.length)) throw new UsageError('vasta set <id> name=value… [--title new title] [--tag name] [--remove-tag name] [--set-tags a,b] [--icon i] [--color c]')
+      const id = idOf(rest[0])
+      // Adding and removing tags are two calls (update_object takes one tagsMode).
+      let changed = await call('update_object', { id, ...changes, ...tagChanges[0] })
+      for (const more of tagChanges.slice(1)) changed = await call('update_object', { id, ...more })
       return out(changed, show)
     }
     case 'pin':

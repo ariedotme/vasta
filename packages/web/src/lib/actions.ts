@@ -1,4 +1,4 @@
-import { newId } from '@vasta/core'
+import { childTag, newId, tagPathParts } from '@vasta/core'
 import { foodCommand, lineAsks, type FoodLineAnswer, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type Space, type TemplateAsk } from '@vasta/core'
 import type { CaptureAnswer } from '@vasta/core/client'
 import { api } from './api.ts'
@@ -106,13 +106,13 @@ export async function openCapture(space: Space, answer: CaptureAnswer, made?: Id
  */
 export async function tagFromPath(path: string): Promise<ObjectRecord | ObjectSummary | undefined> {
   const tagType = systemType('tag')
-  const parts = path.split('/').map((part) => part.trim().replace(/^#/, '')).filter(Boolean)
+  const parts = tagPathParts(path)
   if (!tagType || !parts.length) return undefined
   const tags = await api.objectsOfType(tagType.id)
   let parent: ObjectRecord | ObjectSummary | undefined
   for (const title of parts) {
     const parentId: Id | undefined = parent?.id
-    const existing: ObjectRecord | ObjectSummary | undefined = tags.find((t) => (t.parentId ?? undefined) === parentId && t.title.trim().toLowerCase() === title.toLowerCase())
+    const existing: ObjectRecord | ObjectSummary | undefined = childTag(tags, parentId, title)
     parent = existing ?? (await createObject(tagType.id, { title, ...(parentId ? { parentId } : {}) }, false))
   }
   return parent
