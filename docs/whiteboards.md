@@ -59,6 +59,25 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 
 Where the view was is kept per board on each device.
 
+## Flowcharts, JSON Canvas, agents
+
+- **Mermaid**: paste a flowchart (`graph` or `flowchart`, any direction) on a board, or use the
+  board menu (**⋯** top right) › Add a Mermaid flowchart. A Mermaid diagram in a note has
+  **Turn into whiteboard** (on hover) to make a new board of it. Nodes become shapes (`[ ]`
+  rectangle, `(( ))` ellipse, `{ }` diamond, `{{ }}` and `[/ /]` parallelogram, `> ]` triangle)
+  laid out in layers in the chart's direction, edges become arrows with their labels, and a node
+  named exactly like an object of the space becomes its card. Subgraphs and styles are skipped.
+- **JSON Canvas** ([jsoncanvas.org](https://jsoncanvas.org), Obsidian's `.canvas`): the board menu
+  exports the board as one (cards as links to their objects, frames as groups, arrows as edges;
+  pen strokes have no place in the format and stay out) and imports one (groups become frames,
+  text, file and link nodes sticky notes, links to this app's objects their cards). Pasting a
+  canvas's JSON on a board adds it too.
+- Pasted or imported content goes to the right of what the board holds, selected and in view.
+- **Agents** read a board with `get_board` and change it with `edit_board` over MCP, or with
+  `vasta board` in the terminal ([agents.md](agents.md)): elements and arrows by id, new ones
+  named by a `ref` within one call, positions laid out when left out, a flowchart or a canvas
+  added the same way. The conversions live in [`core/src/board-graph.ts`](../packages/core/src/board-graph.ts).
+
 ## How it is stored
 
 The elements live in the board object's **Y.Doc**, the same document that holds the rich text of
@@ -130,5 +149,4 @@ JSON of the elements).
 ## Not yet
 
 Scenes (frames embedded in notes), card views (small, embed, media), arrows that bend, end in
-empty space or make relations, live queries on a board, frames in a table of contents, MCP and
-CLI tools for editing boards, JSON Canvas export, Mermaid to board. The plan is in issue #38.
+empty space or make relations, live queries on a board, frames in a table of contents. The plan is in issue #38.

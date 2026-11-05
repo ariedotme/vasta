@@ -21,6 +21,13 @@ GitHub release page.
 - **Draw on a card, note or frame**: pick the pen in the selection bar and what you draw sticks to
   that element, moving and resizing with it.
 - A whiteboard's page fits the board to the screen, so it opens without scrolling.
+- **Flowcharts and JSON Canvas on whiteboards**: paste a Mermaid flowchart on a board, or turn a
+  Mermaid diagram in a note into a whiteboard, and it becomes shapes and arrows you can move, with
+  nodes named like your objects becoming their cards. Export a board as a JSON Canvas (Obsidian's
+  `.canvas`) and import one, from the board's menu.
+- **Agents edit whiteboards**: `get_board` and `edit_board` over MCP, and `vasta board` in the
+  terminal, read a board and add, move, change and connect its elements, flowcharts and canvases
+  included.
 - Tag objects and set their icon and color from MCP and the CLI: `tags` (with `tagsMode` add,
   remove or replace), `icon` (an emoji or `ph:<name>`) and `color` on `create_object` and
   `update_object`; `--tag`, `--remove-tag`, `--set-tags`, `--icon` and `--color` on `vasta new`

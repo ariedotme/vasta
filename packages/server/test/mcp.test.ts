@@ -82,7 +82,7 @@ describe('MCP endpoint', () => {
   it('offers the tools, limited to the token user’s spaces', async () => {
     const { client, call } = await setup()
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['add_comment', 'capture', 'create_object', 'delete_food_entry', 'get_daily_note', 'get_object', 'list_habits', 'list_inbox', 'list_spaces', 'list_templates', 'list_types', 'log_food', 'log_habit', 'nutrition_day', 'query', 'save_food', 'search', 'set_pinned', 'update_object', 'write_daily_note'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['add_comment', 'capture', 'create_object', 'delete_food_entry', 'edit_board', 'get_board', 'get_daily_note', 'get_object', 'list_habits', 'list_inbox', 'list_spaces', 'list_templates', 'list_types', 'log_food', 'log_habit', 'nutrition_day', 'query', 'save_food', 'search', 'set_pinned', 'update_object', 'write_daily_note'])
     expect(await call('list_spaces')).toEqual([{ id: 's', name: 'Notes', default: true }])
     const types = await call('list_types')
     expect(types.find((t: { name: string }) => t.name === 'Book').properties.find((p: { name: string }) => p.name === 'Genre')).toEqual({ id: 'genre', name: 'Genre', kind: 'select', multiple: false, options: ['Sci-fi'] })
@@ -252,6 +252,55 @@ describe('MCP endpoint', () => {
     // No sessions: nothing to stream on a GET.
     const { secret } = asUser(app, store, { username: 'reader' })
     expect((await app.request('/mcp', { headers: { authorization: `Bearer ${secret}`, accept: 'text/event-stream' } })).status).toBe(405)
+  })
+
+  it('reads and edits whiteboards: elements, arrows by ref, Mermaid, JSON Canvas', async () => {
+    const { store, events, call } = await setup()
+    const page = await call('create_object', { type: 'Page', title: 'Launch plan' })
+    const board = await call('create_object', { type: 'Whiteboard', title: 'Roadmap' })
+    expect((await call('get_object', { id: board.id })).board).toMatch(/^0 elements/)
+    const edited = await call('edit_board', {
+      id: board.id,
+      add: [
+        { ref: 'plan', kind: 'card', object: 'launch plan' },
+        { ref: 'note', kind: 'sticky', text: 'Ask Ana', color: 'pink', x: 400, y: 0 },
+        { kind: 'frame', title: 'Q1', x: -40, y: -40, w: 800, h: 400 },
+      ],
+      arrows: [{ from: 'plan', to: 'note', label: 'then' }],
+    })
+    expect(edited.refs).toEqual({ plan: expect.any(String), note: expect.any(String) })
+    expect(edited.elements.map((e: { kind: string }) => e.kind)).toEqual(['frame', 'card', 'sticky'])
+    expect(edited.elements[1]).toMatchObject({ object: { id: page.id, title: 'Launch plan' } })
+    expect(edited.arrows).toEqual([{ id: expect.any(String), kind: 'arrow', from: edited.refs.plan, to: edited.refs.note, label: 'then' }])
+    // The derived text: the card links the page to the board, the note is searchable.
+    expect(store.backlinks(page.id).map((b) => b.object.id)).toContain(board.id)
+    expect(store.search('s', 'Ana').map((o) => o.id)).toContain(board.id)
+    expect(events.some((e) => e.kind === 'object' && e.id === board.id)).toBe(true)
+
+    const changed = await call('edit_board', { id: board.id, update: [{ id: edited.refs.note, text: 'Ask Ana on Monday', x: 500 }], remove: [edited.refs.plan] })
+    expect(changed.elements.map((e: { kind: string; text?: string }) => e.text ?? e.kind)).toEqual(['frame', 'Ask Ana on Monday'])
+    expect(changed.elements[1].x).toBe(500)
+    expect(changed.arrows).toEqual([])
+
+    const flow = await call('edit_board', { id: board.id, mermaid: 'graph LR\n  A[Idea] --> B{Launch plan?}\n  B -->|yes| C[Launch plan]' })
+    const kinds = flow.elements.map((e: { kind: string }) => e.kind)
+    expect(kinds.filter((k: string) => k === 'shape')).toHaveLength(2)
+    expect(flow.elements.find((e: { kind: string }) => e.kind === 'card').object.id).toBe(page.id)
+    expect(flow.arrows.map((a: { label?: string }) => a.label ?? '')).toEqual(['', 'yes'])
+
+    const canvas = await call('get_board', { id: board.id, format: 'canvas' })
+    expect(canvas.nodes.find((n: { type: string }) => n.type === 'group').label).toBe('Q1')
+    expect(canvas.nodes.some((n: { text?: string }) => n.text === `[Launch plan](https://notes.example/o/${page.id})`)).toBe(true)
+    const copy = await call('create_object', { type: 'Whiteboard', title: 'Copy' })
+    const imported = await call('edit_board', { id: copy.id, canvas })
+    expect(imported.elements.length).toBe(canvas.nodes.length)
+    expect(imported.elements.filter((e: { kind: string }) => e.kind === 'card')[0].object.id).toBe(page.id)
+    expect(imported.arrows).toHaveLength(canvas.edges.length)
+
+    await expect(call('edit_board', { id: page.id, add: [] })).rejects.toThrow('not a whiteboard')
+    await expect(call('edit_board', { id: board.id, add: [{ kind: 'card', object: 'Nothing like this' }] })).rejects.toThrow('no object')
+    await expect(call('edit_board', { id: board.id, arrows: [{ from: 'x', to: 'y' }] })).rejects.toThrow('no element')
+    await expect(call('edit_board', { id: board.id, mermaid: 'pie title Pets' })).rejects.toThrow('flowcharts')
   })
 
   it('tags objects, and sets and clears their icon and color', async () => {

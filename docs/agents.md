@@ -59,6 +59,8 @@ Code and Codex).
 | `nutrition_day` | A day's meals with their entries (ids), totals against the goal, whether it counts, the week's budget |
 | `delete_food_entry` | Take an entry off a day |
 | `save_food` | Make or fill in a food: nutrients per `per` grams as on its label (kept per 100 g), brand, portions |
+| `get_board` | A whiteboard's elements (cards with their object, text, sticky notes, shapes, frames, pen strokes without their ink) with boxes in board coordinates, and its arrows; `format: "canvas"` gives a JSON Canvas instead |
+| `edit_board` | Change a whiteboard in one step: `add` elements (`ref` names one for `arrows` in the same call; without `x`/`y` they are laid out in a grid to the right of the board), `arrows`, `update` (move, resize, recolor, retext, retitle, reshape, relabel), `remove`, `mermaid` (a flowchart laid out as shapes and arrows, nodes named like objects becoming their cards), `canvas` (a JSON Canvas to add) |
 
 Without `space`, tools use the user's capture space; a space can be named by id or name. Types are
 named by name, plural or built-in key (`page`, `task`…), properties by name, select values by
@@ -74,6 +76,10 @@ never show in `search`, `query` or the other listings, only in `list_templates`.
 recipe its ingredients and what it comes to; so an agent can log a plate from a photo with
 `log_food`, or fill a food from its label with `save_food`, without the app holding LLM keys. Results are
 JSON; objects carry a `url` to open them in the app (`VASTA_WEB_URL`, else the request's address).
+
+A whiteboard is made with `create_object` (type "Whiteboard"); its elements are not in
+`get_object`'s text but in `get_board` ([whiteboards.md](whiteboards.md)). A card names its
+object by id, link or exact title in the board's space.
 
 Writes go through the store like the app's own saves: the change feed tells open pages, and the
 rich text is written to the object's Yjs document, so devices merge it with their own edits.
@@ -181,6 +187,10 @@ vasta habit water +1                       # one more toward a daily goal ("5" s
 vasta food 2 slices of bread at breakfast  # log food; --day for another day
 vasta nutrition                            # today's meals, totals against the goal, the week
 vasta query --type Task --where "status is To do" --sort due
+vasta board <id>                           # a whiteboard's elements and arrows
+vasta board <id> --canvas > plan.canvas    # as a JSON Canvas file (Obsidian opens it)
+echo 'graph LR; A[Idea] --> B[Plan]' | vasta board <id> --mermaid
+vasta board <id> --import < plan.canvas    # add a JSON Canvas to a board
 vasta tool get_object '{"id":"…"}'         # any tool, JSON in and out
 ```
 

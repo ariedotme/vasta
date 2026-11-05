@@ -23,7 +23,9 @@ space: set them by username or name, "me" for the user; get_object shows who mad
 and who changed it last (createdBy, updatedBy). A space with sprints has a Sprint type (dates,
 goal) and tasks a Sprint field: set it by the sprint's title, or "current" for the one under way.
 Types may have templates (list_templates): create_object starts from a type's default template,
-or the one named by "template", with its questions answered by "answers".`
+or the one named by "template", with its questions answered by "answers". Whiteboards (type
+"Whiteboard") hold cards of objects, text, sticky notes, shapes, frames and arrows: read one with
+get_board, change it with edit_board (a Mermaid flowchart becomes a board there too).`
 
 const space = z.string().optional().describe('Space id or name; the default space when omitted')
 const properties = z
@@ -267,6 +269,70 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
       annotations: WRITE,
     },
     (input) => run(() => tools.createObject(strip(input)))
+  )
+
+  const boardColor = z.enum(COLOR_NAMES).optional()
+  server.registerTool(
+    'get_board',
+    {
+      title: 'Get whiteboard',
+      description:
+        'A whiteboard\'s elements (cards of objects, text, sticky notes, shapes, frames, pen strokes without their ink) with their boxes in board coordinates (x right, y down), and its arrows. format "canvas" gives the board as a JSON Canvas (jsoncanvas.org, Obsidian\'s format) instead.',
+      inputSchema: { id: z.string(), format: z.enum(['elements', 'canvas']).optional() },
+      annotations: READ,
+    },
+    ({ id, format }) => run(() => tools.getBoard(id, format))
+  )
+
+  server.registerTool(
+    'edit_board',
+    {
+      title: 'Edit whiteboard',
+      description:
+        'Change a whiteboard in one step (make one with create_object, type "Whiteboard"). "add": elements; a card shows an object ("object": its id or exact title), text, sticky and shape hold "text", a frame has a "title"; give x and y to place one, else new elements are laid out in a grid to the right of the board; "ref" names a new element so "arrows" can use it. "arrows": from and to are refs or ids from get_board. "update": move, resize, recolor, retext, retitle, reshape elements or relabel arrows. "remove": ids (an element\'s arrows and the strokes drawn on it go too). "mermaid": a Mermaid flowchart ("graph LR; A[Idea] --> B{Choose}"), laid out as shapes and arrows, nodes named like an object of the space becoming its card. "canvas": a JSON Canvas to add. Returns the board as get_board does, with the ids given to refs.',
+      inputSchema: {
+        id: z.string(),
+        add: z
+          .array(
+            z.object({
+              ref: z.string().optional(),
+              kind: z.enum(['card', 'text', 'sticky', 'shape', 'frame']),
+              object: z.string().optional(),
+              text: z.string().optional(),
+              shape: z.enum(['rectangle', 'ellipse', 'diamond', 'triangle', 'parallelogram', 'star', 'heart']).optional(),
+              title: z.string().optional(),
+              color: boardColor,
+              x: z.number().optional(),
+              y: z.number().optional(),
+              w: z.number().optional(),
+              h: z.number().optional(),
+            })
+          )
+          .optional(),
+        arrows: z.array(z.object({ from: z.string(), to: z.string(), label: z.string().optional(), color: boardColor })).optional(),
+        update: z
+          .array(
+            z.object({
+              id: z.string(),
+              x: z.number().optional(),
+              y: z.number().optional(),
+              w: z.number().optional(),
+              h: z.number().optional(),
+              text: z.string().optional(),
+              title: z.string().optional(),
+              shape: z.enum(['rectangle', 'ellipse', 'diamond', 'triangle', 'parallelogram', 'star', 'heart']).optional(),
+              label: z.string().optional(),
+              color: z.enum(COLOR_NAMES).nullable().optional(),
+            })
+          )
+          .optional(),
+        remove: z.array(z.string()).optional(),
+        mermaid: z.string().optional(),
+        canvas: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe('A JSON Canvas, as an object or its text'),
+      },
+      annotations: WRITE,
+    },
+    (input) => run(() => tools.editBoard(strip(input)))
   )
 
   server.registerTool(

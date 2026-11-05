@@ -34,6 +34,9 @@ export const USAGE = `vasta — your Vasta notes from the terminal (for you, scr
                                     replaces them all; --icon, --color (none removes either)
   vasta pin <id|link>              pin an object in the sidebar
   vasta unpin <id|link>            remove an object from all sidebar sections
+  vasta board <id|link>             a whiteboard's elements and arrows; --canvas prints it as a JSON Canvas;
+                                    --mermaid adds a Mermaid flowchart read from stdin (or given after the id);
+                                    --import adds a JSON Canvas read from stdin
   vasta capture <text…>             capture into today's note, like the quick capture
   vasta inbox [--days N]            what was captured lately
   vasta habits [YYYY-MM-DD]         your habits: done today (or that day), streaks
@@ -137,6 +140,30 @@ function show(object: Shown): string {
   return lines.join('\n')
 }
 
+interface BoardShown {
+  title: string
+  url: string
+  elements: { id: string; kind: string; x: number; y: number; w: number; h: number; text?: string; title?: string; shape?: string; object?: { title: string } }[]
+  arrows: { from: string; to: string; label?: string }[]
+}
+
+/** A board as lines: each element with what it shows and where, then the arrows between them. */
+function board(shown: BoardShown): string {
+  const names = new Map<string, string>()
+  const lines = [`# ${shown.title || 'Untitled'}`, shown.url, '']
+  for (const e of shown.elements) {
+    const what = e.object ? e.object.title : e.kind === 'frame' ? e.title ?? '' : (e.text ?? '').replace(/\s+/g, ' ')
+    names.set(e.id, what || e.kind)
+    if (e.kind === 'stroke') continue
+    lines.push(`${(e.shape ?? e.kind).padEnd(9)} ${what ? `"${what.length > 60 ? `${what.slice(0, 59)}…` : what}"  ` : ''}at ${e.x},${e.y} ${e.w}×${e.h}  ${e.id}`)
+  }
+  const strokes = shown.elements.filter((e) => e.kind === 'stroke').length
+  if (strokes) lines.push(`${strokes} pen stroke${strokes === 1 ? '' : 's'}`)
+  if (!shown.elements.length) lines.push('Empty.')
+  for (const a of shown.arrows) lines.push(`${names.get(a.from) ?? a.from} → ${names.get(a.to) ?? a.to}${a.label ? `  (${a.label})` : ''}`)
+  return lines.join('\n')
+}
+
 /** Run a command line (without "vasta"); returns what to print. `stdin` is read only when a command takes text from it. */
 export async function runCommand(argv: string[], call: Call, stdin: () => Promise<string> = async () => ''): Promise<string> {
   const { values, positionals } = parseArgs({
@@ -167,6 +194,9 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
       any: { type: 'boolean', default: false },
       sort: { type: 'string', multiple: true },
       done: { type: 'boolean', default: false },
+      canvas: { type: 'boolean', default: false },
+      mermaid: { type: 'boolean', default: false },
+      import: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   })
@@ -192,6 +222,18 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
     case 'show': {
       if (!rest[0]) throw new UsageError('vasta show <id|link>')
       return out(await call('get_object', { id: idOf(rest[0]) }), show)
+    }
+    case 'board': {
+      if (!rest[0]) throw new UsageError('vasta board <id|link> [--canvas | --mermaid | --import]')
+      const id = idOf(rest[0])
+      if (values.canvas) return json(await call('get_board', { id, format: 'canvas' }))
+      if (values.mermaid || values.import) {
+        const input = await text()
+        if (!input.trim()) throw new UsageError(values.mermaid ? 'pipe in a Mermaid flowchart, or give it after the id' : 'pipe in a JSON Canvas file')
+        const changed = await call('edit_board', { id, ...(values.mermaid ? { mermaid: input } : { canvas: input }) })
+        return out(changed, board)
+      }
+      return out(await call('get_board', { id }), board)
     }
     case 'today':
       return out(await call('get_daily_note', { ...(rest[0] ? { day: rest[0] } : {}), ...space }), show)

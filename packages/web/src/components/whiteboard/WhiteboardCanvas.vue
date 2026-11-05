@@ -15,6 +15,8 @@ import {
   addBoardElements,
   bringToFront,
   attachedTo,
+  boardToJsonCanvas,
+  spotAfter,
   copyElements,
   insideFrame,
   isAttached,
@@ -34,8 +36,9 @@ import {
 } from '@vasta/core'
 import { Y } from '@vasta/editor-schema/yjs'
 import { api } from '../../lib/api.ts'
-import { primeSummaries, systemType, typesById, useSummaries } from '../../lib/state.ts'
-import { promptDialog } from '../../lib/overlays.ts'
+import { cachedSummary, lastError, primeSummaries, systemType, typesById, useSummaries } from '../../lib/state.ts'
+import { openMenuAt, promptDialog } from '../../lib/overlays.ts'
+import { canvasElements, isMermaidFlowchart, mermaidElements } from '../../lib/board-actions.ts'
 import {
   BOARD_COLORS,
   PICKER_COLORS,
@@ -58,7 +61,7 @@ import PopoverMenu from '../PopoverMenu.vue'
 import BoardItem from './BoardItem.vue'
 import SelectionBar from './SelectionBar.vue'
 
-const props = defineProps<{ doc: Y.Doc; boardId: Id; readonly?: boolean }>()
+const props = defineProps<{ doc: Y.Doc; boardId: Id; title?: string; readonly?: boolean }>()
 const router = useRouter()
 
 /** Origin of this page's writes: what undo covers. */
@@ -789,9 +792,85 @@ function onPaste(event: ClipboardEvent) {
   const elementsPasted = parseBoardClipboard(text)
   event.preventDefault()
   if (elementsPasted?.length) return placeCopies(elementsPasted)
+  if (isMermaidFlowchart(text)) return void addFlowchart(text)
+  if (/^\s*\{[\s\S]*"nodes"[\s\S]*\}\s*$/.test(text)) {
+    try {
+      return addCanvas(JSON.parse(text))
+    } catch {} // not a canvas after all: pasted as text
+  }
   const id = linkedObject(text)
   if (id && id !== props.boardId) return addCards([id])
   if (text.trim()) addText(viewCenter(), text.trim())
+}
+
+/** New elements (a flowchart, a canvas) are selected and brought into view. */
+function addLaidOut(list: NewBoardElement[]) {
+  const ids = add(list)
+  const added = ids.flatMap((id) => {
+    const element = byId.value.get(id)
+    return element && isPlaced(element) ? [element] : []
+  })
+  select(added.map((e) => e.id))
+  fit(added)
+}
+/** Where pasted or imported content goes: to the right of what the board has, clear of it. */
+const layoutCorner = () => spotAfter(elements.value)
+async function addFlowchart(source: string) {
+  try {
+    addLaidOut(await mermaidElements(source, layoutCorner(), props.boardId))
+  } catch (error) {
+    lastError.value = (error as Error).message
+  }
+}
+function addCanvas(canvas: unknown) {
+  try {
+    const list = canvasElements(canvas, layoutCorner())
+    // Frames first, so they stay under what they hold.
+    addLaidOut(list.sort((a, b) => Number(b.kind === 'frame') - Number(a.kind === 'frame')))
+  } catch (error) {
+    lastError.value = `Not a JSON Canvas file: ${(error as Error).message}`
+  }
+}
+
+// Board menu: JSON Canvas out and in, a flowchart in.
+const fileInput = ref<HTMLInputElement | null>(null)
+function exportCanvas() {
+  const canvas = boardToJsonCanvas(elements.value, (id) => {
+    const summary = cachedSummary(id)
+    return summary ? { title: summary.title, url: `${location.origin}/o/${id}` } : undefined
+  })
+  const blob = new Blob([JSON.stringify(canvas, null, 2)], { type: 'application/json' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `${(props.title || 'Whiteboard').replace(/[\\/:*?"<>|]/g, '-')}.canvas`
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+}
+async function importCanvas(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  ;(event.target as HTMLInputElement).value = ''
+  if (!file) return
+  try {
+    addCanvas(JSON.parse(await file.text()))
+  } catch {
+    lastError.value = 'Not a JSON Canvas file.'
+  }
+}
+async function askFlowchart() {
+  const source = await promptDialog({ title: 'Add a Mermaid flowchart', placeholder: 'graph LR; A[Idea] --> B{Choose}', confirmLabel: 'Add' })
+  if (source?.trim()) await addFlowchart(source.replace(/;\s*/g, '\n'))
+}
+function boardMenu(event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  openMenuAt(rect.left, rect.bottom + 6, [
+    { label: 'Export as JSON Canvas', icon: 'ph:download-simple', run: exportCanvas },
+    ...(props.readonly
+      ? []
+      : [
+          { label: 'Import a JSON Canvas…', icon: 'ph:upload-simple', run: () => fileInput.value?.click() },
+          { label: 'Add a Mermaid flowchart…', icon: 'ph:flow-arrow', hint: 'or paste one', run: askFlowchart },
+        ]),
+  ])
 }
 
 function setColor(color: ColorName | undefined) {
@@ -1318,6 +1397,18 @@ const cursor = computed(() => {
         <AppIcon fallback="ph:frame-corners" :size="16" />
       </button>
     </div>
+
+    <!-- Board menu -->
+    <button
+      data-ui
+      class="absolute right-[3.25rem] top-3 grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-ink-soft shadow-sm hover:bg-hover hover:text-ink"
+      title="Board"
+      aria-label="Board menu"
+      @click="boardMenu"
+    >
+      <AppIcon fallback="ph:dots-three" :size="16" />
+    </button>
+    <input ref="fileInput" type="file" accept=".canvas,application/json" class="hidden" @change="importCanvas" />
 
     <PopoverMenu v-model:open="pickerOpen" :anchor="pickerAnchor" placement="top" width="20rem">
       <div data-ui @keydown.stop>

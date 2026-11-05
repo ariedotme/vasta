@@ -916,7 +916,7 @@ async function startFrom(template: ObjectRecord) {
           :style="!boardFull && boardHeight ? { height: `${boardHeight}px` } : undefined"
           @keydown.esc="!$event.defaultPrevented && (boardFull = false)"
         >
-          <WhiteboardCanvas v-if="board" :doc="board.doc" :board-id="object.id" :readonly="!!object.deletedAt" />
+          <WhiteboardCanvas v-if="board" :doc="board.doc" :board-id="object.id" :title="object.title" :readonly="!!object.deletedAt" />
           <div v-else class="grid h-full place-items-center text-sm text-ink-faint">{{ boardFailed ? 'This board needs a connection to the server.' : 'Opening the board…' }}</div>
           <button
             class="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-ink-soft shadow-sm hover:bg-hover hover:text-ink"
