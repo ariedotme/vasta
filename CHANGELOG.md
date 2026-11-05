@@ -29,6 +29,10 @@ GitHub release page.
   one of its frames; show a card as one line or with its contents (a query's live results, a
   page's text); turn an arrow between two cards into a relation, so it shows in backlinks and
   queries. The board menu lists its frames to jump to.
+- **Scenes on whiteboards**: a menu at the board's top left goes to each frame, with ‹ › to step
+  through them like slides; an embedded scene fades out what lies outside its frame. Letting an
+  arrow go over empty space offers a new note, text, shape or object at its end, and cards
+  showing their contents scroll with the wheel.
 - **Agents edit whiteboards**: `get_board` and `edit_board` over MCP, and `vasta board` in the
   terminal, read a board and add, move, change and connect its elements, flowcharts and canvases
   included.

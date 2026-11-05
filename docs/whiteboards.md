@@ -28,8 +28,11 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   (by its title or its edge) moves what lies wholly inside it. Double-click the title, or select
   it and press Enter, to rename it.
 - **Card views**: a card's view (in the selection bar) is its **card**, **one line**, or its
-  **contents**: a query's live results, a picture, or the text of anything else. Contents are for
-  reading; double-click the card to open the object.
+  **contents**: a query's live results, a picture, or the text of anything else. The wheel scrolls
+  the contents (the board pans again once they reach an end); double-click the card to open the
+  object.
+- **An arrow let go over empty space** offers what to put there, joined to where it started: a
+  sticky note, a text, a shape (typed into right away) or an object (the object picker).
 - **Arrows**: select an element and drag the dot on its right edge to another element, or pick
   the arrow tool (**L**) and drag from one element to another. Double-click an arrow (or select
   it and press Enter) to give it a label.
@@ -61,10 +64,12 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   and put back within 180 ms where it left off), the line goes on as one stroke. Pressure readings
   are smoothed as they arrive, and a pen's points are only thinned by distance, so the width
   never jumps.
-- **Frames** list in the board menu (**⋯** › Frames): pick one to go to it.
+- **Scenes**: when a board has frames, a menu stays at its top left: pick a frame to show it
+  whole, or step through them with **‹ ›** (top to bottom, left to right), like slides. Moving
+  the view by hand leaves the scene.
 - **In a note**: embed a whiteboard as any object (@ or `/`). The embed shows the board, live; when
   the board has frames, a menu in its header picks one, a **scene**, and the embed shows just it.
-  The scene is the embed's `blockId`, so Markdown keeps it: `![Board](vasta://o/<board>#b-<frame>)`.
+  What lies outside the scene's frame fades into the background. The scene is the embed's `blockId`, so Markdown keeps it: `![Board](vasta://o/<board>#b-<frame>)`.
   Double-click the embed to open the board.
 - The board fills the page below the title and properties, so it opens whole without scrolling.
   The **full screen** button (top right) gives it the whole window; Esc leaves it once nothing is
@@ -161,5 +166,5 @@ JSON of the elements).
 
 ## Not yet
 
-Arrows that bend or end in empty space, mentions (instead of relations) from arrows, scenes that
-hide what lies outside their frame, scrolling inside a card's contents. The plan is in issue #38.
+Arrows that bend, mentions (instead of relations) from arrows, others' cursors on a shared board,
+scrolling a card's contents by touch. The plan is in issue #38.

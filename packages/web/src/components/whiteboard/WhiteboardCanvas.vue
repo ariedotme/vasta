@@ -45,6 +45,7 @@ import {
   BOARD_COLORS,
   PICKER_COLORS,
   SHAPE_ICONS,
+  SHAPE_LABELS,
   boardClipboard,
   bounds,
   parseBoardClipboard,
@@ -139,6 +140,31 @@ watch(
   () => props.focus,
   () => props.embedded && size.w && fitFocus()
 )
+
+// Scenes: the board's frames, top to bottom and left to right, picked from a menu always on
+// screen (and stepped through with ‹ ›). Moving the view by hand leaves the scene.
+const frames = computed(() => {
+  const list = placed.value.filter((e) => e.kind === 'frame')
+  const row = (e: PlacedElement) => Math.round(e.y / 60)
+  return [...list].sort((a, b) => row(a) - row(b) || a.x - b.x)
+})
+const scene = ref<Id | null>(null)
+const frameTitle = (frame: PlacedElement | undefined) => (frame?.kind === 'frame' && frame.title?.trim()) || 'Frame'
+function goToScene(id: Id | null) {
+  const frame = id ? frames.value.find((f) => f.id === id) : undefined
+  if (frame) fit([frame], 2)
+  else fit()
+  // After fit moved the camera, which would clear it.
+  void nextTick(() => (scene.value = frame ? frame.id : null))
+}
+function stepScene(step: number) {
+  const list = frames.value
+  if (!list.length) return
+  const at = list.findIndex((f) => f.id === scene.value)
+  const next = at < 0 ? (step > 0 ? 0 : list.length - 1) : (at + step + list.length) % list.length
+  goToScene(list[next]!.id)
+}
+const leaveScene = () => (scene.value = null)
 
 /** The middle of the view, in board coordinates (where new things go). */
 const viewCenter = () => toWorld(size.w / 2, size.h / 2)
@@ -492,6 +518,7 @@ function onPointerMove(event: PointerEvent) {
   if (!g) return
   const world = toWorld(p.x, p.y)
   if (g.kind === 'pinch' && pointers.size >= 2) {
+    leaveScene()
     const { distance, mid } = pinchState()
     const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, g.zoom * (distance / g.distance)))
     // The point under the fingers' middle at the start stays under it.
@@ -500,6 +527,7 @@ function onPointerMove(event: PointerEvent) {
     camera.x = mid.x - anchor.x * zoom
     camera.y = mid.y - anchor.y * zoom
   } else if (g.kind === 'pan') {
+    leaveScene()
     camera.x = g.x + p.x - g.sx
     camera.y = g.y + p.y - g.sy
   } else if (g.kind === 'move') {
@@ -598,6 +626,7 @@ function onPointerUp(event: PointerEvent) {
     const target = elementAt(document.elementFromPoint(event.clientX, event.clientY))
     const exists = arrows.value.some((a) => a.kind === 'arrow' && ((a.from === g.from && a.to === target) || (a.from === target && a.to === g.from)))
     if (target && target !== g.from && !exists) select(add([{ kind: 'arrow', from: g.from, to: target }]))
+    else if (!target && !props.readonly) connectMenu(g.from, event)
     if (!stays(tool.value)) tool.value = 'select'
   } else if (g.kind === 'create') {
     createAt(g)
@@ -610,7 +639,15 @@ function onPointerUp(event: PointerEvent) {
 }
 
 function onWheel(event: WheelEvent) {
+  // A card showing its contents scrolls them, until they reach an end.
+  const scroller = (event.target as Element | null)?.closest?.<HTMLElement>('[data-scroll]')
+  if (scroller && !event.ctrlKey && !event.metaKey && scroller.scrollHeight > scroller.clientHeight + 1) {
+    const atTop = scroller.scrollTop <= 0 && event.deltaY < 0
+    const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1 && event.deltaY > 0
+    if (!atTop && !atBottom) return
+  }
   event.preventDefault()
+  leaveScene()
   const p = local(event)
   // A trackpad pinch arrives as a wheel with Ctrl held, as does Ctrl or ⌘ with the wheel.
   if (event.ctrlKey || event.metaKey) zoomAt(p.x, p.y, camera.zoom * Math.exp(-event.deltaY * (event.deltaMode ? 0.05 : 0.01)))
@@ -634,6 +671,7 @@ function onGestureStart(event: Event) {
 }
 function onGestureChange(event: Event) {
   event.preventDefault()
+  leaveScene()
   const e = event as Event & { scale: number; clientX: number; clientY: number }
   const p = local(e)
   zoomAt(p.x, p.y, gestureZoom * e.scale)
@@ -727,19 +765,52 @@ function finishStroke(g: Extract<Gesture, { kind: 'draw' }>, event: PointerEvent
   lastLine = event.pointerType === 'pen' ? { id, at: event.timeStamp, end: local(event), points: g.points, attach: attach.value } : null
 }
 
+// An arrow let go over empty space offers what to put there, joined to where it started.
+const connectPick = ref<{ from: Id; at: Point; x: number; y: number } | null>(null)
+const pointAnchor = ref<HTMLElement | null>(null)
+function connectMenu(from: Id, event: PointerEvent) {
+  const p = local(event)
+  const at = toWorld(p.x, p.y)
+  const make = (element: NewBoardElement, edit: boolean) => () => {
+    const [id] = add([element])
+    add([{ kind: 'arrow', from, to: id! }])
+    select([id!])
+    if (edit) startEditing(id!)
+  }
+  const centered = (w: number, h: number) => ({ x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2), w, h })
+  openMenuAt(event.clientX, event.clientY, [
+    { kind: 'heading', label: 'Connect to a new' },
+    { label: 'Sticky note', icon: 'ph:note-blank', run: make({ kind: 'sticky', text: '', ...centered(SIZES.sticky.w, SIZES.sticky.h) }, true) },
+    { label: 'Text', icon: 'ph:text-t', run: make({ kind: 'text', text: '', ...centered(SIZES.text.w, SIZES.text.h) }, true) },
+    { label: SHAPE_LABELS[shapeKind.value], icon: SHAPE_ICONS[shapeKind.value], run: make({ kind: 'shape', shape: shapeKind.value, text: '', ...centered(SIZES.shape.w, SIZES.shape.h) }, true) },
+    { label: 'Object…', icon: 'ph:cards', hint: '@', run: () => void nextTick(() => ((connectPick.value = { from, at, x: p.x, y: p.y }), (pickerOpen.value = true))) },
+  ])
+}
+
 const pickerOpen = ref(false)
+watch(pickerOpen, (open) => {
+  if (!open) setTimeout(() => (connectPick.value = null), 0)
+})
 const pickerAnchor = ref<HTMLElement | null>(null)
+/** A card for an object picked: in the middle of the view, or where an arrow was let go (joined to it). */
+function placeCard(objectId: Id) {
+  const link = connectPick.value
+  if (!link) return addCards([objectId])
+  const [id] = add([{ kind: 'card', objectId, x: Math.round(link.at.x - SIZES.card.w / 2), y: Math.round(link.at.y - SIZES.card.h / 2), ...SIZES.card }])
+  add([{ kind: 'arrow', from: link.from, to: id! }])
+  select([id!])
+}
 function picked(object: ObjectSummary) {
-  pickerOpen.value = false
   primeSummaries([object])
-  addCards([object.id])
+  placeCard(object.id)
+  pickerOpen.value = false
 }
 async function created(title: string) {
-  pickerOpen.value = false
   const type = systemType('page')
-  if (!type) return
+  if (!type) return (pickerOpen.value = false)
   const object = await api.createObject({ typeId: type.id, title })
-  addCards([object.id])
+  placeCard(object.id)
+  pickerOpen.value = false
 }
 
 /** An object's link (from the sidebar, a list, another page). */
@@ -881,19 +952,7 @@ async function askFlowchart() {
 }
 function boardMenu(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const frames = placed.value.filter((e) => e.kind === 'frame')
   openMenuAt(rect.left, rect.bottom + 6, [
-    ...(frames.length
-      ? [
-          {
-            kind: 'submenu' as const,
-            label: 'Frames',
-            icon: 'ph:frame-corners',
-            items: frames.map((f) => ({ label: (f.kind === 'frame' && f.title?.trim()) || 'Frame', icon: 'ph:square', run: () => (fit([f], 2), select([f.id])) })),
-          },
-          { kind: 'separator' as const },
-        ]
-      : []),
     { label: 'Export as JSON Canvas', icon: 'ph:download-simple', run: exportCanvas },
     ...(props.readonly
       ? []
@@ -1231,6 +1290,14 @@ const ink = computed(() => {
     opacity: highlight ? 0.4 : 1,
   }
 })
+/** The focused frame of an embedded scene, on screen. */
+const sceneBox = computed(() => {
+  const frame = props.focus ? byId.value.get(props.focus) : undefined
+  if (!frame || !isPlaced(frame)) return null
+  const b = box(frame)
+  const a = toScreen(b.x, b.y)
+  return { x: a.x, y: a.y, w: b.w * camera.zoom, h: b.h * camera.zoom }
+})
 const guideLines = computed(() =>
   preview.guides.map((g) => {
     const a = g.axis === 'x' ? toScreen(g.at, g.from) : toScreen(g.from, g.at)
@@ -1501,6 +1568,40 @@ const cursor = computed(() => {
       </button>
     </div>
 
+    <!-- Scenes: the board's frames, always at hand -->
+    <div
+      v-if="!embedded && frames.length"
+      data-ui
+      class="absolute left-3 top-3 flex max-w-[calc(100%-7.5rem)] items-center rounded-lg border border-line bg-surface text-sm shadow-sm"
+    >
+      <button class="grid h-8 w-7 shrink-0 place-items-center rounded-l-lg text-ink-soft hover:bg-hover hover:text-ink" title="Previous frame" aria-label="Previous frame" @click="stepScene(-1)">
+        <AppIcon fallback="ph:caret-left" :size="14" />
+      </button>
+      <label class="relative flex w-40 min-w-0 items-center gap-1.5 border-x border-line px-2 py-1.5 hover:bg-hover max-sm:w-32">
+        <AppIcon fallback="ph:frame-corners" :size="14" class="shrink-0 text-ink-soft" />
+        <span class="truncate" :class="scene ? 'text-ink' : 'text-ink-soft'">{{ scene ? frameTitle(frames.find((f) => f.id === scene)) : 'Whole board' }}</span>
+        <AppIcon fallback="ph:caret-down" :size="11" class="ml-auto shrink-0 text-ink-faint" />
+        <!-- The native list: on a touch screen it opens as the system picker. -->
+        <select class="absolute inset-0 cursor-pointer opacity-0" aria-label="Go to a frame" :value="scene ?? ''" @change="goToScene(($event.target as HTMLSelectElement).value || null)">
+          <option value="">Whole board</option>
+          <option v-for="f in frames" :key="f.id" :value="f.id">{{ frameTitle(f) }}</option>
+        </select>
+      </label>
+      <button class="grid h-8 w-7 shrink-0 place-items-center rounded-r-lg text-ink-soft hover:bg-hover hover:text-ink" title="Next frame" aria-label="Next frame" @click="stepScene(1)">
+        <AppIcon fallback="ph:caret-right" :size="14" />
+      </button>
+    </div>
+
+    <!-- An embedded scene: what lies outside its frame fades into the background -->
+    <svg v-if="embedded && sceneBox" class="pointer-events-none absolute inset-0 h-full w-full">
+      <path
+        :d="`M0,0 H${size.w} V${size.h} H0 Z M${sceneBox.x},${sceneBox.y} v${sceneBox.h} h${sceneBox.w} v${-sceneBox.h} Z`"
+        fill="var(--color-canvas)"
+        fill-opacity="0.88"
+        fill-rule="evenodd"
+      />
+    </svg>
+
     <!-- Board menu -->
     <button
       v-if="!embedded"
@@ -1514,7 +1615,8 @@ const cursor = computed(() => {
     </button>
     <input ref="fileInput" type="file" accept=".canvas,application/json" class="hidden" @change="importCanvas" />
 
-    <PopoverMenu v-model:open="pickerOpen" :anchor="pickerAnchor" placement="top" width="20rem">
+    <div v-if="connectPick" ref="pointAnchor" class="pointer-events-none absolute h-px w-px" :style="{ left: `${connectPick.x}px`, top: `${connectPick.y}px` }" />
+    <PopoverMenu v-model:open="pickerOpen" :anchor="connectPick ? pointAnchor : pickerAnchor" :placement="connectPick ? 'bottom-start' : 'top'" width="20rem">
       <div data-ui @keydown.stop>
         <ObjectPicker :exclude="[boardId]" create-label="New page" @pick="picked" @create="created" />
       </div>
