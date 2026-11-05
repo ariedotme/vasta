@@ -277,6 +277,11 @@ describe('MCP endpoint', () => {
     expect(store.search('s', 'Ana').map((o) => o.id)).toContain(board.id)
     expect(events.some((e) => e.kind === 'object' && e.id === board.id)).toBe(true)
 
+    const styled = await call('edit_board', { id: board.id, update: [{ id: edited.arrows[0].id, path: 'curved', heads: 'both', dashed: true }] })
+    expect(styled.arrows[0]).toMatchObject({ path: 'curved', heads: 'both', dashed: true })
+    const plain = await call('edit_board', { id: board.id, update: [{ id: edited.arrows[0].id, path: 'straight', heads: 'end', dashed: false }] })
+    expect(plain.arrows[0]).not.toHaveProperty('path')
+    await expect(call('edit_board', { id: board.id, update: [{ id: edited.arrows[0].id, path: 'zigzag' }] })).rejects.toThrow()
     const viewed = await call('edit_board', { id: board.id, update: [{ id: edited.refs.plan, view: 'compact' }] })
     expect(viewed.elements.find((e: { id: string }) => e.id === edited.refs.plan).view).toBe('compact')
     await expect(call('edit_board', { id: board.id, update: [{ id: edited.refs.note, view: 'compact' }] })).resolves.toBeTruthy()

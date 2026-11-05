@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardClipboard, parseBoardClipboard, shapePath, simplifyPoints, snapMove, strokeFromPoints, strokePath, thinPoints } from './whiteboard.ts'
+import { arrowRoute, routePath, snapResize, boardClipboard, parseBoardClipboard, shapePath, simplifyPoints, snapMove, strokeFromPoints, strokePath, thinPoints } from './whiteboard.ts'
 
 describe('pen strokes', () => {
   it('drops the points of a straight run and keeps the corners', () => {
@@ -63,5 +63,38 @@ describe('clipboard', () => {
     expect(parseBoardClipboard(boardClipboard(elements))).toEqual(elements)
     expect(parseBoardClipboard('hello')).toBeUndefined()
     expect(parseBoardClipboard('vasta-board:{nope')).toBeUndefined()
+  })
+})
+
+describe('arrows', () => {
+  const a = { x: 0, y: 0, w: 100, h: 50 }
+  const b = { x: 300, y: 200, w: 100, h: 50 }
+
+  it('runs straight from edge to edge', () => {
+    const route = arrowRoute(a, { x: 300, y: 0, w: 100, h: 50 })
+    expect(route.points).toEqual([{ x: 100, y: 25 }, { x: 300, y: 25 }])
+    expect(routePath(route)).toBe('M100,25 L300,25')
+  })
+
+  it('turns at right angles from the facing sides, wider apart than tall', () => {
+    const route = arrowRoute(a, b, 'elbow')
+    expect(route.points).toEqual([{ x: 100, y: 25 }, { x: 200, y: 25 }, { x: 200, y: 225 }, { x: 300, y: 225 }])
+    expect(route.mid).toEqual({ x: 200, y: 125 })
+  })
+
+  it('bows a curve to one side, its label on the curve', () => {
+    const route = arrowRoute(a, { x: 300, y: 0, w: 100, h: 50 }, 'curved')
+    expect(route.kind).toBe('curve')
+    expect(route.points[1]!.y).toBeLessThan(25)
+    expect(route.mid.y).toBeLessThan(25)
+    expect(routePath(route, (p) => ({ x: p.x * 2, y: p.y * 2 }))).toMatch(/^M\S+ Q\S+ \S+$/)
+  })
+})
+
+describe('snapping a resize', () => {
+  it('lines the right edge up with a neighbor', () => {
+    const out = snapResize({ x: 0, y: 0, w: 100, h: 100 }, 196, 100, [{ x: 0, y: 200, w: 200, h: 50 }], 6)
+    expect(out.w).toBe(200)
+    expect(out.guides[0]).toMatchObject({ axis: 'x', at: 200 })
   })
 })

@@ -270,3 +270,100 @@ export function parseBoardClipboard(text: string): BoardElement[] | undefined {
     return undefined
   }
 }
+
+// Arrows ------------------------------------------------------------------------------------------
+
+type Point = { x: number; y: number }
+const middle = (b: Box): Point => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 })
+
+/** Where a line from the middle of `b` towards `p` leaves it. */
+export function edgePoint(b: Box, p: Point): Point {
+  const c = middle(b)
+  const dx = p.x - c.x
+  const dy = p.y - c.y
+  if (!dx && !dy) return c
+  const t = Math.min(dx ? b.w / 2 / Math.abs(dx) : Infinity, dy ? b.h / 2 / Math.abs(dy) : Infinity)
+  return { x: c.x + dx * t, y: c.y + dy * t }
+}
+
+export type ArrowRoute = { kind: 'line' | 'curve' | 'elbow'; points: Point[]; mid: Point }
+
+/**
+ * The course of an arrow between two boxes: a straight line edge to edge, a curve bowing to the
+ * left of the way it goes, or right angles from the sides facing each other. `mid` is where its
+ * label sits.
+ */
+export function arrowRoute(a: Box, b: Box, path: 'straight' | 'curved' | 'elbow' = 'straight'): ArrowRoute {
+  const ca = middle(a)
+  const cb = middle(b)
+  if (path === 'elbow') {
+    const dx = cb.x - ca.x
+    const dy = cb.y - ca.y
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      const s = { x: dx > 0 ? a.x + a.w : a.x, y: ca.y }
+      const e = { x: dx > 0 ? b.x : b.x + b.w, y: cb.y }
+      const mx = (s.x + e.x) / 2
+      return { kind: 'elbow', points: [s, { x: mx, y: s.y }, { x: mx, y: e.y }, e], mid: { x: mx, y: (s.y + e.y) / 2 } }
+    }
+    const s = { x: ca.x, y: dy > 0 ? a.y + a.h : a.y }
+    const e = { x: cb.x, y: dy > 0 ? b.y : b.y + b.h }
+    const my = (s.y + e.y) / 2
+    return { kind: 'elbow', points: [s, { x: s.x, y: my }, { x: e.x, y: my }, e], mid: { x: (s.x + e.x) / 2, y: my } }
+  }
+  if (path === 'curved') {
+    const length = Math.hypot(cb.x - ca.x, cb.y - ca.y) || 1
+    // Bowed to the left of the way from a to b (on screen, y pointing down), by a quarter of the distance.
+    const normal = { x: (cb.y - ca.y) / length, y: (ca.x - cb.x) / length }
+    const bend = length * 0.25
+    const c = { x: (ca.x + cb.x) / 2 + normal.x * bend, y: (ca.y + cb.y) / 2 + normal.y * bend }
+    const s = edgePoint(a, c)
+    const e = edgePoint(b, c)
+    return { kind: 'curve', points: [s, c, e], mid: { x: 0.25 * s.x + 0.5 * c.x + 0.25 * e.x, y: 0.25 * s.y + 0.5 * c.y + 0.25 * e.y } }
+  }
+  const s = edgePoint(a, cb)
+  const e = edgePoint(b, ca)
+  return { kind: 'line', points: [s, e], mid: { x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 } }
+}
+
+/** An arrow's course as SVG path data, its points mapped (to the screen) first. */
+export function routePath(route: ArrowRoute, map: (p: Point) => Point = (p) => p): string {
+  const pts = route.points.map(map)
+  const f = (n: number) => Math.round(n * 100) / 100
+  const at = (p: Point) => `${f(p.x)},${f(p.y)}`
+  if (route.kind === 'curve') return `M${at(pts[0]!)} Q${at(pts[1]!)} ${at(pts[2]!)}`
+  return `M${pts.map(at).join(' L')}`
+}
+
+// Snapping a resize -------------------------------------------------------------------------------
+
+/** A new size whose right and bottom edges line up with other boxes' edges or middles, when within `threshold`. */
+export function snapResize(box: Box, w: number, h: number, others: Box[], threshold: number): { w: number; h: number; guides: Guide[] } {
+  const right = box.x + w
+  const bottom = box.y + h
+  let best: { x?: { at: number; d: number }; y?: { at: number; d: number } } = {}
+  for (const o of others) {
+    for (const at of [o.x, o.x + o.w / 2, o.x + o.w]) {
+      const d = at - right
+      if (Math.abs(d) <= threshold && (!best.x || Math.abs(d) < Math.abs(best.x.d))) best = { ...best, x: { at, d } }
+    }
+    for (const at of [o.y, o.y + o.h / 2, o.y + o.h]) {
+      const d = at - bottom
+      if (Math.abs(d) <= threshold && (!best.y || Math.abs(d) < Math.abs(best.y.d))) best = { ...best, y: { at, d } }
+    }
+  }
+  const nw = w + (best.x?.d ?? 0)
+  const nh = h + (best.y?.d ?? 0)
+  const guides: Guide[] = []
+  const span = (lined: Box[]) => bounds([{ ...box, w: nw, h: nh }, ...lined])!
+  if (best.x) {
+    const lined = others.filter((o) => [o.x, o.x + o.w / 2, o.x + o.w].some((v) => Math.abs(v - best.x!.at) < 0.5))
+    const all = span(lined)
+    guides.push({ axis: 'x', at: best.x.at, from: all.y, to: all.y + all.h })
+  }
+  if (best.y) {
+    const lined = others.filter((o) => [o.y, o.y + o.h / 2, o.y + o.h].some((v) => Math.abs(v - best.y!.at) < 0.5))
+    const all = span(lined)
+    guides.push({ axis: 'y', at: best.y.at, from: all.x, to: all.x + all.w })
+  }
+  return { w: nw, h: nh, guides }
+}

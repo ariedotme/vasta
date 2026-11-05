@@ -266,7 +266,7 @@ export function boardToJsonCanvas(elements: BoardElement[], object: (id: Id) => 
   }
   const edges: JsonCanvasEdge[] = elements.flatMap((e) =>
     e.kind === 'arrow' && kept.has(e.from) && kept.has(e.to)
-      ? [{ id: e.id, fromNode: e.from, toNode: e.to, toEnd: 'arrow' as const, ...(e.label ? { label: e.label } : {}), ...(e.color && PRESET_OF[e.color] ? { color: PRESET_OF[e.color] } : {}) }]
+      ? [{ id: e.id, fromNode: e.from, toNode: e.to, ...(e.heads === 'both' ? { fromEnd: 'arrow' as const } : {}), toEnd: e.heads === 'none' ? ('none' as const) : ('arrow' as const), ...(e.label ? { label: e.label } : {}), ...(e.color && PRESET_OF[e.color] ? { color: PRESET_OF[e.color] } : {}) }]
       : []
   )
   return { nodes, edges }
@@ -315,7 +315,9 @@ export function jsonCanvasToElements(canvas: unknown, makeId: () => Id, objectFr
     const to = ids.get(e.toNode)
     if (!from || !to || from === to) continue
     const color = canvasColor(e.color)
-    arrows.push({ id: makeId(), kind: 'arrow', from, to, ...(typeof e.label === 'string' && e.label ? { label: e.label } : {}), ...(color ? { color } : {}) })
+    // JSON Canvas edges end in an arrow unless they say otherwise, and start plain.
+    const heads = e.fromEnd === 'arrow' ? 'both' : e.toEnd === 'none' ? 'none' : undefined
+    arrows.push({ id: makeId(), kind: 'arrow', from, to, ...(heads ? { heads } : {}), ...(typeof e.label === 'string' && e.label ? { label: e.label } : {}), ...(color ? { color } : {}) })
   }
   return [...frames, ...others, ...arrows]
 }

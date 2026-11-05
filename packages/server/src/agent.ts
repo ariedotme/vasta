@@ -72,6 +72,8 @@ import {
   type Nutrients,
 } from '@vasta/core'
 import {
+  ARROW_HEADS,
+  ARROW_PATHS,
   CARD_VIEWS,
   CanvasError,
   MermaidError,
@@ -91,6 +93,8 @@ import {
   spotAfter,
   updateBoardElements,
   type BoardElement,
+  type ArrowHeads,
+  type ArrowPath,
   type BoardPatch,
   type CardView,
   type NewBoardElement,
@@ -121,8 +125,30 @@ export interface BoardAddInput {
   w?: number
   h?: number
 }
+/** An arrow's look as agents give it. */
+export interface ArrowStyleInput {
+  path?: string
+  heads?: string
+  dashed?: boolean
+}
+
+/** An arrow's look checked; defaults ("straight", "end", not dashed) are left out (or cleared, for a change). */
+function arrowStyle(input: ArrowStyleInput, clearing = false): { path?: ArrowPath | undefined; heads?: ArrowHeads | undefined; dashed?: true | undefined } {
+  const out: { path?: ArrowPath | undefined; heads?: ArrowHeads | undefined; dashed?: true | undefined } = {}
+  if (input.path !== undefined) {
+    if (!ARROW_PATHS.includes(input.path as ArrowPath)) throw new AgentError(`unknown arrow path "${input.path}" (${ARROW_PATHS.join(', ')})`)
+    if (input.path !== 'straight' || clearing) out.path = input.path === 'straight' ? undefined : (input.path as ArrowPath)
+  }
+  if (input.heads !== undefined) {
+    if (!ARROW_HEADS.includes(input.heads as ArrowHeads)) throw new AgentError(`unknown arrow heads "${input.heads}" (${ARROW_HEADS.join(', ')})`)
+    if (input.heads !== 'end' || clearing) out.heads = input.heads === 'end' ? undefined : (input.heads as ArrowHeads)
+  }
+  if (input.dashed !== undefined && (input.dashed || clearing)) out.dashed = input.dashed ? true : undefined
+  return out
+}
+
 /** What an agent may change in an element. */
-export interface BoardPatchInput {
+export interface BoardPatchInput extends ArrowStyleInput {
   x?: number
   y?: number
   w?: number
@@ -410,7 +436,10 @@ export class AgentTools {
 
   /** What an agent sees of an element (a stroke's ink left out; boxes in board coordinates). */
   private boardElement(element: BoardElement, all: Map<Id, BoardElement>) {
-    if (element.kind === 'arrow') return { id: element.id, kind: 'arrow', from: element.from, to: element.to, ...(element.label ? { label: element.label } : {}), ...(element.color ? { color: element.color } : {}), ...(element.relation ? { relation: element.relation } : {}) }
+    if (element.kind === 'arrow') {
+      const { id, from, to, label, color, relation, path, heads, dashed, mentioned } = element
+      return { id, kind: 'arrow', from, to, ...{ label, color, relation, path, heads, ...(dashed ? { dashed } : {}), ...(mentioned ? { mentioned } : {}) } }
+    }
     let box = { x: element.x, y: element.y, w: element.w, h: element.h }
     if (isAttached(element)) {
       const parent = all.get(element.parent)
@@ -456,7 +485,7 @@ export class AgentTools {
   editBoard(input: {
     id: Id
     add?: BoardAddInput[]
-    arrows?: { from: string; to: string; label?: string; color?: string }[]
+    arrows?: ({ from: string; to: string; label?: string; color?: string } & ArrowStyleInput)[]
     update?: (BoardPatchInput & { id: Id })[]
     remove?: Id[]
     mermaid?: string
@@ -511,7 +540,7 @@ export class AgentTools {
       const from = resolve(arrow.from)
       const to = resolve(arrow.to)
       if (from === to) throw new AgentError('an arrow needs two different elements')
-      additions.push({ id: randomUUID(), kind: 'arrow', from, to, ...(arrow.label ? { label: arrow.label } : {}), ...(color(arrow.color) ? { color: color(arrow.color)! } : {}) })
+      additions.push({ id: randomUUID(), kind: 'arrow', from, to, ...(arrow.label ? { label: arrow.label } : {}), ...(color(arrow.color) ? { color: color(arrow.color)! } : {}), ...arrowStyle(arrow) })
     }
 
     // A flowchart or a canvas goes after everything else.
@@ -557,6 +586,7 @@ export class AgentTools {
       const patch: BoardPatch = {}
       if (element.kind === 'arrow') {
         if (change.label !== undefined) patch.label = change.label || undefined
+        Object.assign(patch, arrowStyle(change, true))
       } else {
         for (const key of ['x', 'y', 'w', 'h'] as const) if (change[key] !== undefined && !isAttached(element)) patch[key] = Math.round(change[key])
         if (change.text !== undefined && 'text' in element) patch.text = change.text

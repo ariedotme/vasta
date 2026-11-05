@@ -36,15 +36,21 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 - **Arrows**: select an element and drag the dot on its right edge to another element, or pick
   the arrow tool (**L**) and drag from one element to another. Double-click an arrow (or select
   it and press Enter) to give it a label.
+- **Arrow styles** (the line button in the selection bar): straight, curved or at right angles
+  (leaving from the sides that face each other), an arrowhead at the end, at both ends or none,
+  and dashed.
 - **Arrows that link objects**: select an arrow between two cards and pick the link in the
   selection bar: it lists the relation properties of the first card's type that take the second's
   type ("Add to “Source”"). The second object is written into that property, so the link shows in
   backlinks, on the object's page and in queries; the arrow shows the property's name. The same
-  menu unlinks. Deleting the arrow keeps the relation (it is the objects' own data now).
+  menu unlinks. Deleting the arrow keeps the relation (it is the objects' own data now). For any two
+  objects whose first has a text field, **Mention it in …'s text** adds a line with a mention of
+  the second at the end of the first's text instead: a backlink, and the arrow shows "Mentioned".
 - **Select** with a click, Shift-click to add, or drag a box over empty space (a frame is taken
   when the box holds it whole). Drag to move: the selection lines up with other elements' edges
   and middles, with red guides; hold Alt, Ctrl or ⌘ to move freely. The corner handle resizes
-  (Shift keeps the proportions; strokes always do), arrow keys nudge (Shift for 10). Delete or
+  (Shift keeps the proportions; strokes always do; the right and bottom edges line up with other
+  elements the same way), arrow keys nudge (Shift for 10). Delete or
   Backspace deletes; an element's arrows go with it.
 - The **selection bar** above the selection: color, shape, open a card, label an arrow, rename a
   frame, bring to front (**]**), send to back (**[**), duplicate (**⌘D**), delete.
@@ -111,7 +117,7 @@ writes it.
 | `sticky` | `text` |
 | `stroke` | `points` (x, y, pressure in turn, relative to the box's corner, simplified), `size`, `sw`, `sh` (the box the points were drawn in, so a resized stroke scales them), `highlight` (optional), `parent` (optional: the element it is drawn on; then `x`, `y`, `w`, `h` are fractions of that element's box) |
 | `frame`  | `title` (optional) |
-| `arrow`  | `from`, `to` (element ids), `label` (optional), `color` (optional), `relation` (optional: the relation property of the "from" card's object it wrote the "to" object into), `rank` |
+| `arrow`  | `from`, `to` (element ids), `label` (optional), `color` (optional), `relation` (optional: the relation property of the "from" card's object it wrote the "to" object into), `mentioned` (optional: the "to" object was mentioned in the "from" object's text), `path` (`curved`, `elbow`; straight when left out), `heads` (`both`, `none`; the end when left out), `dashed`, `rank` |
 
 Every kind but arrows also has `x`, `y`, `w`, `h`, `rank` and an optional `color` (a color name;
 left out, the kind's own: ink, a yellow note).
@@ -166,5 +172,6 @@ JSON of the elements).
 
 ## Not yet
 
-Arrows that bend, mentions (instead of relations) from arrows, others' cursors on a shared board,
-scrolling a card's contents by touch. The plan is in issue #38.
+Others' cursors on a shared board: they come with live collaboration in notes
+([#22](https://github.com/ariedotme/vasta/issues/22)), which boards will share. Rotating shapes,
+a lasso, resizing several elements at once. The plan is in issue #38.

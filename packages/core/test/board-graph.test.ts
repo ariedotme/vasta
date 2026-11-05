@@ -97,6 +97,19 @@ describe('JSON Canvas', () => {
     expect(elements[3]).toMatchObject({ from: 'id2', to: 'id3', label: 'then' })
   })
 
+  it('keeps arrow heads through a canvas', () => {
+    const doc = new Y.Doc()
+    const [a, b] = addBoardElements(doc, [
+      { kind: 'sticky', text: 'A', x: 0, y: 0, w: 100, h: 100 },
+      { kind: 'sticky', text: 'B', x: 300, y: 0, w: 100, h: 100 },
+    ])
+    addBoardElements(doc, [{ kind: 'arrow', from: a!, to: b!, heads: 'both' }, { kind: 'arrow', from: b!, to: a!, heads: 'none' }])
+    const canvas = boardToJsonCanvas(readBoard(doc), () => undefined)
+    expect(canvas.edges!.map((e) => [e.fromEnd ?? 'none', e.toEnd])).toEqual([['arrow', 'arrow'], ['none', 'none']])
+    const back = jsonCanvasToElements(canvas, counter()).filter((e) => e.kind === 'arrow')
+    expect(back.map((e) => (e as { heads?: string }).heads)).toEqual(['both', 'none'])
+  })
+
   it('refuses what is not a canvas', () => {
     expect(() => jsonCanvasToElements('nope', counter())).toThrow()
     expect(() => jsonCanvasToElements({ nodes: 'x' }, counter())).toThrow()

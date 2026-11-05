@@ -272,6 +272,11 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
   )
 
   const boardColor = z.enum(COLOR_NAMES).optional()
+  const arrowLook = {
+    path: z.enum(['straight', 'curved', 'elbow']).optional().describe("An arrow's course"),
+    heads: z.enum(['end', 'both', 'none']).optional().describe('Which ends have a head (none: a plain line)'),
+    dashed: z.boolean().optional(),
+  }
   server.registerTool(
     'get_board',
     {
@@ -309,7 +314,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
             })
           )
           .optional(),
-        arrows: z.array(z.object({ from: z.string(), to: z.string(), label: z.string().optional(), color: boardColor })).optional(),
+        arrows: z.array(z.object({ from: z.string(), to: z.string(), label: z.string().optional(), color: boardColor, ...arrowLook })).optional(),
         update: z
           .array(
             z.object({
@@ -323,6 +328,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
               shape: z.enum(['rectangle', 'ellipse', 'diamond', 'triangle', 'parallelogram', 'star', 'heart']).optional(),
               label: z.string().optional(),
               color: z.enum(COLOR_NAMES).nullable().optional(),
+              ...arrowLook,
               view: z.enum(['card', 'compact', 'embed']).optional().describe("A card's look: its card, one line, or its contents (a query's live results, the text)"),
             })
           )

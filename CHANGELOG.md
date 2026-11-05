@@ -33,6 +33,10 @@ GitHub release page.
   through them like slides; an embedded scene fades out what lies outside its frame. Letting an
   arrow go over empty space offers a new note, text, shape or object at its end, and cards
   showing their contents scroll with the wheel.
+- **Arrow styles and mentions on whiteboards**: arrows can curve or turn at right angles, have
+  heads at either end or none, and be dashed; an arrow between two cards can mention one object
+  in the other's text. Resizing lines edges up with neighbors, and cards showing their contents
+  scroll by touch.
 - **Agents edit whiteboards**: `get_board` and `edit_board` over MCP, and `vasta board` in the
   terminal, read a board and add, move, change and connect its elements, flowcharts and canvases
   included.

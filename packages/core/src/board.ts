@@ -102,7 +102,19 @@ export interface ArrowElement {
    * the "to" card's object into, so the link shows in backlinks and queries too.
    */
   relation?: string
+  /** Its course: straight (default), a curve, or right angles. */
+  path?: ArrowPath
+  /** Which ends have a head: the end (default), both, or none (a plain line). */
+  heads?: ArrowHeads
+  dashed?: boolean
+  /** Between two cards: the "to" object was mentioned in the "from" object's text. */
+  mentioned?: boolean
 }
+
+export const ARROW_PATHS = ['straight', 'curved', 'elbow'] as const
+export type ArrowPath = (typeof ARROW_PATHS)[number]
+export const ARROW_HEADS = ['end', 'both', 'none'] as const
+export type ArrowHeads = (typeof ARROW_HEADS)[number]
 
 export type PlacedElement = CardElement | TextElement | ShapeElement | StickyElement | StrokeElement | FrameElement
 export type BoardElement = PlacedElement | ArrowElement
@@ -125,7 +137,7 @@ const FIELDS: Record<BoardElement['kind'], Record<string, Shape>> = {
   sticky: { ...PLACED, text: 'string' },
   stroke: { ...PLACED, points: 'numbers', size: 'number', sw: 'number', sh: 'number', highlight: 'optional-boolean', parent: 'optional-string' },
   frame: { ...PLACED, title: 'optional-string' },
-  arrow: { rank: 'string', from: 'string', to: 'string', label: 'optional-string', color: 'optional-string', relation: 'optional-string' },
+  arrow: { rank: 'string', from: 'string', to: 'string', label: 'optional-string', color: 'optional-string', relation: 'optional-string', path: 'optional-string', heads: 'optional-string', dashed: 'optional-boolean', mentioned: 'optional-boolean' },
 }
 
 const fits = (shape: Shape, value: unknown) => {
@@ -156,6 +168,8 @@ function readElement(id: Id, entry: unknown): BoardElement | undefined {
     if (value !== undefined) element[name] = value
   }
   if (element.kind === 'shape' && !SHAPES.includes(element.shape as ShapeName)) element.shape = 'rectangle'
+  if (element.kind === 'arrow' && element.path !== undefined && !ARROW_PATHS.includes(element.path as ArrowPath)) delete element.path
+  if (element.kind === 'arrow' && element.heads !== undefined && !ARROW_HEADS.includes(element.heads as ArrowHeads)) delete element.heads
   if (element.kind === 'card' && element.view !== undefined && !CARD_VIEWS.includes(element.view as CardView)) delete element.view
   return element as unknown as BoardElement
 }

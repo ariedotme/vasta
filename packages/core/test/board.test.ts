@@ -154,6 +154,10 @@ describe('card views and linked arrows', () => {
     expect(read.find((e) => e.id === a)).toMatchObject({ view: 'embed' })
     expect(read.find((e) => e.id === b)).not.toHaveProperty('view')
     expect(read.find((e) => e.id === arrow)).toMatchObject({ relation: 'author' })
+    const [styled] = addBoardElements(doc, [{ kind: 'arrow', from: a!, to: b!, path: 'curved', heads: 'both', dashed: true, mentioned: true }])
+    expect(readBoard(doc).find((e) => e.id === styled)).toMatchObject({ path: 'curved', heads: 'both', dashed: true, mentioned: true })
+    doc.getMap<Y.Map<unknown>>(BOARD_FIELD).get(styled!)!.set('path', 'zigzag')
+    expect(readBoard(doc).find((e) => e.id === styled)).not.toHaveProperty('path')
   })
 })
 

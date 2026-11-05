@@ -35,7 +35,9 @@ import {
   type PlacedElement,
   type ShapeName,
 } from '@vasta/core'
-import { Y } from '@vasta/editor-schema/yjs'
+import { Y, readContent, writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
+import { openText, useReplica } from '../../lib/replica.ts'
+import { openRemoteText } from '../../lib/remote-text.ts'
 import { api } from '../../lib/api.ts'
 import { cachedSummary, lastError, primeSummaries, systemType, typesById, useSummaries } from '../../lib/state.ts'
 import { openMenuAt, promptDialog, type MenuItem } from '../../lib/overlays.ts'
@@ -46,6 +48,10 @@ import {
   PICKER_COLORS,
   SHAPE_ICONS,
   SHAPE_LABELS,
+  arrowRoute,
+  edgePoint,
+  routePath,
+  snapResize,
   boardClipboard,
   bounds,
   parseBoardClipboard,
@@ -286,18 +292,6 @@ function clipOf(element: PlacedElement, b: Box) {
 }
 const lost = computed(() => placed.value.length > 0 && shown.value.length === 0)
 
-/** Where a line from the middle of `b` towards (px, py) leaves it. */
-function edgePoint(b: Box, px: number, py: number) {
-  const cx = b.x + b.w / 2
-  const cy = b.y + b.h / 2
-  const dx = px - cx
-  const dy = py - cy
-  if (!dx && !dy) return { x: cx, y: cy }
-  const t = Math.min(dx ? b.w / 2 / Math.abs(dx) : Infinity, dy ? b.h / 2 / Math.abs(dy) : Infinity)
-  return { x: cx + dx * t, y: cy + dy * t }
-}
-const center = (b: Box) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 })
-
 const arrowPaths = computed(() =>
   arrows.value.flatMap((arrow) => {
     if (arrow.kind !== 'arrow') return []
@@ -307,9 +301,8 @@ const arrowPaths = computed(() =>
     const a = box(from)
     const b = box(to)
     if (!inView(a) && !inView(b)) return []
-    const start = edgePoint(a, center(b).x, center(b).y)
-    const end = edgePoint(b, center(a).x, center(a).y)
-    return [{ arrow, s: toScreen(start.x, start.y), e: toScreen(end.x, end.y), mid: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 } }]
+    const route = arrowRoute(a, b, arrow.path)
+    return [{ arrow, d: routePath(route, (p) => toScreen(p.x, p.y)), mid: route.mid }]
   })
 )
 const stroke = computed(() => Math.max(1, 1.75 * camera.zoom))
@@ -346,8 +339,9 @@ const stays = (t: Tool) => t === 'pen' || t === 'highlighter' || t === 'eraser' 
 type Point = { x: number; y: number }
 type Gesture =
   | { kind: 'pan'; sx: number; sy: number; x: number; y: number }
+  | { kind: 'scroll'; el: HTMLElement; top: number; sy: number }
   | { kind: 'move'; start: Point; moved: boolean; sx: number; sy: number; from: Box | undefined; others: Box[] }
-  | { kind: 'resize'; id: Id; start: Point; w: number; h: number }
+  | { kind: 'resize'; id: Id; start: Point; w: number; h: number; from: Box; others: Box[] }
   | { kind: 'marquee'; start: Point; end: Point; keep: Set<Id> }
   | { kind: 'connect'; from: Id; end: Point }
   | { kind: 'create'; what: 'shape' | 'sticky' | 'frame'; start: Point; end: Point }
@@ -432,6 +426,12 @@ function onPointerDown(event: PointerEvent) {
     if (!elementId) gesture.value = pan(p)
     return
   }
+  // A finger in a card's contents scrolls them (the board's own touch handling owns every touch).
+  const scroller = isTouch ? (event.target as Element).closest?.<HTMLElement>('[data-scroll]') : null
+  if (scroller && scroller.scrollHeight > scroller.clientHeight + 1 && !handle) {
+    gesture.value = { kind: 'scroll', el: scroller, top: scroller.scrollTop, sy: p.y }
+    return
+  }
   // With a pen around, fingers navigate.
   if (isTouch && penSeen.value && !handle) {
     gesture.value = pan(p)
@@ -439,7 +439,10 @@ function onPointerDown(event: PointerEvent) {
   }
   if (handle && elementId) {
     const element = byId.value.get(elementId)
-    if (handle === 'resize' && element && isPlaced(element)) gesture.value = { kind: 'resize', id: elementId, start: world, w: element.w, h: element.h }
+    if (handle === 'resize' && element && isPlaced(element)) {
+      const others = shown.value.filter(({ element: e }) => e.id !== elementId && e.kind !== 'stroke').map(({ box }) => box)
+      gesture.value = { kind: 'resize', id: elementId, start: world, w: element.w, h: element.h, from: box(element), others }
+    }
     else if (handle === 'connect') gesture.value = { kind: 'connect', from: elementId, end: world }
     return
   }
@@ -526,6 +529,8 @@ function onPointerMove(event: PointerEvent) {
     camera.zoom = zoom
     camera.x = mid.x - anchor.x * zoom
     camera.y = mid.y - anchor.y * zoom
+  } else if (g.kind === 'scroll') {
+    g.el.scrollTop = g.top - (p.y - g.sy)
   } else if (g.kind === 'pan') {
     leaveScene()
     camera.x = g.x + p.x - g.sx
@@ -550,7 +555,14 @@ function onPointerMove(event: PointerEvent) {
       const k = Math.max(w / g.w, h / g.h)
       w = Math.max(MIN.w, Math.round(g.w * k))
       h = Math.max(MIN.h, Math.round(g.h * k))
-    }
+      preview.guides = []
+    } else if (!event.altKey && !event.ctrlKey && !event.metaKey) {
+      // The right and bottom edges line up with other elements, as a move does.
+      const snapped = snapResize(g.from, w, h, g.others, SNAP_PX / camera.zoom)
+      w = Math.max(MIN.w, Math.round(snapped.w))
+      h = Math.max(MIN.h, Math.round(snapped.h))
+      preview.guides = snapped.guides
+    } else preview.guides = []
     preview.resize = { id: g.id, w, h }
   } else if (g.kind === 'marquee') {
     gesture.value = { ...g, end: world }
@@ -1014,6 +1026,26 @@ async function setRelation(arrowId: Id, propertyId: string, add: boolean) {
   }
 }
 
+/** The second card's object mentioned at the end of the first's text (its first text field), as a new line. */
+async function mentionInText(arrowId: Id) {
+  const joined = arrowObjects(byId.value.get(arrowId))
+  const field = joined?.typeA?.properties.find((p) => p.kind === 'rich-text')?.id
+  if (!joined || !field) return
+  try {
+    const session = useReplica() ? await openText(joined.a.id) : await openRemoteText(joined.a.id)
+    try {
+      const current = (readContent(session.doc)[field] as JsonDoc | undefined) ?? { type: 'doc', content: [] }
+      const line = { type: 'paragraph', content: [{ type: 'mention', attrs: { objectId: joined.b.id, label: joined.b.title } }] }
+      writeContent(session.doc, { [field]: { ...current, content: [...current.content, line] } }, undefined, [field])
+    } finally {
+      session.release()
+    }
+    update({ [arrowId]: { mentioned: true } })
+  } catch (error) {
+    lastError.value = (error as Error).message
+  }
+}
+
 /** The relation properties that can hold the arrow's target, to pick one (or to undo the link). */
 function linkMenu(event: MouseEvent) {
   const joined = linkable.value
@@ -1025,7 +1057,22 @@ function linkMenu(event: MouseEvent) {
   if (arrow.kind === 'arrow' && arrow.relation) items.push({ label: `Unlink (remove from ${relationName(arrow)})`, icon: 'ph:link-break', run: () => setRelation(arrow.id, arrow.relation!, false) })
   else if (options.length) for (const p of options) items.push({ label: `Add to “${p.name}”`, icon: 'ph:link-simple', run: () => setRelation(arrow.id, p.id, true) })
   else items.push({ label: `${typeA?.name ?? 'This type'} has no relation property that takes ${typeB?.pluralName ?? 'these'}`, disabled: true, run: () => {} })
+  // Or a mention in the text, for any two objects (the type needs a text field).
+  if (arrow.kind === 'arrow' && typeA?.properties.some((p) => p.kind === 'rich-text')) {
+    items.push({ kind: 'separator' })
+    items.push(
+      arrow.mentioned
+        ? { label: `Mentioned in ${displayTitle(a, typeA)}’s text`, icon: 'ph:at', disabled: true, run: () => {} }
+        : { label: `Mention it in ${displayTitle(a, typeA)}’s text`, icon: 'ph:at', run: () => mentionInText(arrow.id) }
+    )
+  }
   openMenuAt(rect.left, rect.bottom + 6, items)
+}
+
+function setArrowStyle(patch: BoardPatch) {
+  const patches: Record<Id, BoardPatch> = {}
+  for (const element of selected.value) if (element.kind === 'arrow') patches[element.id] = patch
+  update(patches)
 }
 
 function setColor(color: ColorName | undefined) {
@@ -1276,7 +1323,7 @@ const connecting = computed(() => {
   if (g?.kind !== 'connect') return null
   const from = byId.value.get(g.from)
   if (!from || !isPlaced(from)) return null
-  const start = edgePoint(box(from), g.end.x, g.end.y)
+  const start = edgePoint(box(from), g.end)
   return { s: toScreen(start.x, start.y), e: toScreen(g.end.x, g.end.y) }
 })
 /** The line being drawn, in board coordinates (inside the camera's layer). */
@@ -1343,16 +1390,18 @@ const cursor = computed(() => {
         </marker>
       </defs>
       <g v-for="path in arrowPaths" :key="path.arrow.id" :data-arrow="path.arrow.id">
-        <line :x1="path.s.x" :y1="path.s.y" :x2="path.e.x" :y2="path.e.y" stroke="transparent" :stroke-width="14" style="pointer-events: stroke" />
-        <line
-          :x1="path.s.x"
-          :y1="path.s.y"
-          :x2="path.e.x"
-          :y2="path.e.y"
-          :stroke="selection.has(path.arrow.id) ? 'var(--color-accent)' : path.arrow.kind === 'arrow' && path.arrow.color ? BOARD_COLORS[path.arrow.color] : 'var(--color-ink-soft)'"
+        <path :d="path.d" fill="none" stroke="transparent" :stroke-width="14" style="pointer-events: stroke" />
+        <path
+          v-if="path.arrow.kind === 'arrow'"
+          :d="path.d"
+          fill="none"
+          :stroke="selection.has(path.arrow.id) ? 'var(--color-accent)' : path.arrow.color ? BOARD_COLORS[path.arrow.color] : 'var(--color-ink-soft)'"
           :stroke-width="stroke"
+          :stroke-dasharray="path.arrow.dashed ? `${stroke * 4} ${stroke * 3}` : undefined"
           stroke-linecap="round"
-          marker-end="url(#wb-head)"
+          stroke-linejoin="round"
+          :marker-end="path.arrow.heads === 'none' ? undefined : 'url(#wb-head)'"
+          :marker-start="path.arrow.heads === 'both' ? 'url(#wb-head)' : undefined"
         />
       </g>
     </svg>
@@ -1379,15 +1428,16 @@ const cursor = computed(() => {
       />
 
       <div
-        v-for="path in arrowPaths.filter((p) => p.arrow.kind === 'arrow' && (p.arrow.label || p.arrow.relation))"
+        v-for="path in arrowPaths.filter((p) => p.arrow.kind === 'arrow' && (p.arrow.label || p.arrow.relation || p.arrow.mentioned))"
         :key="`label-${path.arrow.id}`"
         :data-arrow="path.arrow.id"
         class="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-line bg-surface px-1.5 py-0.5 text-xs text-ink-soft shadow-sm"
         :class="selection.has(path.arrow.id) ? 'border-accent text-ink' : ''"
         :style="{ left: `${path.mid.x}px`, top: `${path.mid.y}px`, zIndex: placed.length + 1 }"
       >
-        <AppIcon v-if="path.arrow.kind === 'arrow' && path.arrow.relation" fallback="ph:link-simple" :size="11" class="-mt-px mr-0.5 inline text-accent" />{{
-          path.arrow.kind === 'arrow' ? path.arrow.label || relationName(path.arrow) : ''
+        <AppIcon v-if="path.arrow.kind === 'arrow' && path.arrow.relation" fallback="ph:link-simple" :size="11" class="-mt-px mr-0.5 inline text-accent" />
+        <AppIcon v-else-if="path.arrow.kind === 'arrow' && path.arrow.mentioned" fallback="ph:at" :size="11" class="-mt-px mr-0.5 inline text-accent" />{{
+          path.arrow.kind === 'arrow' ? path.arrow.label || (path.arrow.relation ? relationName(path.arrow) : 'Mentioned') : ''
         }}
       </div>
 
@@ -1465,6 +1515,7 @@ const cursor = computed(() => {
       @rename="selected[0] && renameFrame(selected[0].id)"
       @open="openSelected"
       @view="setView"
+      @arrow-style="setArrowStyle"
       @link="linkMenu"
       :linkable="!!linkable"
       @draw-on="selected[0] && drawOn(selected[0].id)"
