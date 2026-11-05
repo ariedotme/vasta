@@ -221,7 +221,10 @@ The table layout's columns are `TableSettings` (`ViewDef.table`, `QueryDef.table
 of `{ field, width?, hidden?, wrap? }`, the field a property id or a built-in field (title, tags,
 type, collections, createdAt, updatedAt, date, host). The title is always first. Fields the list
 does not name (a property added later) come after the listed ones; without settings the table
-shows the title, tags, the types' properties and last edited.
+shows the title, tags, the types' properties and last edited. Property cells edit their value in
+place (`components/ObjectCollection.vue`, with the object page's `PropertyValueEditor`), except
+formulas and rich text: a cell saves only its field (`setProperty` in `lib/actions.ts`, the fetched
+object as the save's base), so a field changed elsewhere meanwhile is kept.
 
 **Boards** (the `kanban` layout, `components/BoardView.vue`): a column per group of the view's
 group field, with `ViewDef.board` / `QueryDef.board` (`BoardSettings`) for the rest:

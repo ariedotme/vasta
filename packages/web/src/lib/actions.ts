@@ -1,5 +1,5 @@
 import { childTag, newId, tagPathParts } from '@vasta/core'
-import { foodCommand, lineAsks, type FoodLineAnswer, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type Space, type TemplateAsk } from '@vasta/core'
+import { foodCommand, lineAsks, type FoodLineAnswer, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type PropertyValue, type SelectOption, type Space, type TemplateAsk } from '@vasta/core'
 import type { CaptureAnswer } from '@vasta/core/client'
 import { api } from './api.ts'
 import { clone } from './clone.ts'
@@ -19,6 +19,29 @@ export async function createObject(typeId: Id, data: Partial<ObjectRecord> = {},
   void refreshCounts()
   if (open) await router.push({ path: `/o/${object.id}`, query: { new: '1' } })
   return object
+}
+
+/**
+ * Sets one property of an object and saves it, as a table cell does. The fetched copy goes along
+ * as the base, so a field changed elsewhere meanwhile is kept and only this one is written.
+ */
+export async function setProperty(id: Id, propertyId: Id, value: PropertyValue | undefined): Promise<ObjectRecord> {
+  const object = await api.object(id)
+  const base = clone(object)
+  if (value) object.props[propertyId] = value
+  else delete object.props[propertyId]
+  const saved = await api.saveObject(object, base)
+  primeFromObject(saved)
+  return saved
+}
+
+/** Adds an option to a select property of a type (one made from a value editor) and saves the type. */
+export async function addSelectOption(type: ObjectType, propertyId: Id, option: SelectOption) {
+  const next = clone(type)
+  const target = next.properties.find((p) => p.id === propertyId)
+  if (target?.kind !== 'select') return
+  target.options.push(option)
+  replaceType(await api.saveType(next))
 }
 
 /** "YYYY-MM-DD" of a date in this device's calendar. */

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
-import { computed, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, TableSettings, ViewLayout } from '@vasta/core'
+import { computed, nextTick, ref, watch, type Directive } from 'vue'
+import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout } from '@vasta/core'
+import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
-import { typesById } from '../lib/state.ts'
+import { lastError, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
 import BoardView from './BoardView.vue'
@@ -16,6 +17,7 @@ import ObjectCard from './ObjectCard.vue'
 import ObjectChip from './ObjectChip.vue'
 import PersonChip from './PersonChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
+import PropertyValueEditor from './PropertyValueEditor.vue'
 
 const props = defineProps<{
   objects: ObjectSummary[]
@@ -85,6 +87,67 @@ function startResize(event: PointerEvent, column: Column) {
   handle.addEventListener('pointerup', end)
   handle.addEventListener('pointercancel', end)
 }
+// Editing in the table: a click anywhere on a property's cell (or Enter on it) opens its editor
+// there, one cell at a time; the related objects' chips and links in it do not navigate then. In a
+// query embedded in a page, presses in a cell stay out of the page editor, which would select the
+// embed and lose track of the document. A value shows as soon as it is picked (`edits`) and is saved like the object page
+// saves it; only the latest edit of a cell clears it, so quick changes do not flicker back.
+const EDITABLE = new Set<PropertyDef['kind']>(['text', 'url', 'number', 'checkbox', 'date', 'select', 'relation', 'person'])
+const editable = (column: Column) => !!column.def && EDITABLE.has(column.def.kind)
+const cellKey = (object: ObjectSummary, column: Column) => `${object.id} ${column.field}`
+const editing = ref('')
+const edits = ref<Record<string, PropertyValue | null>>({})
+const latest = new Map<string, number>()
+let saves = 0
+const container = ref<HTMLElement | null>(null)
+const valueOf = (object: ObjectSummary, column: Column) => {
+  const key = cellKey(object, column)
+  return key in edits.value ? (edits.value[key] ?? undefined) : object.props[column.field]
+}
+
+function startEdit(object: ObjectSummary, column: Column) {
+  if (!editable(column)) return
+  // A checkbox has nothing to open: a click toggles it.
+  if (column.def?.kind === 'checkbox') {
+    const value = valueOf(object, column)
+    void saveCell(object, column, { kind: 'checkbox', value: !(value?.kind === 'checkbox' && value.value) })
+  } else editing.value = cellKey(object, column)
+}
+
+/** Editing ended; the focus goes back to the cell when nothing else took it (Enter, Escape). */
+function endEdit(key: string) {
+  if (editing.value !== key) return
+  editing.value = ''
+  void nextTick(() => {
+    if (document.activeElement && document.activeElement !== document.body) return
+    container.value?.querySelector<HTMLElement>(`[data-cell="${CSS.escape(key)}"]`)?.focus()
+  })
+}
+
+async function saveCell(object: ObjectSummary, column: Column, value: PropertyValue | undefined) {
+  const key = cellKey(object, column)
+  const save = ++saves
+  latest.set(key, save)
+  edits.value = { ...edits.value, [key]: value ?? null }
+  try {
+    const saved = await setProperty(object.id, column.field, value)
+    if (latest.get(key) === save) emit('moved', saved)
+  } catch (error) {
+    lastError.value = (error as Error).message
+  } finally {
+    if (latest.get(key) === save) {
+      latest.delete(key)
+      const { [key]: _done, ...rest } = edits.value
+      edits.value = rest
+    }
+  }
+}
+
+function addOption(object: ObjectSummary, column: Column, option: SelectOption) {
+  const type = typeOf(object)
+  if (type) void addSelectOption(type, column.field, option).catch((error) => (lastError.value = (error as Error).message))
+}
+
 const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))
 
 </script>
@@ -106,7 +169,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
   />
 
   <!-- Container queries: the same view sits in a full page or in a narrow document column. -->
-  <div v-else class="@container">
+  <div v-else ref="container" class="@container">
     <section v-for="group in groups" :key="group.key" class="mt-4 first:mt-0">
       <header v-if="groupField" class="mb-3 flex items-center gap-2 text-sm">
         <span v-if="group.objectId"><ObjectChip :id="group.objectId" :tag="groupField === 'tags'" /></span>
@@ -167,6 +230,33 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 <span v-else-if="column.field === 'createdAt' || column.field === 'updatedAt'" class="text-xs text-ink-faint">{{ formatRelative(object[column.field]) }}</span>
                 <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
                 <span v-else-if="column.field === 'host'">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+                <PropertyValueEditor
+                  v-else-if="column.def && editing === cellKey(object, column)"
+                  :def="column.def"
+                  :value="valueOf(object, column)"
+                  autofocus
+                  class="-mx-2 -my-1.5"
+                  @update="saveCell(object, column, $event)"
+                  @add-option="addOption(object, column, $event)"
+                  @close="endEdit(cellKey(object, column))"
+                  @mousedown.stop
+                />
+                <div
+                  v-else-if="column.def && editable(column)"
+                  role="button"
+                  tabindex="0"
+                  class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/50"
+                  :class="column.wrap ? '' : 'overflow-hidden'"
+                  :aria-label="`${column.label}: edit`"
+                  :data-edit="column.field"
+                  :data-cell="cellKey(object, column)"
+                  @mousedown.stop
+                  @click.capture.prevent="startEdit(object, column)"
+                  @keydown.enter.self.prevent="startEdit(object, column)"
+                  @keydown.space.self.prevent="startEdit(object, column)"
+                >
+                  <PropertyDisplay :def="column.def" :value="valueOf(object, column)" :object="object" :wrap="column.wrap" />
+                </div>
                 <PropertyDisplay v-else-if="column.def" :def="column.def" :value="object.props[column.field]" :object="object" :wrap="column.wrap" />
               </td>
               <td />

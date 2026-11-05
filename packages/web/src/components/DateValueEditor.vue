@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Date property editor: start, optional end, all-day or timed, and an optional repeat rule.
 // Day values are stored at midnight UTC; timed values as instants from this device's clock.
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { DateValue } from '@vasta/core'
 import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
@@ -10,11 +10,14 @@ import { formatDate } from '../lib/format.ts'
 import AppIcon from './AppIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
-const props = defineProps<{ value: DateValue | undefined; withTime?: boolean }>()
-const emit = defineEmits<{ update: [value: DateValue | undefined] }>()
+// `autofocus`: open the picker on mount (a table cell being edited); `close` says it was closed.
+const props = defineProps<{ value: DateValue | undefined; withTime?: boolean; autofocus?: boolean }>()
+const emit = defineEmits<{ update: [value: DateValue | undefined]; close: [] }>()
 
 const anchor = ref<HTMLElement | null>(null)
 const open = ref(false)
+onMounted(() => props.autofocus && (open.value = true))
+watch(open, (value) => !value && emit('close'))
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const localDay = (iso: string) => dayKey(new Date(iso))
