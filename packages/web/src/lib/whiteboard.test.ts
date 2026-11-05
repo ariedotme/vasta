@@ -1,0 +1,62 @@
+import { describe, expect, it } from 'vitest'
+import { boardClipboard, parseBoardClipboard, shapePath, simplifyPoints, snapMove, strokeFromPoints, strokePath } from './whiteboard.ts'
+
+describe('pen strokes', () => {
+  it('drops the points of a straight run and keeps the corners', () => {
+    const points: number[] = []
+    for (let i = 0; i <= 10; i++) points.push(i * 10, 0, 0.5)
+    for (let i = 1; i <= 10; i++) points.push(100, i * 10, 0.5)
+    expect(simplifyPoints(points, 0.5)).toEqual([0, 0, 0.5, 100, 0, 0.5, 100, 100, 0.5])
+  })
+
+  it('keeps a wobble larger than the tolerance', () => {
+    expect(simplifyPoints([0, 0, 0.5, 50, 4, 0.5, 100, 0, 0.5], 1).length).toBe(9)
+    expect(simplifyPoints([0, 0, 0.5, 50, 0.4, 0.5, 100, 0, 0.5], 1).length).toBe(6)
+  })
+
+  it('puts a stroke in a box with room for its width, points relative to the corner', () => {
+    const stroke = strokeFromPoints([100, 200, 0.5, 140, 230, 0.5], 4)
+    expect(stroke).toMatchObject({ x: 96, y: 196, w: 48, h: 38, sw: 48, sh: 38 })
+    expect(stroke.points).toEqual([4, 4, 0.5, 44, 34, 0.5])
+  })
+
+  it('draws an outline path', () => {
+    expect(strokePath([0, 0, 0.5, 20, 20, 0.5, 40, 0, 0.5], 4)).toMatch(/^M[\d.,-]+ Q.*Z$/)
+    expect(strokePath([], 4)).toBe('')
+  })
+})
+
+describe('shapes', () => {
+  it('draws every shape inside its box', () => {
+    for (const shape of ['rectangle', 'ellipse', 'diamond', 'triangle', 'parallelogram', 'star', 'heart'] as const) {
+      const numbers = shapePath(shape, 100, 60).match(/-?\d+(\.\d+)?/g)!.map(Number)
+      expect(Math.min(...numbers)).toBeGreaterThanOrEqual(0)
+      expect(Math.max(...numbers)).toBeLessThanOrEqual(100)
+    }
+  })
+})
+
+describe('snapping', () => {
+  const other = { x: 300, y: 100, w: 200, h: 100 }
+
+  it('lines up left edges within the threshold and draws a guide', () => {
+    const moved = snapMove({ x: 0, y: 400, w: 100, h: 50 }, [other], 297, 0, 6)
+    expect(moved.dx).toBe(300)
+    expect(moved.dy).toBe(0)
+    expect(moved.guides).toEqual([{ axis: 'x', at: 300, from: 100, to: 450 }])
+  })
+
+  it('lines up middles, and leaves a move alone past the threshold', () => {
+    expect(snapMove({ x: 0, y: 0, w: 100, h: 50 }, [other], 352, 0, 6).dx).toBe(350)
+    expect(snapMove({ x: 0, y: 0, w: 100, h: 50 }, [other], 230, 0, 6)).toEqual({ dx: 230, dy: 0, guides: [] })
+  })
+})
+
+describe('clipboard', () => {
+  it('round-trips elements and ignores other text', () => {
+    const elements = [{ id: 'a', rank: 'a', kind: 'text' as const, text: 'Hi', x: 0, y: 0, w: 10, h: 10 }]
+    expect(parseBoardClipboard(boardClipboard(elements))).toEqual(elements)
+    expect(parseBoardClipboard('hello')).toBeUndefined()
+    expect(parseBoardClipboard('vasta-board:{nope')).toBeUndefined()
+  })
+})

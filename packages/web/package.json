@@ -30,6 +30,7 @@
     "@vasta/editor-schema": "workspace:*",
     "fflate": "0.8.2",
     "pele": "1.10.1",
+    "perfect-freehand": "1.2.2",
     "vue": "3.5.44",
     "vue-router": "5.4.0",
     "yjs": "13.6.33"

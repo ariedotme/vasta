@@ -206,6 +206,9 @@ importers:
       pele:
         specifier: 1.10.1
         version: 1.10.1
+      perfect-freehand:
+        specifier: 1.2.2
+        version: 1.2.2
       vue:
         specifier: 3.5.44
         version: 3.5.44(typescript@5.9.2)
@@ -1830,6 +1833,9 @@ packages:
 
   perfect-debounce@2.1.0:
     resolution: {integrity: sha512-LjgdTytVFXeUgtHZr9WYViYSM/g8MkcTPYDlPa3cDqMirHjKiSZPYd6DoL7pK8AJQr+uWkQvCjHNdiMqsrJs+g==}
+
+  perfect-freehand@1.2.2:
+    resolution: {integrity: sha512-eh31l019WICQ03pkF3FSzHxB8n07ItqIQ++G5UV8JX0zVOXzgTGCqnRR0jJ2h9U8/2uW4W4mtGJELt9kEV0CFQ==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -3677,6 +3683,8 @@ snapshots:
   pele@1.10.1: {}
 
   perfect-debounce@2.1.0: {}
+
+  perfect-freehand@1.2.2: {}
 
   picocolors@1.1.1: {}
 

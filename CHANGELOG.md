@@ -12,8 +12,12 @@ GitHub release page.
   objects on it as cards (drag them in, or press @), write text anywhere, and link elements with
   arrows that can have a label. Pan, zoom and pinch with a mouse, a trackpad or a touch screen;
   undo and redo; a full-screen mode. Boards sync and merge across devices, offline too, and cards
-  show up in their objects' backlinks. Shapes, drawing, frames and more come next.
-  [Whiteboards →](docs/whiteboards.md)
+  show up in their objects' backlinks. [Whiteboards →](docs/whiteboards.md)
+- **Drawing on whiteboards**: shapes, sticky notes, a pen with pressure and a highlighter, an
+  eraser, and frames that carry what is inside them. A bar over the selection sets colors and
+  shapes, brings things forward or back, duplicates and deletes; moving lines things up with
+  their neighbors; copy and paste work across boards. With an Apple Pencil, fingers only move the
+  view, a resting hand draws nothing, and two- and three-finger taps undo and redo.
 - Tag objects and set their icon and color from MCP and the CLI: `tags` (with `tagsMode` add,
   remove or replace), `icon` (an emoji or `ph:<name>`) and `color` on `create_object` and
   `update_object`; `--tag`, `--remove-tag`, `--set-tags`, `--icon` and `--color` on `vasta new`

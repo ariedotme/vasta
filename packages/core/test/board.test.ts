@@ -6,6 +6,9 @@ import {
   addBoardElements,
   boardContent,
   bringToFront,
+  copyElements,
+  insideFrame,
+  sendToBack,
   contentOfText,
   readBoard,
   removeBoardElements,
@@ -68,6 +71,76 @@ describe('board elements', () => {
     future.set('rank', 'z')
     doc.getMap(BOARD_FIELD).set('x', future)
     expect(readBoard(doc).map((e) => e.kind)).toEqual(['card'])
+  })
+})
+
+describe('drawing elements', () => {
+  const stroke = { kind: 'stroke' as const, points: [0, 0, 0.5, 10, 10, 0.5], size: 4, sw: 10, sh: 10, x: 5, y: 5, w: 10, h: 10 }
+
+  it('reads shapes, notes, strokes and frames back, frames under everything', () => {
+    const doc = new Y.Doc()
+    addBoardElements(doc, [
+      { kind: 'shape', shape: 'diamond', text: 'Decide', x: 0, y: 0, w: 120, h: 80, color: 'blue' },
+      { kind: 'sticky', text: 'Remember', x: 200, y: 0, w: 160, h: 160 },
+      stroke,
+    ])
+    const [frameId] = addBoardElements(doc, [{ kind: 'frame', title: 'Week', x: -20, y: -20, w: 600, h: 400 }])
+    const read = readBoard(doc)
+    expect(read.map((e) => e.kind)).toEqual(['frame', 'shape', 'sticky', 'stroke'])
+    expect(read[0]!.id).toBe(frameId)
+    expect(read[1]).toMatchObject({ shape: 'diamond', color: 'blue' })
+    expect(read[3]).toMatchObject({ points: stroke.points, size: 4 })
+  })
+
+  it('takes an unknown shape as a rectangle, and drops a stroke with bad points', () => {
+    const doc = new Y.Doc()
+    const [shape, bad] = addBoardElements(doc, [
+      { kind: 'shape', shape: 'rectangle', text: '', x: 0, y: 0, w: 10, h: 10 },
+      { ...stroke, points: [1, 2] },
+    ])
+    doc.getMap<Y.Map<unknown>>(BOARD_FIELD).get(shape!)!.set('shape', 'hexagon')
+    doc.getMap<Y.Map<unknown>>(BOARD_FIELD).get(bad!)!.set('points', ['x'])
+    expect(readBoard(doc).map((e) => [e.kind, 'shape' in e ? e.shape : undefined])).toEqual([['shape', 'rectangle']])
+  })
+
+  it('sends elements to the back, keeping their order', () => {
+    const doc = new Y.Doc()
+    const [a, b, c] = addBoardElements(doc, [card('o1'), card('o2'), card('o3')])
+    sendToBack(doc, [c!, b!])
+    expect(readBoard(doc).map((e) => e.id)).toEqual([b, c, a])
+  })
+
+  it('copies elements with new ids, and arrows only with both ends', () => {
+    const doc = new Y.Doc()
+    const [a, b, c] = addBoardElements(doc, [card('o1'), card('o2', 300), card('o3', 600)])
+    addBoardElements(doc, [{ kind: 'arrow', from: a!, to: b! }, { kind: 'arrow', from: b!, to: c! }])
+    const chosen = readBoard(doc).filter((e) => e.id !== c)
+    let n = 0
+    const copies = copyElements(chosen, 24, 24, () => `copy-${++n}`)
+    expect(copies.map((e) => e.kind)).toEqual(['card', 'card', 'arrow'])
+    expect(copies[0]).toMatchObject({ id: 'copy-1', x: 24, y: 24 })
+    expect(copies[2]).toMatchObject({ from: 'copy-1', to: 'copy-2' })
+  })
+
+  it('finds what lies wholly inside a frame', () => {
+    const doc = new Y.Doc()
+    const [frame] = addBoardElements(doc, [{ kind: 'frame', x: 0, y: 0, w: 500, h: 500 }])
+    const [inside] = addBoardElements(doc, [card('o1', 10, 10), card('o2', 400, 10)])
+    const read = readBoard(doc)
+    const f = read.find((e) => e.id === frame)!
+    expect(insideFrame(f as never, read).map((e) => e.id)).toEqual([inside])
+  })
+
+  it('lists a frame as a heading followed by what is in it, and leaves strokes out', () => {
+    const doc = new Y.Doc()
+    addBoardElements(doc, [
+      { kind: 'sticky', text: 'Outside', x: 0, y: 0, w: 100, h: 100 },
+      { kind: 'frame', title: 'Ideas', x: 0, y: 500, w: 600, h: 400 },
+      { kind: 'shape', shape: 'ellipse', text: 'Inside', x: 20, y: 520, w: 100, h: 60 },
+      { ...stroke, x: 30, y: 600 },
+    ])
+    const content = boardContent(readBoard(doc))!
+    expect(content.content.map((n) => (n.type === 'heading' ? `# ${n.content![0]!.text}` : n.content![0]!.text))).toEqual(['# Ideas', 'Inside', 'Outside'])
   })
 })
 
