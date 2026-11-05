@@ -1516,6 +1516,10 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     } catch {
       return c.json({ error: 'invalid key' }, 400)
     }
+    // Only for members of a space that uses the file; anyone else gets the same 404 as a file that
+    // does not exist.
+    const user = userOf(c)
+    if (!store.mediaSpaces(key).some((spaceId) => users.canUse(user.id, spaceId))) return c.json({ error: 'not found' }, 404)
     let file
     try {
       file = await media.get(key, c.req.header('range'))

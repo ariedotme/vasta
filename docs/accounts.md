@@ -153,9 +153,11 @@ stdin (`echo "$PASSWORD" | pnpm vasta user add …`).
 - Every route checks membership: a record in another space answers `404` as if it did not exist,
   lists and search only cover the user's spaces, and `/api/events` only sends changes of their
   spaces.
-- `/media/*` needs a login but does **not** check the space: file names are SHA-256 hashes of
-  their content, so they cannot be guessed, but anyone logged in who learns a hash can fetch it.
-  Fine for people who trust each other; revisit before opening sign-ups.
+- `/media/*` needs a login and serves a file only to members of a space that uses it: as an
+  object's file (an image, a PDF…), a weblink's preview picture, or a cover (`Store.mediaSpaces`,
+  trashed objects included). Anyone else gets the same `404` as for a file that does not exist,
+  even knowing its name (a SHA-256 hash of its content). A file nothing points at is served to
+  nobody.
 - The server fetches URLs for weblinks (pages, preview images) and calendars on behalf of any
   logged-in user. It refuses loopback, private, link-local and other non-internet addresses, after
   resolving the name and again on every redirect (`server/src/safe-fetch.ts`), and drops

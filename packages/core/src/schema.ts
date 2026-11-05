@@ -49,6 +49,11 @@ CREATE INDEX IF NOT EXISTS calendar_sources_rev ON calendar_sources(space_id, re
 DROP INDEX IF EXISTS objects_titles;
 CREATE INDEX IF NOT EXISTS objects_listing ON objects(space_id, deleted_at, template, type_id, title, aliases);
 CREATE INDEX IF NOT EXISTS objects_templates ON objects(space_id) WHERE template IS NOT NULL;
+-- Which objects use a media file (a file object, a weblink's preview, a cover): /media/<key> serves a
+-- file only to members of a space that uses it (Store.mediaSpaces).
+CREATE INDEX IF NOT EXISTS objects_media_file ON objects(json_extract(media, '$.file.key')) WHERE media IS NOT NULL;
+CREATE INDEX IF NOT EXISTS objects_media_preview ON objects(json_extract(media, '$.previewImageFile.key')) WHERE media IS NOT NULL;
+CREATE INDEX IF NOT EXISTS objects_cover ON objects(cover_url) WHERE cover_url IS NOT NULL;
 `
 
 export const SCHEMA_SQL = `

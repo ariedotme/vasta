@@ -774,6 +774,22 @@ export class Store {
     this.textSaved(id)
   }
 
+  /**
+   * The spaces whose objects use a media file: as the object's file, a weblink's preview picture, or
+   * a cover (`/media/<key>`). Trashed objects count (they can come back). Each part of the query
+   * has its own index.
+   */
+  mediaSpaces(key: string): Id[] {
+    const rows = this.db
+      .prepare(
+        `SELECT space_id FROM objects WHERE media IS NOT NULL AND json_extract(media, '$.file.key') = ?
+         UNION SELECT space_id FROM objects WHERE media IS NOT NULL AND json_extract(media, '$.previewImageFile.key') = ?
+         UNION SELECT space_id FROM objects WHERE cover_url IS NOT NULL AND cover_url IN (?, ?)`
+      )
+      .all(key, key, `/media/${key}`, `/media/${encodeURIComponent(key)}`) as Row[]
+    return rows.map((row) => row.space_id as Id)
+  }
+
   /** The Yjs state vectors of objects' rich text (what a client compares with its own to see if it lags). */
   textVectors(ids: Id[]): Map<Id, Uint8Array> {
     const rows = this.db.prepare('SELECT object_id, vector FROM object_docs WHERE object_id IN (SELECT value FROM json_each(?))').all(JSON.stringify(ids)) as Row[]

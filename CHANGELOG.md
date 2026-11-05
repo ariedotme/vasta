@@ -45,6 +45,12 @@ GitHub release page.
   `update_object`; `--tag`, `--remove-tag`, `--set-tags`, `--icon` and `--color` on `vasta new`
   and `vasta set`. Missing tags are created, nested ones by path (`recipe/breakfast`).
 
+### Fixed
+
+- **Files are only served to the spaces that use them.** A picture, PDF, cover or link preview
+  opens for members of a space whose objects use it; before, anyone logged in who knew a file's
+  name could fetch it (#2).
+
 ## 0.5.1 (2026-11-04)
 
 ### Fixed

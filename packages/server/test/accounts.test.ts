@@ -278,16 +278,39 @@ describe('accounts', () => {
     expect((await b.request('/api/spaces')).status).toBe(401)
   })
 
-  it('needs a login for media', async () => {
-    const { app, media, accounts } = setup()
-    await accounts.createUser({ username: 'arie', password: PASSWORD })
-    const { key } = await media.put(new Uint8Array([1, 2, 3]), 'dot.png')
-    expect((await app.request(`/media/${key}`)).status).toBe(401)
-    const b = browser(app)
-    await b.login('arie', PASSWORD)
-    const ok = await b.request(`/media/${key}`)
+  it('serves media only to members of a space that uses the file', async () => {
+    const { app, store, media, accounts } = setup()
+    await accounts.createUser({ username: 'arie', password: PASSWORD }) // gets the space "old"
+    const ana = await accounts.createUser({ username: 'ana', password: PASSWORD }) // a space of her own
+    const anaSpace = accounts.spacesOf(ana).find((s) => s.id !== 'old')!
+    const object = (id: string, spaceId: string, extra: Partial<ObjectRecord>): ObjectRecord => ({
+      id, spaceId, typeId: builtinTypeId(spaceId, 'image'), title: id, aliases: [], props: {}, content: {}, tagIds: [], collectionIds: [], createdAt: start, updatedAt: start, ...extra,
+    })
+    const photo = await media.put(new Uint8Array([1, 2, 3]), 'photo.png')
+    const cover = await media.put(new Uint8Array([4, 5, 6]), 'cover.png')
+    const preview = await media.put(new Uint8Array([7, 8, 9]), 'preview.png')
+    const loose = await media.put(new Uint8Array([9, 9, 9]), 'loose.png')
+    store.putObject(object('img', 'old', { media: { file: { key: photo.key, name: 'photo.png', sizeBytes: 3 } } }))
+    store.putObject({ ...object('page', anaSpace.id, { coverUrl: `/media/${cover.key}` }), typeId: builtinTypeId(anaSpace.id, 'page') })
+    store.putObject({ ...object('link', 'old', { media: { url: 'https://example.com', previewImageFile: { key: preview.key, name: 'preview.png', sizeBytes: 3 } } }), typeId: builtinTypeId('old', 'weblink') })
+
+    expect((await app.request(`/media/${photo.key}`)).status).toBe(401)
+    const a = browser(app)
+    await a.login('arie', PASSWORD)
+    const ok = await a.request(`/media/${photo.key}`)
     expect(ok.status).toBe(200)
     expect(ok.headers.get('cache-control')).toMatch(/^private/)
+    expect((await a.request(`/media/${preview.key}`)).status).toBe(200)
+    // Known hash, but the file is only used in Ana's space, or nowhere.
+    expect((await a.request(`/media/${cover.key}`)).status).toBe(404)
+    expect((await a.request(`/media/${loose.key}`)).status).toBe(404)
+
+    const b = browser(app)
+    await b.login('ana', PASSWORD)
+    expect((await b.request(`/media/${cover.key}`)).status).toBe(200)
+    expect((await b.request(`/media/${photo.key}`)).status).toBe(404)
+    accounts.share('old', ana.id, 'editor')
+    expect((await b.request(`/media/${photo.key}`)).status).toBe(200)
   })
 
   it('updates the profile from the app', async () => {

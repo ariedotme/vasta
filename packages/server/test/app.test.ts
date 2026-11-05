@@ -156,8 +156,10 @@ describe('server API', () => {
   })
 
   it('serves stored media, whole or a range, and rejects invalid keys', async () => {
-    const { app, media } = setup()
+    const { app, media, store } = setup()
     const file = await media.put(new Uint8Array([137, 80, 78, 71]), 'pic.png')
+    // Served to members of a space that uses it: an image object here.
+    store.putObject({ id: 'pic', spaceId: 's', typeId: builtinTypeId('s', 'image'), title: 'Pic', aliases: [], props: {}, content: {}, tagIds: [], collectionIds: [], createdAt: at, updatedAt: at, media: { file: { key: file.key, name: 'pic.png', sizeBytes: 4 } } })
     const response = await app.request(`/media/${file.key}`)
     expect(response.headers.get('content-type')).toBe('image/png')
     expect(response.headers.get('accept-ranges')).toBe('bytes')
