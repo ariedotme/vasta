@@ -25,6 +25,10 @@ GitHub release page.
   Mermaid diagram in a note into a whiteboard, and it becomes shapes and arrows you can move, with
   nodes named like your objects becoming their cards. Export a board as a JSON Canvas (Obsidian's
   `.canvas`) and import one, from the board's menu.
+- **Whiteboards in notes, live cards, linking arrows**: embed a whiteboard in a note, whole or
+  one of its frames; show a card as one line or with its contents (a query's live results, a
+  page's text); turn an arrow between two cards into a relation, so it shows in backlinks and
+  queries. The board menu lists its frames to jump to.
 - **Agents edit whiteboards**: `get_board` and `edit_board` over MCP, and `vasta board` in the
   terminal, read a board and add, move, change and connect its elements, flowcharts and canvases
   included.

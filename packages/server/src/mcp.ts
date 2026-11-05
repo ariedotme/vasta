@@ -323,6 +323,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
               shape: z.enum(['rectangle', 'ellipse', 'diamond', 'triangle', 'parallelogram', 'star', 'heart']).optional(),
               label: z.string().optional(),
               color: z.enum(COLOR_NAMES).nullable().optional(),
+              view: z.enum(['card', 'compact', 'embed']).optional().describe("A card's look: its card, one line, or its contents (a query's live results, the text)"),
             })
           )
           .optional(),

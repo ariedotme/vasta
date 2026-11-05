@@ -60,7 +60,7 @@ Code and Codex).
 | `delete_food_entry` | Take an entry off a day |
 | `save_food` | Make or fill in a food: nutrients per `per` grams as on its label (kept per 100 g), brand, portions |
 | `get_board` | A whiteboard's elements (cards with their object, text, sticky notes, shapes, frames, pen strokes without their ink) with boxes in board coordinates, and its arrows; `format: "canvas"` gives a JSON Canvas instead |
-| `edit_board` | Change a whiteboard in one step: `add` elements (`ref` names one for `arrows` in the same call; without `x`/`y` they are laid out in a grid to the right of the board), `arrows`, `update` (move, resize, recolor, retext, retitle, reshape, relabel), `remove`, `mermaid` (a flowchart laid out as shapes and arrows, nodes named like objects becoming their cards), `canvas` (a JSON Canvas to add) |
+| `edit_board` | Change a whiteboard in one step: `add` elements (`ref` names one for `arrows` in the same call; without `x`/`y` they are laid out in a grid to the right of the board), `arrows`, `update` (move, resize, recolor, retext, retitle, reshape, relabel, a card's `view`), `remove`, `mermaid` (a flowchart laid out as shapes and arrows, nodes named like objects becoming their cards), `canvas` (a JSON Canvas to add) |
 
 Without `space`, tools use the user's capture space; a space can be named by id or name. Types are
 named by name, plural or built-in key (`page`, `task`…), properties by name, select values by

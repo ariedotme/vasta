@@ -27,9 +27,17 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 - **Frames** (**F**): drag a box to make a named region; it sits under everything. Moving a frame
   (by its title or its edge) moves what lies wholly inside it. Double-click the title, or select
   it and press Enter, to rename it.
+- **Card views**: a card's view (in the selection bar) is its **card**, **one line**, or its
+  **contents**: a query's live results, a picture, or the text of anything else. Contents are for
+  reading; double-click the card to open the object.
 - **Arrows**: select an element and drag the dot on its right edge to another element, or pick
   the arrow tool (**L**) and drag from one element to another. Double-click an arrow (or select
   it and press Enter) to give it a label.
+- **Arrows that link objects**: select an arrow between two cards and pick the link in the
+  selection bar: it lists the relation properties of the first card's type that take the second's
+  type ("Add to “Source”"). The second object is written into that property, so the link shows in
+  backlinks, on the object's page and in queries; the arrow shows the property's name. The same
+  menu unlinks. Deleting the arrow keeps the relation (it is the objects' own data now).
 - **Select** with a click, Shift-click to add, or drag a box over empty space (a frame is taken
   when the box holds it whole). Drag to move: the selection lines up with other elements' edges
   and middles, with red guides; hold Alt, Ctrl or ⌘ to move freely. The corner handle resizes
@@ -53,6 +61,11 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   and put back within 180 ms where it left off), the line goes on as one stroke. Pressure readings
   are smoothed as they arrive, and a pen's points are only thinned by distance, so the width
   never jumps.
+- **Frames** list in the board menu (**⋯** › Frames): pick one to go to it.
+- **In a note**: embed a whiteboard as any object (@ or `/`). The embed shows the board, live; when
+  the board has frames, a menu in its header picks one, a **scene**, and the embed shows just it.
+  The scene is the embed's `blockId`, so Markdown keeps it: `![Board](vasta://o/<board>#b-<frame>)`.
+  Double-click the embed to open the board.
 - The board fills the page below the title and properties, so it opens whole without scrolling.
   The **full screen** button (top right) gives it the whole window; Esc leaves it once nothing is
   selected.
@@ -87,13 +100,13 @@ writes it.
 
 | kind    | fields |
 |---------|--------|
-| `card`   | `objectId` |
+| `card`   | `objectId`, `view` (optional: `compact`, `embed`) |
 | `text`   | `text` |
 | `shape`  | `shape` (rectangle, ellipse, diamond, triangle, parallelogram, star, heart; anything else reads as a rectangle), `text` |
 | `sticky` | `text` |
 | `stroke` | `points` (x, y, pressure in turn, relative to the box's corner, simplified), `size`, `sw`, `sh` (the box the points were drawn in, so a resized stroke scales them), `highlight` (optional), `parent` (optional: the element it is drawn on; then `x`, `y`, `w`, `h` are fractions of that element's box) |
 | `frame`  | `title` (optional) |
-| `arrow`  | `from`, `to` (element ids), `label` (optional), `color` (optional), `rank` |
+| `arrow`  | `from`, `to` (element ids), `label` (optional), `color` (optional), `relation` (optional: the relation property of the "from" card's object it wrote the "to" object into), `rank` |
 
 Every kind but arrows also has `x`, `y`, `w`, `h`, `rank` and an optional `color` (a color name;
 left out, the kind's own: ink, a yellow note).
@@ -148,5 +161,5 @@ JSON of the elements).
 
 ## Not yet
 
-Scenes (frames embedded in notes), card views (small, embed, media), arrows that bend, end in
-empty space or make relations, live queries on a board, frames in a table of contents. The plan is in issue #38.
+Arrows that bend or end in empty space, mentions (instead of relations) from arrows, scenes that
+hide what lies outside their frame, scrolling inside a card's contents. The plan is in issue #38.

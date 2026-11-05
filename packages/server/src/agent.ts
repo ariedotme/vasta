@@ -72,6 +72,7 @@ import {
   type Nutrients,
 } from '@vasta/core'
 import {
+  CARD_VIEWS,
   CanvasError,
   MermaidError,
   NODE_SIZE,
@@ -91,6 +92,7 @@ import {
   updateBoardElements,
   type BoardElement,
   type BoardPatch,
+  type CardView,
   type NewBoardElement,
 } from '@vasta/core'
 import { docToMarkdown, markdownToDoc } from '@vasta/core/markdown'
@@ -130,6 +132,7 @@ export interface BoardPatchInput {
   shape?: string
   label?: string
   color?: string | null
+  view?: string
 }
 
 export interface AgentOptions {
@@ -407,7 +410,7 @@ export class AgentTools {
 
   /** What an agent sees of an element (a stroke's ink left out; boxes in board coordinates). */
   private boardElement(element: BoardElement, all: Map<Id, BoardElement>) {
-    if (element.kind === 'arrow') return { id: element.id, kind: 'arrow', from: element.from, to: element.to, ...(element.label ? { label: element.label } : {}), ...(element.color ? { color: element.color } : {}) }
+    if (element.kind === 'arrow') return { id: element.id, kind: 'arrow', from: element.from, to: element.to, ...(element.label ? { label: element.label } : {}), ...(element.color ? { color: element.color } : {}), ...(element.relation ? { relation: element.relation } : {}) }
     let box = { x: element.x, y: element.y, w: element.w, h: element.h }
     if (isAttached(element)) {
       const parent = all.get(element.parent)
@@ -417,7 +420,7 @@ export class AgentTools {
     const base = { id: element.id, kind: element.kind, ...rounded, ...(element.color ? { color: element.color } : {}) }
     switch (element.kind) {
       case 'card':
-        return { ...base, object: { id: element.objectId, title: this.titleOf(element.objectId) ?? '(deleted)' } }
+        return { ...base, object: { id: element.objectId, title: this.titleOf(element.objectId) ?? '(deleted)' }, ...(element.view ? { view: element.view } : {}) }
       case 'text':
       case 'sticky':
         return { ...base, text: element.text }
@@ -558,6 +561,10 @@ export class AgentTools {
         for (const key of ['x', 'y', 'w', 'h'] as const) if (change[key] !== undefined && !isAttached(element)) patch[key] = Math.round(change[key])
         if (change.text !== undefined && 'text' in element) patch.text = change.text
         if (change.title !== undefined && element.kind === 'frame') patch.title = change.title || undefined
+        if (change.view !== undefined && element.kind === 'card') {
+          if (!CARD_VIEWS.includes(change.view as CardView)) throw new AgentError(`unknown card view "${change.view}" (${CARD_VIEWS.join(', ')})`)
+          patch.view = change.view === 'card' ? undefined : (change.view as CardView)
+        }
         if (change.shape !== undefined && element.kind === 'shape') {
           if (!isShapeName(change.shape)) throw new AgentError(`unknown shape "${change.shape}"`)
           patch.shape = change.shape

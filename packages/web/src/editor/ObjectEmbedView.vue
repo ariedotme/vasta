@@ -6,6 +6,7 @@ import AppIcon from '../components/AppIcon.vue'
 import EmbedFrame from '../components/EmbedFrame.vue'
 import QueryEmbed from '../components/QueryEmbed.vue'
 import BlockEmbed from './BlockEmbed.vue'
+import BoardEmbed from '../components/whiteboard/BoardEmbed.vue'
 import { chip, iconTextClasses } from '../lib/colors.ts'
 import { embedFor } from '../lib/embeds.ts'
 import { displayTitle } from '../lib/format.ts'
@@ -28,6 +29,9 @@ const broken = ref(false)
 const asImage = computed(() => display.value === 'image' && !!image.value && !broken.value)
 const pageId = inject(PAGE_OBJECT_ID, undefined)
 const isQuery = computed(() => type.value?.system === 'query')
+/** A whiteboard shows itself, or the frame (a scene) its blockId names. */
+const isBoard = computed(() => type.value?.system === 'whiteboard')
+const setScene = (frameId: string | null) => props.updateAttributes({ blockId: frameId, display: frameId ? 'block' : 'embed' })
 /** "Embed" display of a weblink from a known site: the provider's player instead of a card. */
 const player = computed(() => (display.value === 'embed' && type.value?.system === 'weblink' ? embedFor(summary.value?.media?.url) : undefined))
 </script>
@@ -35,8 +39,11 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
 <template>
   <!-- Queries put the drag handle on their header, so their controls stay usable. -->
   <NodeViewWrapper class="my-1" contenteditable="false" :data-drag-handle="isQuery ? undefined : ''">
+    <!-- A whiteboard, whole or one frame of it, in any display but one line -->
+    <BoardEmbed v-if="isBoard && display !== 'inline'" :board-id="objectId" :frame-id="blockId" :editable="editor.isEditable" @scene="setScene" />
+
     <!-- One block of the object: a read-only copy that follows it -->
-    <BlockEmbed v-if="blockId" :object-id="objectId" :block-id="blockId" />
+    <BlockEmbed v-else-if="blockId" :object-id="objectId" :block-id="blockId" />
 
     <!-- Inline: one line, like a link that takes a whole row -->
     <button v-else-if="display === 'inline'" class="flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-hover" @click="open">

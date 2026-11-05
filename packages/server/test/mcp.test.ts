@@ -277,6 +277,9 @@ describe('MCP endpoint', () => {
     expect(store.search('s', 'Ana').map((o) => o.id)).toContain(board.id)
     expect(events.some((e) => e.kind === 'object' && e.id === board.id)).toBe(true)
 
+    const viewed = await call('edit_board', { id: board.id, update: [{ id: edited.refs.plan, view: 'compact' }] })
+    expect(viewed.elements.find((e: { id: string }) => e.id === edited.refs.plan).view).toBe('compact')
+    await expect(call('edit_board', { id: board.id, update: [{ id: edited.refs.note, view: 'compact' }] })).resolves.toBeTruthy()
     const changed = await call('edit_board', { id: board.id, update: [{ id: edited.refs.note, text: 'Ask Ana on Monday', x: 500 }], remove: [edited.refs.plan] })
     expect(changed.elements.map((e: { kind: string; text?: string }) => e.text ?? e.kind)).toEqual(['frame', 'Ask Ana on Monday'])
     expect(changed.elements[1].x).toBe(500)

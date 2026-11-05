@@ -2,11 +2,12 @@
 // The bar above a board's selection: what can be done to what is selected, by kind (color,
 // shape, label, title, open), and to any selection (front, back, duplicate, delete).
 import { computed, ref } from 'vue'
-import { SHAPES, type BoardElement, type ColorName, type ShapeName } from '@vasta/core'
+import { SHAPES, type BoardElement, type CardView, type ColorName, type ShapeName } from '@vasta/core'
 import { BOARD_COLORS, PICKER_COLORS, SHAPE_ICONS, SHAPE_LABELS } from '../../lib/whiteboard.ts'
 import AppIcon from '../AppIcon.vue'
 
-const props = defineProps<{ elements: BoardElement[]; x: number; y: number; below: boolean }>()
+/** `linkable`: the selection is one arrow between two cards (it can become a relation). */
+const props = defineProps<{ elements: BoardElement[]; x: number; y: number; below: boolean; linkable?: boolean }>()
 const emit = defineEmits<{
   color: [color: ColorName | undefined]
   shape: [shape: ShapeName]
@@ -18,9 +19,18 @@ const emit = defineEmits<{
   rename: []
   open: []
   drawOn: []
+  view: [view: CardView]
+  link: [event: MouseEvent]
 }>()
 
-const open = ref<'color' | 'shape' | null>(null)
+const open = ref<'color' | 'shape' | 'view' | null>(null)
+const cards = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'card'))
+const currentView = computed<CardView>(() => (cards.value ? ((props.elements[0] as { view?: CardView }).view ?? 'card') : 'card'))
+const VIEWS: { id: CardView; label: string; icon: string }[] = [
+  { id: 'card', label: 'Card', icon: 'ph:cards' },
+  { id: 'compact', label: 'One line', icon: 'ph:rows' },
+  { id: 'embed', label: 'Contents (a query’s results, the text)', icon: 'ph:article' },
+]
 const colorable = computed(() => props.elements.some((e) => e.kind !== 'card'))
 const shapes = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'shape'))
 const single = computed(() => (props.elements.length === 1 ? props.elements[0] : undefined))
@@ -30,7 +40,7 @@ const current = computed(() => {
 })
 const currentShape = computed(() => (shapes.value ? (props.elements[0] as { shape: ShapeName }).shape : 'rectangle'))
 
-const toggle = (menu: 'color' | 'shape') => (open.value = open.value === menu ? null : menu)
+const toggle = (menu: 'color' | 'shape' | 'view') => (open.value = open.value === menu ? null : menu)
 const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink'
 </script>
 
@@ -73,10 +83,27 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
     >
       <AppIcon fallback="ph:pen-nib" :size="17" />
     </button>
+    <div v-if="cards" class="relative">
+      <button :class="button" title="How the card shows its object" aria-label="Card view" @click="toggle('view')">
+        <AppIcon :fallback="VIEWS.find((v) => v.id === currentView)!.icon" :size="17" />
+      </button>
+      <div v-if="open === 'view'" class="absolute left-0 top-full mt-1.5 w-max rounded-xl border border-line bg-surface p-1 shadow-md">
+        <button
+          v-for="v in VIEWS"
+          :key="v.id"
+          class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover"
+          :class="v.id === currentView ? 'text-accent' : 'text-ink'"
+          @click="(emit('view', v.id), (open = null))"
+        >
+          <AppIcon :fallback="v.icon" :size="16" />{{ v.label }}
+        </button>
+      </div>
+    </div>
+    <button v-if="linkable" :class="button" title="Link the objects (a relation)" aria-label="Link the objects" @click="emit('link', $event)"><AppIcon fallback="ph:link-simple" :size="17" /></button>
     <button v-if="single?.kind === 'card'" :class="button" title="Open" aria-label="Open" @click="emit('open')"><AppIcon fallback="ph:arrow-square-out" :size="17" /></button>
     <button v-if="single?.kind === 'arrow'" :class="button" title="Label (Enter)" aria-label="Label" @click="emit('label')"><AppIcon fallback="ph:tag-simple" :size="17" /></button>
     <button v-if="single?.kind === 'frame'" :class="button" title="Rename (Enter)" aria-label="Rename" @click="emit('rename')"><AppIcon fallback="ph:pencil-simple" :size="17" /></button>
-    <span v-if="colorable || shapes || single?.kind === 'card' || single?.kind === 'arrow' || single?.kind === 'frame' || single?.kind === 'shape' || single?.kind === 'sticky'" class="mx-0.5 h-5 w-px bg-line" />
+    <span v-if="colorable || shapes || cards || linkable || single?.kind === 'card' || single?.kind === 'arrow' || single?.kind === 'frame' || single?.kind === 'shape' || single?.kind === 'sticky'" class="mx-0.5 h-5 w-px bg-line" />
     <button :class="button" title="Bring to front (])" aria-label="Bring to front" @click="emit('front')"><AppIcon fallback="ph:arrow-line-up" :size="17" /></button>
     <button :class="button" title="Send to back ([)" aria-label="Send to back" @click="emit('back')"><AppIcon fallback="ph:arrow-line-down" :size="17" /></button>
     <button :class="button" title="Duplicate (⌘D)" aria-label="Duplicate" @click="emit('duplicate')"><AppIcon fallback="ph:copy" :size="17" /></button>

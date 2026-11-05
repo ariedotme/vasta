@@ -28,10 +28,15 @@ interface Placed {
   color?: ColorName
 }
 
+export const CARD_VIEWS = ['card', 'compact', 'embed'] as const
+/** How a card shows its object: the card (default), one line, or what it holds (a query's live results, a page's text, a picture). */
+export type CardView = (typeof CARD_VIEWS)[number]
+
 /** An object of the space, drawn as its card. */
 export interface CardElement extends Placed {
   kind: 'card'
   objectId: Id
+  view?: CardView
 }
 
 /** Free text that lives only on the board. */
@@ -92,6 +97,11 @@ export interface ArrowElement {
   to: Id
   label?: string
   color?: ColorName
+  /**
+   * Between two cards: the relation property (of the "from" card's object) that this arrow wrote
+   * the "to" card's object into, so the link shows in backlinks and queries too.
+   */
+  relation?: string
 }
 
 export type PlacedElement = CardElement | TextElement | ShapeElement | StickyElement | StrokeElement | FrameElement
@@ -109,13 +119,13 @@ export type BoardPatch = { [K in Exclude<UnionKeys<BoardElement>, 'id' | 'kind'>
 type Shape = 'number' | 'string' | 'optional-string' | 'optional-boolean' | 'numbers'
 const PLACED: Record<string, Shape> = { rank: 'string', x: 'number', y: 'number', w: 'number', h: 'number', color: 'optional-string' }
 const FIELDS: Record<BoardElement['kind'], Record<string, Shape>> = {
-  card: { ...PLACED, objectId: 'string' },
+  card: { ...PLACED, objectId: 'string', view: 'optional-string' },
   text: { ...PLACED, text: 'string' },
   shape: { ...PLACED, shape: 'string', text: 'string' },
   sticky: { ...PLACED, text: 'string' },
   stroke: { ...PLACED, points: 'numbers', size: 'number', sw: 'number', sh: 'number', highlight: 'optional-boolean', parent: 'optional-string' },
   frame: { ...PLACED, title: 'optional-string' },
-  arrow: { rank: 'string', from: 'string', to: 'string', label: 'optional-string', color: 'optional-string' },
+  arrow: { rank: 'string', from: 'string', to: 'string', label: 'optional-string', color: 'optional-string', relation: 'optional-string' },
 }
 
 const fits = (shape: Shape, value: unknown) => {
@@ -146,6 +156,7 @@ function readElement(id: Id, entry: unknown): BoardElement | undefined {
     if (value !== undefined) element[name] = value
   }
   if (element.kind === 'shape' && !SHAPES.includes(element.shape as ShapeName)) element.shape = 'rectangle'
+  if (element.kind === 'card' && element.view !== undefined && !CARD_VIEWS.includes(element.view as CardView)) delete element.view
   return element as unknown as BoardElement
 }
 

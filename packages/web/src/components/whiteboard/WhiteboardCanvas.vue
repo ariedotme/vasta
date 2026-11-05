@@ -27,6 +27,7 @@ import {
   updateBoardElements,
   type BoardElement,
   type BoardPatch,
+  type CardView,
   type ColorName,
   type Id,
   type NewBoardElement,
@@ -37,7 +38,8 @@ import {
 import { Y } from '@vasta/editor-schema/yjs'
 import { api } from '../../lib/api.ts'
 import { cachedSummary, lastError, primeSummaries, systemType, typesById, useSummaries } from '../../lib/state.ts'
-import { openMenuAt, promptDialog } from '../../lib/overlays.ts'
+import { openMenuAt, promptDialog, type MenuItem } from '../../lib/overlays.ts'
+import { displayTitle } from '../../lib/format.ts'
 import { canvasElements, isMermaidFlowchart, mermaidElements } from '../../lib/board-actions.ts'
 import {
   BOARD_COLORS,
@@ -61,7 +63,11 @@ import PopoverMenu from '../PopoverMenu.vue'
 import BoardItem from './BoardItem.vue'
 import SelectionBar from './SelectionBar.vue'
 
-const props = defineProps<{ doc: Y.Doc; boardId: Id; title?: string; readonly?: boolean }>()
+/**
+ * `embedded`: a still view inside a note (no tools, no saved camera), showing `focus` (a frame:
+ * a scene of the board) or the whole board.
+ */
+const props = defineProps<{ doc: Y.Doc; boardId: Id; title?: string; readonly?: boolean; embedded?: boolean; focus?: Id | null }>()
 const router = useRouter()
 
 /** Origin of this page's writes: what undo covers. */
@@ -123,6 +129,17 @@ const local = (event: { clientX: number; clientY: number }) => {
   const rect = root.value!.getBoundingClientRect()
   return { x: event.clientX - rect.left, y: event.clientY - rect.top }
 }
+/** An embedded board shows its scene (a frame) or everything; a little margin either way. */
+function fitFocus() {
+  const target = props.focus ? byId.value.get(props.focus) : undefined
+  if (target && isPlaced(target)) fit([target], 2)
+  else fit()
+}
+watch(
+  () => props.focus,
+  () => props.embedded && size.w && fitFocus()
+)
+
 /** The middle of the view, in board coordinates (where new things go). */
 const viewCenter = () => toWorld(size.w / 2, size.h / 2)
 
@@ -142,6 +159,7 @@ function loadCamera(): boolean {
 }
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 watch(camera, () => {
+  if (props.embedded) return
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     const { x: cx, y: cy } = viewCenter()
@@ -166,7 +184,8 @@ function fit(list: PlacedElement[] = placed.value, maxZoom = 1) {
     Object.assign(camera, { x: size.w / 2, y: size.h / 2, zoom: 1 })
     return
   }
-  const pad = 64
+  // A small view (an embed in a note) keeps a margin to scale.
+  const pad = Math.min(64, Math.min(size.w, size.h) / 12)
   const zoom = Math.min(maxZoom, Math.max(MIN_ZOOM, Math.min((size.w - pad * 2) / Math.max(all.w, 1), (size.h - pad * 2) / Math.max(all.h, 1))))
   camera.zoom = zoom
   camera.x = size.w / 2 - (all.x + all.w / 2) * zoom
@@ -862,7 +881,19 @@ async function askFlowchart() {
 }
 function boardMenu(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const frames = placed.value.filter((e) => e.kind === 'frame')
   openMenuAt(rect.left, rect.bottom + 6, [
+    ...(frames.length
+      ? [
+          {
+            kind: 'submenu' as const,
+            label: 'Frames',
+            icon: 'ph:frame-corners',
+            items: frames.map((f) => ({ label: (f.kind === 'frame' && f.title?.trim()) || 'Frame', icon: 'ph:square', run: () => (fit([f], 2), select([f.id])) })),
+          },
+          { kind: 'separator' as const },
+        ]
+      : []),
     { label: 'Export as JSON Canvas', icon: 'ph:download-simple', run: exportCanvas },
     ...(props.readonly
       ? []
@@ -871,6 +902,71 @@ function boardMenu(event: MouseEvent) {
           { label: 'Add a Mermaid flowchart…', icon: 'ph:flow-arrow', hint: 'or paste one', run: askFlowchart },
         ]),
   ])
+}
+
+// Card views ----------------------------------------------------------------------
+
+const VIEW_SIZES: Record<CardView, { w: number; h: number }> = { card: SIZES.card, compact: { w: 240, h: 44 }, embed: { w: 420, h: 320 } }
+function setView(view: CardView) {
+  const patches: Record<Id, BoardPatch> = {}
+  for (const element of selected.value) if (element.kind === 'card') patches[element.id] = { view: view === 'card' ? undefined : view, ...VIEW_SIZES[view] }
+  update(patches)
+}
+
+// Arrows as relations ---------------------------------------------------------------
+// An arrow between two cards can write the second card's object into a relation property of the
+// first's, so the link shows in backlinks and queries; the arrow remembers which property.
+
+/** The two objects an arrow joins, when it joins two cards. */
+function arrowObjects(arrow: BoardElement | undefined) {
+  if (arrow?.kind !== 'arrow') return undefined
+  const from = byId.value.get(arrow.from)
+  const to = byId.value.get(arrow.to)
+  if (from?.kind !== 'card' || to?.kind !== 'card') return undefined
+  const a = summaryById.value.get(from.objectId)
+  const b = summaryById.value.get(to.objectId)
+  return a && b ? { arrow, a, b, typeA: typesById.value.get(a.typeId), typeB: typesById.value.get(b.typeId) } : undefined
+}
+const linkable = computed(() => (selected.value.length === 1 ? arrowObjects(selected.value[0]) : undefined))
+function relationName(arrow: { relation?: string; from: Id }) {
+  const from = byId.value.get(arrow.from)
+  const type = from?.kind === 'card' ? typesById.value.get(summaryById.value.get(from.objectId)?.typeId ?? '') : undefined
+  return type?.properties.find((p) => p.id === arrow.relation)?.name ?? 'Linked'
+}
+
+async function setRelation(arrowId: Id, propertyId: string, add: boolean) {
+  const joined = arrowObjects(byId.value.get(arrowId))
+  if (!joined) return
+  const def = joined.typeA?.properties.find((p) => p.id === propertyId)
+  if (def?.kind !== 'relation') return
+  try {
+    const object = await api.object(joined.a.id)
+    const value = object.props[def.id]
+    const ids = value?.kind === 'relation' ? value.value : []
+    const next = add ? (def.multiple ? [...new Set([...ids, joined.b.id])] : [joined.b.id]) : ids.filter((id) => id !== joined.b.id)
+    const props = { ...object.props }
+    if (next.length) props[def.id] = { kind: 'relation', value: next }
+    else delete props[def.id]
+    const saved = await api.saveObject({ ...object, props }, object)
+    primeSummaries([{ ...saved, preview: joined.a.preview }])
+    update({ [arrowId]: { relation: add ? def.id : undefined } })
+  } catch (error) {
+    lastError.value = (error as Error).message
+  }
+}
+
+/** The relation properties that can hold the arrow's target, to pick one (or to undo the link). */
+function linkMenu(event: MouseEvent) {
+  const joined = linkable.value
+  if (!joined) return
+  const { arrow, typeA, typeB, a, b } = joined
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const options = (typeA?.properties ?? []).filter((p) => p.kind === 'relation' && (!p.targetTypeIds.length || p.targetTypeIds.includes(b.typeId)))
+  const items: MenuItem[] = [{ kind: 'heading', label: `${displayTitle(a, typeA)} → ${displayTitle(b, typeB)}` }]
+  if (arrow.kind === 'arrow' && arrow.relation) items.push({ label: `Unlink (remove from ${relationName(arrow)})`, icon: 'ph:link-break', run: () => setRelation(arrow.id, arrow.relation!, false) })
+  else if (options.length) for (const p of options) items.push({ label: `Add to “${p.name}”`, icon: 'ph:link-simple', run: () => setRelation(arrow.id, p.id, true) })
+  else items.push({ label: `${typeA?.name ?? 'This type'} has no relation property that takes ${typeB?.pluralName ?? 'these'}`, disabled: true, run: () => {} })
+  openMenuAt(rect.left, rect.bottom + 6, items)
 }
 
 function setColor(color: ColorName | undefined) {
@@ -1032,7 +1128,7 @@ onMounted(() => {
     const first = !size.w
     size.w = entry!.contentRect.width
     size.h = entry!.contentRect.height
-    if (first && !loadCamera()) fit()
+    if (first && (props.embedded || !loadCamera())) fitFocus()
   })
   observer.observe(root.value!)
   // iPadOS Scribble and text selection take a Pencil's touches (breaking a line in the middle)
@@ -1206,6 +1302,7 @@ const cursor = computed(() => {
         :editing="editing === element.id"
         :faded="preview.erasing.has(element.id)"
         :clip="clipOf(element, b)"
+        :board-id="boardId"
         :summary="element.kind === 'card' ? summaryById.get(element.objectId) : undefined"
         :type="element.kind === 'card' ? typesById.get(summaryById.get(element.objectId)?.typeId ?? '') : undefined"
         :style="{ zIndex: index + 1 }"
@@ -1215,14 +1312,16 @@ const cursor = computed(() => {
       />
 
       <div
-        v-for="path in arrowPaths.filter((p) => p.arrow.kind === 'arrow' && p.arrow.label)"
+        v-for="path in arrowPaths.filter((p) => p.arrow.kind === 'arrow' && (p.arrow.label || p.arrow.relation))"
         :key="`label-${path.arrow.id}`"
         :data-arrow="path.arrow.id"
         class="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-line bg-surface px-1.5 py-0.5 text-xs text-ink-soft shadow-sm"
         :class="selection.has(path.arrow.id) ? 'border-accent text-ink' : ''"
         :style="{ left: `${path.mid.x}px`, top: `${path.mid.y}px`, zIndex: placed.length + 1 }"
       >
-        {{ path.arrow.kind === 'arrow' ? path.arrow.label : '' }}
+        <AppIcon v-if="path.arrow.kind === 'arrow' && path.arrow.relation" fallback="ph:link-simple" :size="11" class="-mt-px mr-0.5 inline text-accent" />{{
+          path.arrow.kind === 'arrow' ? path.arrow.label || relationName(path.arrow) : ''
+        }}
       </div>
 
       <svg v-if="ink" class="pointer-events-none absolute left-0 top-0 overflow-visible" width="1" height="1" :style="{ zIndex: placed.length + 3 }">
@@ -1298,6 +1397,9 @@ const cursor = computed(() => {
       @label="selected[0] && labelArrow(selected[0].id)"
       @rename="selected[0] && renameFrame(selected[0].id)"
       @open="openSelected"
+      @view="setView"
+      @link="linkMenu"
+      :linkable="!!linkable"
       @draw-on="selected[0] && drawOn(selected[0].id)"
     />
 
@@ -1320,15 +1422,15 @@ const cursor = computed(() => {
     </template>
 
     <div v-if="!placed.length && !gesture" class="pointer-events-none absolute inset-0 grid place-items-center p-6 text-center text-sm text-ink-faint">
-      <p>{{ readonly ? 'This board is empty.' : 'Drag objects here from the sidebar, add one with @, draw with P, or double-click to write.' }}</p>
+      <p>{{ readonly || embedded ? 'This board is empty.' : 'Drag objects here from the sidebar, add one with @, draw with P, or double-click to write.' }}</p>
     </div>
-    <button v-if="lost" data-ui class="absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm shadow-sm hover:bg-hover" @click="fit()">
+    <button v-if="lost && !embedded" data-ui class="absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm shadow-sm hover:bg-hover" @click="fit()">
       Back to content
     </button>
 
     <!-- Pen options -->
     <div
-      v-if="!readonly && (tool === 'pen' || tool === 'highlighter')"
+      v-if="!readonly && !embedded && (tool === 'pen' || tool === 'highlighter')"
       data-ui
       class="absolute bottom-[calc(3.75rem+env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-line bg-surface p-1 shadow-md"
     >
@@ -1352,6 +1454,7 @@ const cursor = computed(() => {
 
     <!-- Tools -->
     <div
+      v-if="!embedded"
       data-ui
       class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-0.5 overflow-x-auto rounded-xl border border-line bg-surface p-1 shadow-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       :class="narrow ? 'left-3 max-w-[calc(100%-4.75rem)]' : 'left-1/2 max-w-[calc(100%-1.5rem)] -translate-x-1/2'"
@@ -1385,7 +1488,7 @@ const cursor = computed(() => {
     </div>
 
     <!-- Zoom -->
-    <div data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-3 flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md">
+    <div v-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-3 flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md">
       <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" title="Zoom out" aria-label="Zoom out" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom / 1.25)">
         <AppIcon fallback="ph:minus" :size="16" />
       </button>
@@ -1400,6 +1503,7 @@ const cursor = computed(() => {
 
     <!-- Board menu -->
     <button
+      v-if="!embedded"
       data-ui
       class="absolute right-[3.25rem] top-3 grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-ink-soft shadow-sm hover:bg-hover hover:text-ink"
       title="Board"

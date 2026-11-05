@@ -144,6 +144,19 @@ describe('drawing elements', () => {
   })
 })
 
+describe('card views and linked arrows', () => {
+  it('keeps a card’s view and an arrow’s relation, and drops a view it does not know', () => {
+    const doc = new Y.Doc()
+    const [a, b] = addBoardElements(doc, [{ ...card('o1'), view: 'embed' }, card('o2', 400)])
+    const [arrow] = addBoardElements(doc, [{ kind: 'arrow', from: a!, to: b!, relation: 'author' }])
+    doc.getMap<Y.Map<unknown>>(BOARD_FIELD).get(b!)!.set('view', 'hologram')
+    const read = readBoard(doc)
+    expect(read.find((e) => e.id === a)).toMatchObject({ view: 'embed' })
+    expect(read.find((e) => e.id === b)).not.toHaveProperty('view')
+    expect(read.find((e) => e.id === arrow)).toMatchObject({ relation: 'author' })
+  })
+})
+
 describe('strokes drawn on an element', () => {
   const onCard = (parent: string) => ({ kind: 'stroke' as const, parent, points: [0, 0, 0.5, 10, 10, 0.5], size: 2, sw: 10, sh: 10, x: 0.1, y: 0.1, w: 0.5, h: 0.5 })
 

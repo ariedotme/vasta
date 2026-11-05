@@ -6,9 +6,14 @@ import { computed } from 'vue'
 import type { ObjectSummary, ObjectType, PlacedElement } from '@vasta/core'
 import { STICKY_INK, fillColor, hasPressure, shapePath, stickyColor, strokeColor, strokePath } from '../../lib/whiteboard.ts'
 import ObjectCard from '../ObjectCard.vue'
+import AppIcon from '../AppIcon.vue'
+import BoardCardEmbed from './BoardCardEmbed.vue'
+import { iconTextClasses } from '../../lib/colors.ts'
+import { displayTitle } from '../../lib/format.ts'
 
 const props = defineProps<{
   element: PlacedElement
+  boardId: string
   box: { x: number; y: number; w: number; h: number }
   zoom: number
   selected: boolean
@@ -74,8 +79,15 @@ function onInput(event: Event) {
   >
     <!-- Object card -->
     <template v-if="element.kind === 'card'">
-      <ObjectCard v-if="summary" :object="summary" :type="type" variant="grid" class="pointer-events-none h-full" />
-      <div v-else class="grid h-full place-items-center rounded-xl border border-dashed border-line-strong bg-surface text-sm text-ink-faint">Loading…</div>
+      <template v-if="summary">
+        <div v-if="element.view === 'compact'" class="pointer-events-none flex h-full items-center gap-2 overflow-hidden rounded-lg border border-line bg-surface px-3 shadow-sm">
+          <AppIcon :icon="summary.icon ?? type?.icon" fallback="ph:file-text" :class="type?.color ? iconTextClasses[type.color] : 'text-ink-soft'" />
+          <span class="truncate font-medium">{{ displayTitle(summary, type) }}</span>
+        </div>
+        <BoardCardEmbed v-else-if="element.view === 'embed'" :object="summary" :type="type" :board-id="boardId" class="pointer-events-none" />
+        <ObjectCard v-else :object="summary" :type="type" variant="grid" class="pointer-events-none h-full" />
+      </template>
+      <div v-if="!summary" class="grid h-full place-items-center rounded-xl border border-dashed border-line-strong bg-surface text-sm text-ink-faint">Loading…</div>
     </template>
 
     <!-- Pen stroke: only its ink takes the pointer -->
