@@ -27,12 +27,14 @@ import QueryEditor from '../components/QueryEditor.vue'
 import QueryResults from '../components/QueryResults.vue'
 import ReverseRelations from '../components/ReverseRelations.vue'
 import WeblinkPanel from '../components/WeblinkPanel.vue'
+import WhiteboardCanvas from '../components/whiteboard/WhiteboardCanvas.vue'
 import DocEditor from '../editor/DocEditor.vue'
 import { dayKey, deleteForeverFlow, deleteObjectFlow, isInSidebar, openDay, pinItems, restoreObjectFlow, tagFromPath } from '../lib/actions.ts'
 import { api, mediaUrl, serverApi } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
+import { openRemoteText } from '../lib/remote-text.ts'
 import { PAGE_OBJECT_ID } from '../lib/page.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
@@ -83,7 +85,7 @@ const isNew = computed(() => route.query.new === '1')
 /** A link to one of the text's blocks (#b-<id>): the editors scroll to it. */
 const linkedBlock = computed(() => (route.hash.startsWith('#b-') ? route.hash.slice(3) : undefined))
 /** Dashboards built with columns need room; everything else reads better at text width. */
-const wide = computed(() => Object.values(object.value?.content ?? {}).some((doc) => doc.content.some((node) => node.type === 'columns')))
+const wide = computed(() => isWhiteboard.value || Object.values(object.value?.content ?? {}).some((doc) => doc.content.some((node) => node.type === 'columns')))
 
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -94,6 +96,16 @@ let timer: ReturnType<typeof setTimeout> | undefined
 const text = shallowRef<TextSession | null>(null)
 let base: ObjectRecord | undefined
 const textFields = computed(() => Object.fromEntries(richFields.value.map((p) => [p.id, text.value ? { doc: text.value.doc, field: p.id } : undefined])))
+/** A whiteboard's document: the text session, or one over the sync routes without the replica. */
+const isWhiteboard = computed(() => type.value?.system === 'whiteboard')
+const board = shallowRef<TextSession | null>(null)
+const boardFailed = ref(false)
+const boardFull = ref(false)
+/** Full screen, with the keys going to the board (Esc, the tools). */
+function toggleBoardFull() {
+  boardFull.value = !boardFull.value
+  void nextTick(() => document.querySelector<HTMLElement>('.whiteboard')?.focus({ preventScroll: true }))
+}
 /** Editors wait for the text session when the replica runs. */
 const editorsReady = ref(false)
 
@@ -173,6 +185,10 @@ onMounted(async () => {
     return
   }
   if (useReplica()) text.value = await openText(props.id).catch(() => null)
+  if (isWhiteboard.value && !props.embedded) {
+    board.value = text.value ?? (await openRemoteText(props.id).catch(() => null))
+    boardFailed.value = !board.value
+  }
   editorsReady.value = true
   await nextTick()
   autosize()
@@ -191,6 +207,7 @@ onBeforeUnmount(() => {
   stopListening()
   void save()
   text.value?.release()
+  if (board.value !== text.value) board.value?.release()
 })
 
 // Cover ---------------------------------------------------------------------
@@ -862,6 +879,24 @@ async function startFrom(template: ObjectRecord) {
           </div>
         </div>
         <QueryResults class="mt-4" :query="object.query ?? { typeIds: [] }" :parent-id="object.id" @table="setQuery({ ...(object.query ?? { typeIds: [] }), table: $event })" @board="setQuery({ ...(object.query ?? { typeIds: [] }), board: $event })" />
+      </section>
+
+      <section v-if="isWhiteboard && !embedded" class="mt-6">
+        <div
+          :class="boardFull ? 'fixed inset-0 z-40' : 'relative h-[max(28rem,calc(100dvh-16rem))] overflow-hidden rounded-xl border border-line'"
+          @keydown.esc="!$event.defaultPrevented && (boardFull = false)"
+        >
+          <WhiteboardCanvas v-if="board" :doc="board.doc" :board-id="object.id" :readonly="!!object.deletedAt" />
+          <div v-else class="grid h-full place-items-center text-sm text-ink-faint">{{ boardFailed ? 'This board needs a connection to the server.' : 'Opening the board…' }}</div>
+          <button
+            class="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-ink-soft shadow-sm hover:bg-hover hover:text-ink"
+            :title="boardFull ? 'Leave full screen (Esc)' : 'Full screen'"
+            :aria-label="boardFull ? 'Leave full screen' : 'Full screen'"
+            @click="toggleBoardFull"
+          >
+            <AppIcon :fallback="boardFull ? 'ph:corners-in' : 'ph:corners-out'" :size="16" />
+          </button>
+        </div>
       </section>
 
       <div v-for="(field, index) in richFields" :key="field.id" :class="embedded && index === 0 ? '' : 'mt-8'">

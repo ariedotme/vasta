@@ -72,6 +72,10 @@ the editor would save) and kept for search, links, previews, queries and the age
 `vector` is the document's state vector, so pulls hand it out without decoding documents. Yjs runs
 with garbage collection on: the server keeps no history.
 
+A whiteboard's elements live in the same document, in a `Y.Map` named `whiteboard` beside the text
+fragments, and sync with it; `objects.content.whiteboard` is derived from that map
+([whiteboards.md](whiteboards.md)).
+
 Every `putObject` goes through the Y.Doc: the fields whose JSON changed are diffed into their
 fragment (`updateYFragment`), so unchanged blocks keep their Yjs items and concurrent edits
 elsewhere still merge. A change that only deletes does not advance a state vector, so devices

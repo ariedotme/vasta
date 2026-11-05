@@ -36,9 +36,15 @@ export function checkDoc(doc: JsonDoc, schema: Schema = vastaSchema()): JsonDoc 
 /** A map in each Y.Doc for Vasta's own bookkeeping, not a text field (see markDeletions). */
 const META = 'vasta'
 
+/**
+ * A map in a whiteboard's Y.Doc holding its elements (@vasta/core board.ts), not a text field. The
+ * object's `content` has a field of this name too, derived from the map (the board as blocks).
+ */
+export const BOARD_FIELD = 'whiteboard'
+
 /** Names of the fields a Y.Doc holds text for (empty fragments count as absent). */
 export function textFields(ydoc: Y.Doc): string[] {
-  return [...ydoc.share.keys()].filter((name) => name !== META && ydoc.getXmlFragment(name).length > 0).sort()
+  return [...ydoc.share.keys()].filter((name) => name !== META && name !== BOARD_FIELD && ydoc.getXmlFragment(name).length > 0).sort()
 }
 
 /**
@@ -68,6 +74,7 @@ export function readContent(ydoc: Y.Doc, schema: Schema = vastaSchema()): Record
  */
 export function writeContent(ydoc: Y.Doc, content: Record<string, JsonDoc>, schema: Schema = vastaSchema(), fields?: Iterable<string>) {
   const names = new Set(fields ?? [...Object.keys(content), ...textFields(ydoc)])
+  names.delete(BOARD_FIELD) // derived from the board's map, never written as text
   const nodes = new Map([...names].map((name) => [name, content[name] ? PmNode.fromJSON(schema, content[name]) : undefined]))
   ydoc.transact(() => {
     for (const [name, node] of nodes) {

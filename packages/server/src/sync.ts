@@ -3,9 +3,9 @@
 // than the stored one, and Yjs updates of rich text; `text` hands out the Yjs updates a client
 // lacks. The app's other routes keep writing whole records; the store stamps them.
 import type { Id, ObjectRecord, ObjectType } from '@vasta/core'
-import { ClockDriftError, SYNC_TABLES, WriteRefused, applyFields, builtinTypeKey, canonicalJson, hlcTime, isHlc, isPushable, mergeFields, type SyncRecords, type SyncTable } from '@vasta/core'
+import { ClockDriftError, SYNC_TABLES, WriteRefused, applyFields, builtinTypeKey, canonicalJson, contentOfText, hlcTime, isHlc, isPushable, mergeFields, type SyncRecords, type SyncTable } from '@vasta/core'
 import type { NodeStore, PulledRow, SyncChange, SyncChangeResult, SyncRow, SyncTombstone } from '@vasta/core/node'
-import { Y, readContent } from '@vasta/editor-schema/yjs'
+import { Y } from '@vasta/editor-schema/yjs'
 
 export type { PulledRow, SyncChange, SyncChangeResult }
 
@@ -217,13 +217,13 @@ function applyText(store: NodeStore, id: Id, encoded: unknown): { ydoc: Y.Doc; c
   const update = Buffer.from(encoded, 'base64')
   if (update.length > MAX_TEXT_UPDATE) throw new Refused('text update too large')
   const ydoc = store.loadText(id) ?? new Y.Doc()
-  const before = { snapshot: Y.snapshot(ydoc), content: canonicalJson(readContent(ydoc)) }
+  const before = { snapshot: Y.snapshot(ydoc), content: canonicalJson(contentOfText(ydoc)) }
   try {
     Y.applyUpdate(ydoc, update)
   } catch {
     throw new Refused('text must be a base64 Yjs update')
   }
   if (ydoc.store.pendingStructs || ydoc.store.pendingDs) throw new Refused('the text update builds on changes the server lacks; pull first')
-  const changed = !Y.equalSnapshots(before.snapshot, Y.snapshot(ydoc)) || canonicalJson(readContent(ydoc)) !== before.content
+  const changed = !Y.equalSnapshots(before.snapshot, Y.snapshot(ydoc)) || canonicalJson(contentOfText(ydoc)) !== before.content
   return { ydoc, changed }
 }

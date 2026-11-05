@@ -284,6 +284,7 @@ extensions/browser/      "Save to Vasta" browser extension
 - [Agents](docs/agents.md): the MCP endpoint and the CLI
 - [Reminders](docs/reminders.md): ntfy, Telegram and the desktop app
 - [Sync](docs/sync.md): how local-first sync works
+- [Whiteboards](docs/whiteboards.md): boards of object cards, text and arrows, and how they sync
 - [Import](docs/import.md): bringing your notes over from Capacities
 
 The server also describes its capture API at `/api/openapi.json` (OpenAPI 3.1).

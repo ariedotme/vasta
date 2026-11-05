@@ -151,6 +151,8 @@ const specs: Record<SystemTypeKey, BuiltinSpec> = {
       body,
     ],
   },
+  // Elements live in the object's Y.Doc (board.ts); the description says what the board is for.
+  whiteboard: { name: 'Whiteboard', pluralName: 'Whiteboards', icon: 'ph:chalkboard-simple', properties: [] },
   quote: { name: 'Quote', pluralName: 'Quotes', icon: 'ph:quotes', properties: [{ id: SOURCE_PROPERTY_ID, kind: 'relation', name: 'Source', targetTypeIds: [], multiple: false }, body] },
   // Nutrition (nutrition.ts): made in a space when it turns food tracking on.
   food: {

@@ -32,6 +32,7 @@ key because the app gives them special behavior:
 | `food`, `recipe`, `nutrition-goal` | food tracking, made in a space only when it turns it on (see [Nutrition](#nutrition)) |
 | `sprint`     | a time box for tasks, made when a space turns sprints on (see [Sprints](#sprints)): `dates` (a date range), `goal` (text), named as the space calls them |
 | `quote`      | a passage saved from an object's text ("Save as quote" on a selection): the passage is the title, `source` (relation, "Source") the object it came from, `body` an optional note. The passage keeps a highlight mark with the quote's id (`attrs.quoteId`); deleting the quote removes it (`Store.deleteObject`), and re-saving a weblink's readable text finds it again by its text |
+| `whiteboard` | an endless canvas of object cards, text and arrows. The elements live in the object's Y.Doc (a `Y.Map` named `whiteboard`), and `content.whiteboard` is derived from them (cards as embeds, text as paragraphs) for backlinks, search and agents. See [whiteboards.md](whiteboards.md) |
 
 Built-in type ids are `<system>:<spaceId>`; custom type ids are UUIDs. Types added to Vasta later
 (Quote, 2026-10-19; Habit, 2026-10-20) reach older spaces when the server starts (`ensureBuiltinTypes`),

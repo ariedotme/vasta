@@ -138,7 +138,7 @@ export interface Invite {
 export type SystemTypeKey =
   | 'page' | 'daily-note' | 'tag' | 'collection' | 'query' | 'task'
   | 'weblink' | 'date' | 'image' | 'pdf' | 'audio' | 'video' | 'file' | 'quote' | 'habit'
-  | 'food' | 'recipe' | 'nutrition-goal' | 'sprint'
+  | 'food' | 'recipe' | 'nutrition-goal' | 'sprint' | 'whiteboard'
 
 export interface ObjectType {
   id: Id

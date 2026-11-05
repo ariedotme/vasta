@@ -3,7 +3,7 @@
 // a file, delete for good, members, subscriptions) always goes to it, with the replica synced
 // before and after.
 import type { ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
-import { dayIn, type CaptureDestinations } from '@vasta/core'
+import { SYNC_PROTOCOL, dayIn, type CaptureDestinations } from '@vasta/core'
 import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
 import { noteNetworkError, noteResponse } from './network.ts'
@@ -535,3 +535,10 @@ export const mediaUrl = (key: string) => `/media/${encodeURIComponent(key)}`
 
 /** Largest upload the server takes (MAX_UPLOAD_BYTES in packages/server/src/app.ts). */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+/** The sync routes, for a page that edits an object's Y.Doc without the replica (a whiteboard: lib/remote-text.ts). */
+export const syncApi = {
+  /** The text updates the server has beyond these state vectors (base64; empty for all of it). */
+  text: async (vectors: Record<Id, string>) => (await request<{ objects: Record<Id, string> }>('POST', '/api/sync/text', { protocol: SYNC_PROTOCOL, objects: vectors })).objects,
+  pushText: async (id: Id, update: string) => (await request<{ changes: { id: Id; error?: string }[] }>('POST', '/api/sync/push', { protocol: SYNC_PROTOCOL, changes: [{ table: 'objects', id, text: update }] })).changes[0],
+}

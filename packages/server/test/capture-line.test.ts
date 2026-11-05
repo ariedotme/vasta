@@ -88,7 +88,7 @@ describe('leading type', () => {
   })
 
   it('offers types made from a title and properties', () => {
-    expect(types.filter(isCapturable).map((t) => t.system ?? t.id)).toEqual(['page', 'tag', 'collection', 'task', 'habit', 'book', 'list'])
+    expect(types.filter(isCapturable).map((t) => t.system ?? t.id)).toEqual(['page', 'tag', 'collection', 'task', 'habit', 'whiteboard', 'book', 'list'])
   })
 })
 

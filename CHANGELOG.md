@@ -8,6 +8,12 @@ GitHub release page.
 
 ### Added
 
+- **Whiteboards** (first version): a new built-in type whose page is an endless canvas. Put
+  objects on it as cards (drag them in, or press @), write text anywhere, and link elements with
+  arrows that can have a label. Pan, zoom and pinch with a mouse, a trackpad or a touch screen;
+  undo and redo; a full-screen mode. Boards sync and merge across devices, offline too, and cards
+  show up in their objects' backlinks. Shapes, drawing, frames and more come next.
+  [Whiteboards →](docs/whiteboards.md)
 - Tag objects and set their icon and color from MCP and the CLI: `tags` (with `tagsMode` add,
   remove or replace), `icon` (an emoji or `ph:<name>`) and `color` on `create_object` and
   `update_object`; `--tag`, `--remove-tag`, `--set-tags`, `--icon` and `--color` on `vasta new`
