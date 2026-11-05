@@ -174,4 +174,4 @@ JSON of the elements).
 
 Others' cursors on a shared board: they come with live collaboration in notes
 ([#22](https://github.com/ariedotme/vasta/issues/22)), which boards will share. Rotating shapes,
-a lasso, resizing several elements at once. The plan is in issue #38.
+a lasso, resizing several elements at once ([#51](https://github.com/ariedotme/vasta/issues/51)). The plan is in issue #38.
