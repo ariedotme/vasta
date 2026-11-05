@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardClipboard, parseBoardClipboard, shapePath, simplifyPoints, snapMove, strokeFromPoints, strokePath } from './whiteboard.ts'
+import { boardClipboard, parseBoardClipboard, shapePath, simplifyPoints, snapMove, strokeFromPoints, strokePath, thinPoints } from './whiteboard.ts'
 
 describe('pen strokes', () => {
   it('drops the points of a straight run and keeps the corners', () => {
@@ -12,6 +12,11 @@ describe('pen strokes', () => {
   it('keeps a wobble larger than the tolerance', () => {
     expect(simplifyPoints([0, 0, 0.5, 50, 4, 0.5, 100, 0, 0.5], 1).length).toBe(9)
     expect(simplifyPoints([0, 0, 0.5, 50, 0.4, 0.5, 100, 0, 0.5], 1).length).toBe(6)
+  })
+
+  it('thins a pen line by distance only, keeping its pressure changes and its last point', () => {
+    const points = [0, 0, 0.2, 0.1, 0, 0.3, 1, 0, 0.4, 2, 0, 0.9, 2.1, 0, 0.5]
+    expect(thinPoints(points, 0.5)).toEqual([0, 0, 0.2, 1, 0, 0.4, 2, 0, 0.9, 2.1, 0, 0.5])
   })
 
   it('puts a stroke in a box with room for its width, points relative to the corner', () => {

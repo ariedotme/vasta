@@ -45,6 +45,7 @@ import {
   parseBoardClipboard,
   simplifyPoints,
   snapMove,
+  thinPoints,
   strokeColor,
   strokeFromPoints,
   strokePath,
@@ -302,7 +303,7 @@ type Gesture =
   | { kind: 'marquee'; start: Point; end: Point; keep: Set<Id> }
   | { kind: 'connect'; from: Id; end: Point }
   | { kind: 'create'; what: 'shape' | 'sticky' | 'frame'; start: Point; end: Point }
-  | { kind: 'draw'; points: number[]; pressure: boolean }
+  | { kind: 'draw'; points: number[]; pressure: boolean; smooth: number; continues?: Id }
   | { kind: 'erase' }
   | { kind: 'pinch'; distance: number; zoom: number; mid: Point; cam: Point }
 const gesture = shallowRef<Gesture | null>(null)
@@ -395,7 +396,14 @@ function onPointerDown(event: PointerEvent) {
     return
   }
   if (tool.value === 'pen' || tool.value === 'highlighter') {
-    gesture.value = { kind: 'draw', points: [world.x, world.y, pressureOf(event)], pressure: event.pointerType === 'pen' }
+    // A pen lifted for an instant and put back where it left off goes on with the same line
+    // (iPadOS can break a line in two mid-stroke).
+    const last = lastLine
+    const resumes = last && event.pointerType === 'pen' && event.timeStamp - last.at < 180 && Math.hypot(p.x - last.end.x, p.y - last.end.y) < 14 && byId.value.has(last.id) && last.attach === attach.value
+    const smooth = pressureOf(event)
+    gesture.value = resumes
+      ? { kind: 'draw', points: [...last.points, world.x, world.y, smooth], pressure: true, smooth, continues: last.id }
+      : { kind: 'draw', points: [world.x, world.y, smooth], pressure: event.pointerType === 'pen', smooth }
     select([])
     return
   }
@@ -512,11 +520,14 @@ function onPointerMove(event: PointerEvent) {
     // Coalesced events carry the points a pen sent between two frames.
     const events = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : []
     const points = [...g.points]
+    let smooth = g.smooth
     for (const e of events.length ? events : [event]) {
       const w = toWorld(local(e).x, local(e).y)
-      points.push(Math.round(w.x * 100) / 100, Math.round(w.y * 100) / 100, pressureOf(e))
+      // A pen's pressure readings jitter: follow them smoothly so the width does not flicker.
+      smooth = g.pressure ? smooth + 0.35 * (pressureOf(e) - smooth) : 0.5
+      points.push(Math.round(w.x * 100) / 100, Math.round(w.y * 100) / 100, Math.round(smooth * 1000) / 1000)
     }
-    gesture.value = { ...g, points }
+    gesture.value = { ...g, points, smooth }
   } else if (g.kind === 'erase') {
     eraseAt(event)
   }
@@ -540,6 +551,11 @@ function onPointerUp(event: PointerEvent) {
     return
   }
   if (!g) return
+  // The system took the pointer (a gesture, Scribble): keep what was drawn, drop anything else.
+  if (event.type === 'pointercancel' && g.kind === 'draw') {
+    finishStroke(g, event)
+    return cancelGesture()
+  }
   if (event.type === 'pointercancel' && g.kind !== 'pan') return cancelGesture()
   if (g.kind === 'move' && g.moved && (preview.dx || preview.dy)) {
     const patches: Record<Id, BoardPatch> = {}
@@ -564,7 +580,7 @@ function onPointerUp(event: PointerEvent) {
   } else if (g.kind === 'create') {
     createAt(g)
   } else if (g.kind === 'draw') {
-    finishStroke(g)
+    finishStroke(g, event)
   } else if (g.kind === 'erase' && preview.erasing.size) {
     remove([...preview.erasing])
   }
@@ -581,6 +597,11 @@ function onWheel(event: WheelEvent) {
     camera.x -= (event.shiftKey && !event.deltaX ? event.deltaY : event.deltaX) * unit
     camera.y -= (event.shiftKey && !event.deltaX ? 0 : event.deltaY) * unit
   }
+}
+
+function onStylusTouch(event: TouchEvent) {
+  const touches = [...event.changedTouches] as (Touch & { touchType?: string })[]
+  if (touches.some((t) => t.touchType === 'stylus')) event.preventDefault()
 }
 
 // Safari on a Mac pinches with gesture events instead of wheels.
@@ -655,11 +676,15 @@ function createAt(g: Extract<Gesture, { kind: 'create' }>) {
   if (g.what === 'sticky') startEditing(id!)
 }
 
-function finishStroke(g: Extract<Gesture, { kind: 'draw' }>) {
+/** The last line a pen drew: a pen put back down where it lifted, right away, continues it. */
+let lastLine: { id: Id; at: number; end: Point; points: number[]; attach: Id | null } | null = null
+
+function finishStroke(g: Extract<Gesture, { kind: 'draw' }>, event: PointerEvent) {
   const highlight = tool.value === 'highlighter'
   const size = Math.round(penWidth() * 100) / 100
-  // A quarter of a screen pixel: only points that change nothing go.
-  const points = simplifyPoints(g.points, 0.25 / camera.zoom)
+  // A pen's points only thin out by distance (each keeps its pressure); a mouse's or finger's,
+  // at an even width, simplify to the corners. A quarter of a screen pixel either way.
+  const points = g.pressure ? thinPoints(g.points, 0.5 / camera.zoom) : simplifyPoints(g.points, 0.25 / camera.zoom)
   // A dot: a tap with the pen.
   if (points.length === 3) points.push(points[0]! + 0.5, points[1]! + 0.5, points[2]!)
   const placedStroke = strokeFromPoints(points, size)
@@ -671,7 +696,13 @@ function finishStroke(g: Extract<Gesture, { kind: 'draw' }>) {
         return { x: (placedStroke.x - p.x) / p.w, y: (placedStroke.y - p.y) / p.h, w: placedStroke.w / p.w, h: placedStroke.h / p.h, parent: target.id }
       })()
     : {}
-  add([{ kind: 'stroke', size, ...placedStroke, ...where, ...(pen.color && !highlight ? { color: pen.color } : {}), ...(highlight ? { highlight: true } : {}) }])
+  const stroke = { kind: 'stroke' as const, size, ...placedStroke, ...where, ...(pen.color && !highlight ? { color: pen.color } : {}), ...(highlight ? { highlight: true } : {}) }
+  let id = g.continues
+  if (id && byId.value.has(id)) {
+    const { kind: _kind, ...fields } = stroke
+    update({ [id]: fields })
+  } else id = add([stroke])[0]!
+  lastLine = event.pointerType === 'pen' ? { id, at: event.timeStamp, end: local(event), points: g.points, attach: attach.value } : null
 }
 
 const pickerOpen = ref(false)
@@ -925,6 +956,10 @@ onMounted(() => {
     if (first && !loadCamera()) fit()
   })
   observer.observe(root.value!)
+  // iPadOS Scribble and text selection take a Pencil's touches (breaking a line in the middle)
+  // unless they are cancelled; fingers keep their touches for the browser.
+  root.value!.addEventListener('touchstart', onStylusTouch, { passive: false })
+  root.value!.addEventListener('touchmove', onStylusTouch, { passive: false })
   root.value!.addEventListener('gesturestart', onGestureStart)
   root.value!.addEventListener('gesturechange', onGestureChange)
 })
@@ -1294,6 +1329,7 @@ const cursor = computed(() => {
 
 <style scoped>
 .whiteboard {
+  -webkit-touch-callout: none;
   background-image: radial-gradient(circle, var(--color-line-strong) 1px, transparent 1.2px);
 }
 </style>

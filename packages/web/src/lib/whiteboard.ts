@@ -157,6 +157,24 @@ export function simplifyPoints(points: number[], tolerance: number): number[] {
 }
 const round = (n: number) => Math.round(n * 100) / 100
 
+/**
+ * For a pen's points: drop only those closer than `minDistance` to the last one kept (the last
+ * point always stays). Unlike simplifyPoints this keeps every change of pressure along the line,
+ * so the width never jumps where points were left out.
+ */
+export function thinPoints(points: number[], minDistance: number): number[] {
+  const n = points.length / 3
+  if (n <= 2) return [...points]
+  const out = [points[0]!, points[1]!, points[2]!]
+  for (let i = 1; i < n; i++) {
+    const [x, y, p] = [points[i * 3]!, points[i * 3 + 1]!, points[i * 3 + 2]!]
+    const last = i === n - 1
+    if (!last && Math.hypot(x - out[out.length - 3]!, y - out[out.length - 2]!) < minDistance) continue
+    out.push(round(x), round(y), Math.round(p * 100) / 100)
+  }
+  return out
+}
+
 /** A stroke drawn in board coordinates, as an element: its box and its points relative to the box's corner. */
 export function strokeFromPoints(points: number[], size: number) {
   let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity]

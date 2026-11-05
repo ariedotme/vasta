@@ -48,7 +48,11 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   they cover this device's changes on the board, not other people's.
 - **With a pen** (Apple Pencil and the like): once a pen has touched the board, fingers only move
   and zoom the view, and touches are ignored while the pen is down, so a resting hand draws
-  nothing.
+  nothing. The board cancels the Pencil's touches so iPadOS Scribble and text selection do
+  not take them mid-line; if the system still breaks a line (a cancelled pointer, the pen lifted
+  and put back within 180 ms where it left off), the line goes on as one stroke. Pressure readings
+  are smoothed as they arrive, and a pen's points are only thinned by distance, so the width
+  never jumps.
 - The board fills the page below the title and properties, so it opens whole without scrolling.
   The **full screen** button (top right) gives it the whole window; Esc leaves it once nothing is
   selected.
