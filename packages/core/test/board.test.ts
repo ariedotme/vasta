@@ -144,6 +144,40 @@ describe('drawing elements', () => {
   })
 })
 
+describe('strokes drawn on an element', () => {
+  const onCard = (parent: string) => ({ kind: 'stroke' as const, parent, points: [0, 0, 0.5, 10, 10, 0.5], size: 2, sw: 10, sh: 10, x: 0.1, y: 0.1, w: 0.5, h: 0.5 })
+
+  it('go with the element, and are dropped when it is gone elsewhere', () => {
+    const doc = new Y.Doc()
+    const [a, b] = addBoardElements(doc, [card('o1'), card('o2', 400)])
+    addBoardElements(doc, [onCard(a!), onCard(b!)])
+    removeBoardElements(doc, [a!])
+    expect(readBoard(doc).filter((e) => e.kind === 'stroke').map((e) => (e as { parent: string }).parent)).toEqual([b])
+    // Deleted on another device while this one drew on it.
+    doc.getMap<Y.Map<unknown>>(BOARD_FIELD).get(b!)!.delete('objectId')
+    expect(readBoard(doc).filter((e) => e.kind === 'stroke')).toHaveLength(0)
+  })
+
+  it('are copied only with their element, onto the copy', () => {
+    const doc = new Y.Doc()
+    const [a] = addBoardElements(doc, [card('o1')])
+    addBoardElements(doc, [onCard(a!)])
+    const all = readBoard(doc)
+    let n = 0
+    const copies = copyElements(all, 24, 24, () => `c${++n}`)
+    expect(copies[1]).toMatchObject({ kind: 'stroke', parent: 'c1', x: 0.1 })
+    expect(copyElements(all.filter((e) => e.kind === 'stroke'), 24, 24)).toEqual([])
+  })
+
+  it('do not count as lying inside a frame (they go with their element)', () => {
+    const doc = new Y.Doc()
+    const [frame, a] = addBoardElements(doc, [{ kind: 'frame', x: 0, y: 0, w: 1000, h: 1000 }, card('o1', 10, 10)])
+    addBoardElements(doc, [onCard(a!)])
+    const read = readBoard(doc)
+    expect(insideFrame(read.find((e) => e.id === frame) as never, read).map((e) => e.kind)).toEqual(['card'])
+  })
+})
+
 describe('board merges', () => {
   it('keeps two devices’ offline moves of different elements, and of different fields of one', () => {
     let ids: string[] = []

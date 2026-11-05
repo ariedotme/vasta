@@ -14,6 +14,8 @@ const props = defineProps<{
   selected: boolean
   editing: boolean
   faded?: boolean
+  /** A stroke drawn on an element is cut at that element's edges (insets from this box, in board units). */
+  clip?: { top: number; right: number; bottom: number; left: number }
   summary?: ObjectSummary
   type?: ObjectType
 }>()
@@ -77,7 +79,13 @@ function onInput(event: Event) {
     </template>
 
     <!-- Pen stroke: only its ink takes the pointer -->
-    <svg v-else-if="element.kind === 'stroke'" class="absolute inset-0 overflow-visible" :width="box.w" :height="box.h">
+    <svg
+      v-else-if="element.kind === 'stroke'"
+      class="absolute inset-0 overflow-visible"
+      :width="box.w"
+      :height="box.h"
+      :style="clip ? { clipPath: `inset(${Math.max(0, clip.top)}px ${Math.max(0, clip.right)}px ${Math.max(0, clip.bottom)}px ${Math.max(0, clip.left)}px)` } : undefined"
+    >
       <path
         :d="path"
         :data-element="element.id"

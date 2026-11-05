@@ -97,9 +97,11 @@ function pointTriples(points: number[], sx = 1, sy = 1): [number, number, number
 export function strokePath(points: number[], size: number, options: { sx?: number; sy?: number; pen?: boolean; last?: boolean } = {}): string {
   const outline = getStroke(pointTriples(points, options.sx, options.sy), {
     size,
-    thinning: 0.55,
-    smoothing: 0.5,
-    streamline: 0.4,
+    // A light touch of a real pen still makes a line a third as wide, never a broken hairline.
+    thinning: options.pen ? 0.45 : 0.5,
+    easing: options.pen ? (t) => 0.3 + 0.7 * Math.sin((t * Math.PI) / 2) : (t) => t,
+    smoothing: 0.6,
+    streamline: 0.45,
     simulatePressure: !options.pen,
     last: options.last ?? true,
   })
@@ -153,7 +155,7 @@ export function simplifyPoints(points: number[], tolerance: number): number[] {
   for (let i = 0; i < n; i++) if (keep[i]) out.push(round(x(i)), round(y(i)), Math.round(points[i * 3 + 2]! * 100) / 100)
   return out
 }
-const round = (n: number) => Math.round(n * 10) / 10
+const round = (n: number) => Math.round(n * 100) / 100
 
 /** A stroke drawn in board coordinates, as an element: its box and its points relative to the box's corner. */
 export function strokeFromPoints(points: number[], size: number) {

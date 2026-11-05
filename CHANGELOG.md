@@ -18,6 +18,9 @@ GitHub release page.
   shapes, brings things forward or back, duplicates and deletes; moving lines things up with
   their neighbors; copy and paste work across boards. With an Apple Pencil, fingers only move the
   view, a resting hand draws nothing, and two- and three-finger taps undo and redo.
+- **Draw on a card, note or frame**: pick the pen in the selection bar and what you draw sticks to
+  that element, moving and resizing with it.
+- A whiteboard's page fits the board to the screen, so it opens without scrolling.
 - Tag objects and set their icon and color from MCP and the CLI: `tags` (with `tagsMode` add,
   remove or replace), `icon` (an emoji or `ph:<name>`) and `color` on `create_object` and
   `update_object`; `--tag`, `--remove-tag`, `--set-tags`, `--icon` and `--color` on `vasta new`

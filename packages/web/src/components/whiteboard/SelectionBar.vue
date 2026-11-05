@@ -17,6 +17,7 @@ const emit = defineEmits<{
   label: []
   rename: []
   open: []
+  drawOn: []
 }>()
 
 const open = ref<'color' | 'shape' | null>(null)
@@ -63,10 +64,19 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
         </button>
       </div>
     </div>
+    <button
+      v-if="single && single.kind !== 'arrow' && single.kind !== 'stroke' && single.kind !== 'text'"
+      :class="button"
+      title="Draw on it: the strokes move and resize with it"
+      aria-label="Draw on it"
+      @click="emit('drawOn')"
+    >
+      <AppIcon fallback="ph:pen-nib" :size="17" />
+    </button>
     <button v-if="single?.kind === 'card'" :class="button" title="Open" aria-label="Open" @click="emit('open')"><AppIcon fallback="ph:arrow-square-out" :size="17" /></button>
     <button v-if="single?.kind === 'arrow'" :class="button" title="Label (Enter)" aria-label="Label" @click="emit('label')"><AppIcon fallback="ph:tag-simple" :size="17" /></button>
     <button v-if="single?.kind === 'frame'" :class="button" title="Rename (Enter)" aria-label="Rename" @click="emit('rename')"><AppIcon fallback="ph:pencil-simple" :size="17" /></button>
-    <span v-if="colorable || shapes || single?.kind === 'card' || single?.kind === 'arrow' || single?.kind === 'frame'" class="mx-0.5 h-5 w-px bg-line" />
+    <span v-if="colorable || shapes || single?.kind === 'card' || single?.kind === 'arrow' || single?.kind === 'frame' || single?.kind === 'shape' || single?.kind === 'sticky'" class="mx-0.5 h-5 w-px bg-line" />
     <button :class="button" title="Bring to front (])" aria-label="Bring to front" @click="emit('front')"><AppIcon fallback="ph:arrow-line-up" :size="17" /></button>
     <button :class="button" title="Send to back ([)" aria-label="Send to back" @click="emit('back')"><AppIcon fallback="ph:arrow-line-down" :size="17" /></button>
     <button :class="button" title="Duplicate (⌘D)" aria-label="Duplicate" @click="emit('duplicate')"><AppIcon fallback="ph:copy" :size="17" /></button>

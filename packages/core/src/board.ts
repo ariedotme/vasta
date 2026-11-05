@@ -70,6 +70,11 @@ export interface StrokeElement extends Placed {
   sh: number
   /** A highlighter: drawn wide and see-through. */
   highlight?: boolean
+  /**
+   * Drawn on another element (a card, a frame…): then `x`, `y`, `w` and `h` are fractions of that
+   * element's box, so the stroke moves and scales with it, and goes when it goes.
+   */
+  parent?: Id
 }
 
 /** A named region; moving it moves what lies inside. */
@@ -108,7 +113,7 @@ const FIELDS: Record<BoardElement['kind'], Record<string, Shape>> = {
   text: { ...PLACED, text: 'string' },
   shape: { ...PLACED, shape: 'string', text: 'string' },
   sticky: { ...PLACED, text: 'string' },
-  stroke: { ...PLACED, points: 'numbers', size: 'number', sw: 'number', sh: 'number', highlight: 'optional-boolean' },
+  stroke: { ...PLACED, points: 'numbers', size: 'number', sw: 'number', sh: 'number', highlight: 'optional-boolean', parent: 'optional-string' },
   frame: { ...PLACED, title: 'optional-string' },
   arrow: { rank: 'string', from: 'string', to: 'string', label: 'optional-string', color: 'optional-string' },
 }
@@ -157,8 +162,11 @@ export function readBoard(ydoc: Y.Doc): BoardElement[] {
     const element = readElement(id, entry)
     if (element) elements.push(element)
   }
-  const placed = new Set(elements.filter(isPlaced).map((e) => e.id))
-  return elements.filter((e) => e.kind !== 'arrow' || (placed.has(e.from) && placed.has(e.to) && e.from !== e.to)).sort((a, b) => Number(b.kind === 'frame') - Number(a.kind === 'frame') || byRank(a, b))
+  // A stroke drawn on an element needs it (and the element must not be a stroke itself).
+  const holders = new Set(elements.filter((e) => isPlaced(e) && e.kind !== 'stroke').map((e) => e.id))
+  const kept = elements.filter((e) => e.kind !== 'stroke' || !e.parent || holders.has(e.parent))
+  const placed = new Set(kept.filter(isPlaced).map((e) => e.id))
+  return kept.filter((e) => e.kind !== 'arrow' || (placed.has(e.from) && placed.has(e.to) && e.from !== e.to)).sort((a, b) => Number(b.kind === 'frame') - Number(a.kind === 'frame') || byRank(a, b))
 }
 
 const topRank = (ydoc: Y.Doc) => {
@@ -203,18 +211,23 @@ export function updateBoardElements(ydoc: Y.Doc, patches: Record<Id, BoardPatch>
   }, origin)
 }
 
-/** Delete elements, and the arrows that start or end at them. */
+/** Delete elements, the arrows that start or end at them and the strokes drawn on them. */
 export function removeBoardElements(ydoc: Y.Doc, ids: Id[], origin?: unknown) {
   const gone = new Set(ids)
   ydoc.transact(() => {
     const map = boardMap(ydoc)
     for (const [id, entry] of map) {
-      const from = entry instanceof Y.Map ? entry.get('from') : undefined
-      const to = entry instanceof Y.Map ? entry.get('to') : undefined
-      if (gone.has(id) || gone.has(from as Id) || gone.has(to as Id)) map.delete(id)
+      const field = (name: string) => (entry instanceof Y.Map ? (entry.get(name) as Id | undefined) : undefined)
+      if (gone.has(id) || [field('from'), field('to'), field('parent')].some((other) => other !== undefined && gone.has(other))) map.delete(id)
     }
   }, origin)
 }
+
+/** Whether an element is a stroke drawn on another element (its box is in fractions of that one's). */
+export const isAttached = (element: BoardElement): element is StrokeElement & { parent: Id } => element.kind === 'stroke' && !!element.parent
+
+/** The strokes drawn on an element. */
+export const attachedTo = (id: Id, elements: BoardElement[]) => elements.filter((e): e is StrokeElement => e.kind === 'stroke' && e.parent === id)
 
 /** Put elements under all others, keeping their order among themselves. */
 export function sendToBack(ydoc: Y.Doc, ids: Id[], origin?: unknown) {
@@ -230,7 +243,8 @@ export function sendToBack(ydoc: Y.Doc, ids: Id[], origin?: unknown) {
 
 /**
  * Copies of elements, for pasting or duplicating: new ids, moved by (dx, dy). Arrows come along
- * only when both their ends do.
+ * only when both their ends do, strokes drawn on an element only with it (they keep their place
+ * on it).
  */
 export function copyElements(elements: BoardElement[], dx: number, dy: number, makeId: () => Id = newId): (NewBoardElement & { id: Id })[] {
   const ids = new Map(elements.map((e) => [e.id, makeId()]))
@@ -240,6 +254,9 @@ export function copyElements(elements: BoardElement[], dx: number, dy: number, m
       const from = ids.get(element.from)
       const to = ids.get(element.to)
       if (from && to) copies.push({ ...element, id: ids.get(id)!, from, to })
+    } else if (element.kind === 'stroke' && element.parent) {
+      const parent = ids.get(element.parent)
+      if (parent) copies.push({ ...element, id: ids.get(id)!, parent, points: [...element.points] })
     } else copies.push({ ...element, id: ids.get(id)!, x: element.x + dx, y: element.y + dy, ...(element.kind === 'stroke' ? { points: [...element.points] } : {}) })
   }
   return copies
@@ -248,7 +265,7 @@ export function copyElements(elements: BoardElement[], dx: number, dy: number, m
 /** Elements whose box lies wholly inside a frame's (what moves with it). */
 export function insideFrame(frame: FrameElement, elements: BoardElement[]): PlacedElement[] {
   return elements.filter(
-    (e): e is PlacedElement => isPlaced(e) && e.id !== frame.id && e.x >= frame.x && e.y >= frame.y && e.x + e.w <= frame.x + frame.w && e.y + e.h <= frame.y + frame.h
+    (e): e is PlacedElement => isPlaced(e) && !isAttached(e) && e.id !== frame.id && e.x >= frame.x && e.y >= frame.y && e.x + e.w <= frame.x + frame.w && e.y + e.h <= frame.y + frame.h
   )
 }
 

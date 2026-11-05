@@ -14,8 +14,10 @@ import {
   BOARD_FIELD,
   addBoardElements,
   bringToFront,
+  attachedTo,
   copyElements,
   insideFrame,
+  isAttached,
   isPlaced,
   readBoard,
   removeBoardElements,
@@ -190,6 +192,15 @@ const preview = reactive<{ dx: number; dy: number; moving: Set<Id>; resize: { id
 
 /** Where an element is drawn now, with what is being dragged. */
 function box(element: PlacedElement): Box {
+  if (isAttached(element)) {
+    const parent = byId.value.get(element.parent)
+    if (parent && isPlaced(parent) && !isAttached(parent)) {
+      const p = box(parent)
+      // Moved on its own (not with the element it is drawn on).
+      const own = preview.moving.has(element.id) && !preview.moving.has(parent.id)
+      return { x: p.x + element.x * p.w + (own ? preview.dx : 0), y: p.y + element.y * p.h + (own ? preview.dy : 0), w: element.w * p.w, h: element.h * p.h }
+    }
+  }
   const moving = preview.moving.has(element.id)
   const resized = preview.resize?.id === element.id ? preview.resize : null
   return {
@@ -208,7 +219,22 @@ const view = computed(() => {
 })
 const inView = (b: Box) => b.x < view.value.right && b.x + b.w > view.value.left && b.y < view.value.bottom && b.y + b.h > view.value.top
 /** Only what is in view (and what is selected) is drawn, so big boards stay quick. */
-const shown = computed(() => placed.value.map((element, index) => ({ element, index, box: box(element) })).filter(({ element, box }) => selection.value.has(element.id) || inView(box)))
+const shown = computed(() => {
+  // Strokes drawn on an element are drawn right above it, whatever their own rank.
+  const children = new Map<Id, PlacedElement[]>()
+  for (const e of placed.value) if (isAttached(e)) children.set(e.parent, [...(children.get(e.parent) ?? []), e])
+  const ordered: PlacedElement[] = []
+  for (const e of placed.value) if (!isAttached(e)) ordered.push(e, ...(children.get(e.id) ?? []))
+  return ordered.map((element, index) => ({ element, index, box: box(element) })).filter(({ element, box }) => selection.value.has(element.id) || inView(box))
+})
+/** The box of the element a stroke is drawn on, relative to the stroke's own box (to clip to it). */
+function clipOf(element: PlacedElement, b: Box) {
+  if (!isAttached(element)) return undefined
+  const parent = byId.value.get(element.parent)
+  if (!parent || !isPlaced(parent)) return undefined
+  const p = box(parent)
+  return { top: p.y - b.y, left: p.x - b.x, right: b.x + b.w - (p.x + p.w), bottom: b.y + b.h - (p.y + p.h) }
+}
 const lost = computed(() => placed.value.length > 0 && shown.value.length === 0)
 
 /** Where a line from the middle of `b` towards (px, py) leaves it. */
@@ -246,6 +272,21 @@ const tool = ref<Tool>('select')
 const shapeKind = ref<ShapeName>('rectangle')
 const pen = reactive<{ color: ColorName | undefined; size: number }>({ color: undefined, size: 4 })
 const spaceHeld = ref(false)
+/** The element the pen draws on (strokes then move and scale with it), from the selection bar. */
+const attach = ref<Id | null>(null)
+const attachTarget = computed(() => {
+  const target = attach.value ? byId.value.get(attach.value) : undefined
+  return target && isPlaced(target) ? target : undefined
+})
+function drawOn(id: Id) {
+  attach.value = id
+  tool.value = 'pen'
+  select([])
+}
+const stopDrawingOn = () => {
+  attach.value = null
+  if (drawing.value) tool.value = 'select'
+}
 /** A pen touched the board: fingers now only move the view. */
 const penSeen = ref(false)
 const drawing = computed(() => tool.value === 'pen' || tool.value === 'highlighter' || tool.value === 'eraser')
@@ -288,6 +329,11 @@ function cancelGesture() {
   preview.guides = []
   gesture.value = null
 }
+
+/** A pen's pressure; some report 0 on the first event of a line. */
+const pressureOf = (e: PointerEvent) => (e.pointerType === 'pen' ? Math.max(e.pressure || 0.5, 0.05) : 0.5)
+/** The pen's width is what it looks like on screen at the zoom it draws at, so a zoomed-out board still gets a visible line. */
+const penWidth = () => (tool.value === 'highlighter' ? 18 : pen.size) / camera.zoom
 
 const pan = (p: Point): Gesture => ({ kind: 'pan', sx: p.x, sy: p.y, x: camera.x, y: camera.y })
 
@@ -349,7 +395,7 @@ function onPointerDown(event: PointerEvent) {
     return
   }
   if (tool.value === 'pen' || tool.value === 'highlighter') {
-    gesture.value = { kind: 'draw', points: [world.x, world.y, event.pointerType === 'pen' ? event.pressure : 0.5], pressure: event.pointerType === 'pen' }
+    gesture.value = { kind: 'draw', points: [world.x, world.y, pressureOf(event)], pressure: event.pointerType === 'pen' }
     select([])
     return
   }
@@ -454,7 +500,10 @@ function onPointerMove(event: PointerEvent) {
     const [top, bottom] = [Math.min(g.start.y, world.y), Math.max(g.start.y, world.y)]
     // A frame is taken only when the box holds it whole; other elements when it touches them.
     const inside = placed.value
-      .filter((e) => (e.kind === 'frame' ? e.x >= left && e.y >= top && e.x + e.w <= right && e.y + e.h <= bottom : e.x < right && e.x + e.w > left && e.y < bottom && e.y + e.h > top))
+      .filter((e) => {
+        const b = box(e)
+        return e.kind === 'frame' ? b.x >= left && b.y >= top && b.x + b.w <= right && b.y + b.h <= bottom : b.x < right && b.x + b.w > left && b.y < bottom && b.y + b.h > top
+      })
       .map((e) => e.id)
     select([...g.keep, ...inside])
   } else if (g.kind === 'connect' || g.kind === 'create') {
@@ -465,7 +514,7 @@ function onPointerMove(event: PointerEvent) {
     const points = [...g.points]
     for (const e of events.length ? events : [event]) {
       const w = toWorld(local(e).x, local(e).y)
-      points.push(Math.round(w.x * 10) / 10, Math.round(w.y * 10) / 10, g.pressure ? e.pressure : 0.5)
+      points.push(Math.round(w.x * 100) / 100, Math.round(w.y * 100) / 100, pressureOf(e))
     }
     gesture.value = { ...g, points }
   } else if (g.kind === 'erase') {
@@ -496,7 +545,13 @@ function onPointerUp(event: PointerEvent) {
     const patches: Record<Id, BoardPatch> = {}
     for (const id of preview.moving) {
       const element = byId.value.get(id)
-      if (element && isPlaced(element)) patches[id] = { x: element.x + preview.dx, y: element.y + preview.dy }
+      if (!element || !isPlaced(element)) continue
+      if (isAttached(element)) {
+        // Moved on its own: its place on the element changes, in fractions of the element's box.
+        const parent = byId.value.get(element.parent)
+        if (preview.moving.has(element.parent) || !parent || !isPlaced(parent)) continue
+        patches[id] = { x: element.x + preview.dx / parent.w, y: element.y + preview.dy / parent.h }
+      } else patches[id] = { x: element.x + preview.dx, y: element.y + preview.dy }
     }
     update(patches)
   } else if (g.kind === 'resize' && preview.resize) {
@@ -559,7 +614,7 @@ function onDoubleClick(event: MouseEvent) {
 
 /** Where a new element goes: the point asked for, moved down and right past elements that start there. */
 function freeSpot(x: number, y: number) {
-  const taken = (px: number, py: number) => placed.value.some((e) => Math.abs(e.x - px) < 12 && Math.abs(e.y - py) < 12)
+  const taken = (px: number, py: number) => placed.value.some((e) => !isAttached(e) && Math.abs(e.x - px) < 12 && Math.abs(e.y - py) < 12)
   while (taken(x, y)) (x += 24), (y += 24)
   return { x, y }
 }
@@ -602,11 +657,21 @@ function createAt(g: Extract<Gesture, { kind: 'create' }>) {
 
 function finishStroke(g: Extract<Gesture, { kind: 'draw' }>) {
   const highlight = tool.value === 'highlighter'
-  const size = highlight ? 18 : pen.size
-  const points = simplifyPoints(g.points, 0.6 / camera.zoom)
+  const size = Math.round(penWidth() * 100) / 100
+  // A quarter of a screen pixel: only points that change nothing go.
+  const points = simplifyPoints(g.points, 0.25 / camera.zoom)
   // A dot: a tap with the pen.
   if (points.length === 3) points.push(points[0]! + 0.5, points[1]! + 0.5, points[2]!)
-  add([{ kind: 'stroke', size, ...strokeFromPoints(points, size), ...(pen.color && !highlight ? { color: pen.color } : {}), ...(highlight ? { highlight: true } : {}) }])
+  const placedStroke = strokeFromPoints(points, size)
+  const target = attachTarget.value
+  // On an element: the box in fractions of the element's, so it follows the element.
+  const where = target
+    ? (() => {
+        const p = box(target)
+        return { x: (placedStroke.x - p.x) / p.w, y: (placedStroke.y - p.y) / p.h, w: placedStroke.w / p.w, h: placedStroke.h / p.h, parent: target.id }
+      })()
+    : {}
+  add([{ kind: 'stroke', size, ...placedStroke, ...where, ...(pen.color && !highlight ? { color: pen.color } : {}), ...(highlight ? { highlight: true } : {}) }])
 }
 
 const pickerOpen = ref(false)
@@ -656,6 +721,7 @@ function onDrop(event: DragEvent) {
 function chosenForCopy(): BoardElement[] {
   const ids = new Set(selection.value)
   for (const element of selected.value) if (element.kind === 'frame') for (const inside of insideFrame(element, elements.value)) ids.add(inside.id)
+  for (const id of [...ids]) for (const stroke of attachedTo(id, elements.value)) ids.add(stroke.id)
   for (const arrow of arrows.value) if (arrow.kind === 'arrow' && ids.has(arrow.from) && ids.has(arrow.to)) ids.add(arrow.id)
   return elements.value.filter((e) => ids.has(e.id))
 }
@@ -811,10 +877,11 @@ function onKeyDown(event: KeyboardEvent) {
   if (event.shiftKey && event.code === 'Digit0') return (event.preventDefault(), zoomAt(size.w / 2, size.h / 2, 1))
   if (key === 'escape') {
     // Steps out in layers: the selection and the tool first, then whatever holds the board (full screen).
-    if (!selection.value.size && tool.value === 'select') return
+    if (!selection.value.size && tool.value === 'select' && !attach.value) return
     event.stopPropagation()
     select([])
     tool.value = 'select'
+    attach.value = null
     return
   }
   if (event.key === '@') return (event.preventDefault(), void (!props.readonly && (pickerOpen.value = true)))
@@ -834,7 +901,7 @@ function onKeyDown(event: KeyboardEvent) {
     const step = event.shiftKey ? 10 : 1
     const [dx, dy] = key === 'arrowleft' ? [-step, 0] : key === 'arrowright' ? [step, 0] : key === 'arrowup' ? [0, -step] : [0, step]
     const patches: Record<Id, BoardPatch> = {}
-    for (const element of selected.value) if (isPlaced(element)) patches[element.id] = { x: element.x + dx, y: element.y + dy }
+    for (const element of selected.value) if (isPlaced(element) && !isAttached(element)) patches[element.id] = { x: element.x + dx, y: element.y + dy }
     update(patches)
   } else if (key === ']') toFront()
   else if (key === '[') toBack()
@@ -876,6 +943,11 @@ watch(elements, (list) => {
 })
 watch(tool, (t) => {
   if (t !== 'select' && t !== 'hand') select([])
+  // Drawing on an element ends with a tool that does not draw.
+  if (t !== 'pen' && t !== 'highlighter' && t !== 'eraser' && t !== 'hand') attach.value = null
+})
+watch(attachTarget, (target) => {
+  if (!target) attach.value = null
 })
 
 // What is drawn over the board ---------------------------------------------------------
@@ -915,6 +987,8 @@ const tools: { id: Tool; icon: string; label: string; key: string }[] = [
   { id: 'frame', icon: 'ph:frame-corners', label: 'Frame', key: 'F' },
   { id: 'arrow', icon: 'ph:arrow-up-right', label: 'Arrow', key: 'L' },
 ]
+/** The board's own width decides the layout (a narrow board beside the sidebar on a wide screen too). */
+const narrow = computed(() => size.w < 720)
 const toolIcon = (t: (typeof tools)[number]) => (t.id === 'shape' ? SHAPE_ICONS[shapeKind.value] : t.icon)
 
 const background = computed(() => {
@@ -942,7 +1016,7 @@ const ink = computed(() => {
   if (g?.kind !== 'draw') return null
   const highlight = tool.value === 'highlighter'
   return {
-    d: strokePath(g.points, highlight ? 18 : pen.size, { pen: g.pressure, last: false }),
+    d: strokePath(g.points, penWidth(), { pen: g.pressure, last: false }),
     fill: strokeColor(highlight ? 'yellow' : pen.color),
     opacity: highlight ? 0.4 : 1,
   }
@@ -1017,6 +1091,7 @@ const cursor = computed(() => {
         :selected="selection.has(element.id)"
         :editing="editing === element.id"
         :faded="preview.erasing.has(element.id)"
+        :clip="clipOf(element, b)"
         :summary="element.kind === 'card' ? summaryById.get(element.objectId) : undefined"
         :type="element.kind === 'card' ? typesById.get(summaryById.get(element.objectId)?.typeId ?? '') : undefined"
         :style="{ zIndex: index + 1 }"
@@ -1043,6 +1118,7 @@ const cursor = computed(() => {
       <!-- Handles of the one selected element: drag the dot to draw an arrow, the corner to resize. -->
       <template v-if="selectedOne && !readonly && editing !== selectedOne.id">
         <div
+          v-if="!isAttached(selectedOne)"
           :data-element="selectedOne.id"
           data-handle="connect"
           title="Drag to another element to draw an arrow"
@@ -1059,6 +1135,7 @@ const cursor = computed(() => {
           }"
         />
         <div
+          v-if="!isAttached(selectedOne)"
           :data-element="selectedOne.id"
           data-handle="resize"
           class="absolute rounded-sm border-accent bg-surface"
@@ -1107,7 +1184,26 @@ const cursor = computed(() => {
       @label="selected[0] && labelArrow(selected[0].id)"
       @rename="selected[0] && renameFrame(selected[0].id)"
       @open="openSelected"
+      @draw-on="selected[0] && drawOn(selected[0].id)"
     />
+
+    <!-- Drawing on an element: its outline, and how to stop -->
+    <template v-if="attachTarget">
+      <div
+        class="pointer-events-none absolute rounded-xl border-2 border-dashed border-accent"
+        :style="{
+          left: `${toScreen(box(attachTarget).x, 0).x - 4}px`,
+          top: `${toScreen(0, box(attachTarget).y).y - 4}px`,
+          width: `${box(attachTarget).w * camera.zoom + 8}px`,
+          height: `${box(attachTarget).h * camera.zoom + 8}px`,
+        }"
+      />
+      <div data-ui class="absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface py-1 pl-3 pr-1 text-sm shadow-md">
+        <AppIcon fallback="ph:pen-nib" :size="15" class="text-accent" />
+        <span class="text-ink-soft">Drawing on this {{ attachTarget.kind === 'card' ? 'card' : attachTarget.kind === 'frame' ? 'frame' : attachTarget.kind === 'sticky' ? 'note' : 'element' }}</span>
+        <button class="rounded-full bg-accent px-3 py-1 text-sm font-medium text-white" @click="stopDrawingOn">Done</button>
+      </div>
+    </template>
 
     <div v-if="!placed.length && !gesture" class="pointer-events-none absolute inset-0 grid place-items-center p-6 text-center text-sm text-ink-faint">
       <p>{{ readonly ? 'This board is empty.' : 'Drag objects here from the sidebar, add one with @, draw with P, or double-click to write.' }}</p>
@@ -1120,7 +1216,7 @@ const cursor = computed(() => {
     <div
       v-if="!readonly && (tool === 'pen' || tool === 'highlighter')"
       data-ui
-      class="absolute bottom-[3.75rem] left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-line bg-surface p-1 shadow-md"
+      class="absolute bottom-[calc(3.75rem+env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-line bg-surface p-1 shadow-md"
     >
       <template v-if="tool === 'pen'">
         <button
@@ -1141,7 +1237,11 @@ const cursor = computed(() => {
     </div>
 
     <!-- Tools -->
-    <div data-ui class="absolute bottom-3 left-1/2 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-xl border border-line bg-surface p-1 shadow-md max-sm:left-3 max-sm:max-w-[calc(100%-4.5rem)] max-sm:translate-x-0">
+    <div
+      data-ui
+      class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-0.5 overflow-x-auto rounded-xl border border-line bg-surface p-1 shadow-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      :class="narrow ? 'left-3 max-w-[calc(100%-4.75rem)]' : 'left-1/2 max-w-[calc(100%-1.5rem)] -translate-x-1/2'"
+    >
       <template v-if="!readonly">
         <button
           v-for="t in tools"
@@ -1162,7 +1262,7 @@ const cursor = computed(() => {
           title="Add an object (@)"
           @click="pickerOpen = !pickerOpen"
         >
-          <AppIcon fallback="ph:cards" :size="18" /><span class="max-lg:hidden">Object</span>
+          <AppIcon fallback="ph:cards" :size="18" /><span v-if="!narrow">Object</span>
         </button>
       </template>
       <template v-else>
@@ -1171,12 +1271,12 @@ const cursor = computed(() => {
     </div>
 
     <!-- Zoom -->
-    <div data-ui class="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md">
-      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover max-md:hidden" title="Zoom out" aria-label="Zoom out" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom / 1.25)">
+    <div data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-3 flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md">
+      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" title="Zoom out" aria-label="Zoom out" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom / 1.25)">
         <AppIcon fallback="ph:minus" :size="16" />
       </button>
-      <button class="h-8 w-14 rounded-lg tabular-nums text-ink-soft hover:bg-hover max-md:hidden" title="Zoom to 100% (⇧0)" @click="zoomAt(size.w / 2, size.h / 2, 1)">{{ Math.round(camera.zoom * 100) }}%</button>
-      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover max-md:hidden" title="Zoom in" aria-label="Zoom in" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom * 1.25)">
+      <button class="h-8 w-14 rounded-lg tabular-nums text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" title="Zoom to 100% (⇧0)" @click="zoomAt(size.w / 2, size.h / 2, 1)">{{ Math.round(camera.zoom * 100) }}%</button>
+      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" title="Zoom in" aria-label="Zoom in" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom * 1.25)">
         <AppIcon fallback="ph:plus" :size="16" />
       </button>
       <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" title="Fit everything (⇧1)" aria-label="Fit everything" @click="fit()">

@@ -15,8 +15,14 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   usual size or drag a box. The selection bar switches between rectangle, ellipse, diamond,
   triangle, parallelogram, star and heart. Double-click to write inside.
 - **Sticky notes** (**S**): click or drag; you type straight away.
-- **Pen** (**P**) and **highlighter** (**M**): draw freehand; the pen has colors and three widths.
-  A pen's pressure shapes the line; a mouse or finger uses speed instead. The **eraser** (**E**,
+- **Pen** (**P**) and **highlighter** (**M**): draw freehand; the pen has colors and three widths,
+  measured on screen (a zoomed-out board still gets a line as wide as the one chosen). A pen's
+  pressure shapes the line, eased so a light touch never breaks it; a mouse or finger uses speed
+  instead.
+- **Draw on an element**: select a card, note, shape or frame and pick the pen in the selection
+  bar. What you draw then belongs to that element: it is cut at its edges, moves and scales when
+  the element does, is copied with it and deleted with it. **Done** (or Esc, or another tool)
+  goes back to drawing on the board. The **eraser** (**E**,
   or a pen's eraser end) removes the strokes it passes over.
 - **Frames** (**F**): drag a box to make a named region; it sits under everything. Moving a frame
   (by its title or its edge) moves what lies wholly inside it. Double-click the title, or select
@@ -43,8 +49,9 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 - **With a pen** (Apple Pencil and the like): once a pen has touched the board, fingers only move
   and zoom the view, and touches are ignored while the pen is down, so a resting hand draws
   nothing.
-- The **full screen** button (top right) gives the board the whole window; Esc leaves it once
-  nothing is selected.
+- The board fills the page below the title and properties, so it opens whole without scrolling.
+  The **full screen** button (top right) gives it the whole window; Esc leaves it once nothing is
+  selected.
 
 Where the view was is kept per board on each device.
 
@@ -61,7 +68,7 @@ writes it.
 | `text`   | `text` |
 | `shape`  | `shape` (rectangle, ellipse, diamond, triangle, parallelogram, star, heart; anything else reads as a rectangle), `text` |
 | `sticky` | `text` |
-| `stroke` | `points` (x, y, pressure in turn, relative to the box's corner, simplified), `size`, `sw`, `sh` (the box the points were drawn in, so a resized stroke scales them), `highlight` (optional) |
+| `stroke` | `points` (x, y, pressure in turn, relative to the box's corner, simplified), `size`, `sw`, `sh` (the box the points were drawn in, so a resized stroke scales them), `highlight` (optional), `parent` (optional: the element it is drawn on; then `x`, `y`, `w`, `h` are fractions of that element's box) |
 | `frame`  | `title` (optional) |
 | `arrow`  | `from`, `to` (element ids), `label` (optional), `color` (optional), `rank` |
 
@@ -72,7 +79,8 @@ left out, the kind's own: ink, a yellow note).
 order (frames always first), so bringing one to the front or sending it back writes only that one. Because each element is its own map,
 two devices that move different elements, or change different fields of one (one moves a card,
 the other resizes it), both keep their change; the same field ends as Yjs resolves it. An element
-deleted on one device is gone on both, even if the other moved it meanwhile. Arrows whose ends are
+deleted on one device is gone on both, even if the other moved it meanwhile; strokes drawn on it
+go with it (and a stroke whose element is gone is not drawn). Arrows whose ends are
 gone are not drawn, and an element of a kind this version does not know (a newer device's) is
 skipped, not destroyed.
 

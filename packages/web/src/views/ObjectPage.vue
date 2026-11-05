@@ -101,6 +101,34 @@ const isWhiteboard = computed(() => type.value?.system === 'whiteboard')
 const board = shallowRef<TextSession | null>(null)
 const boardFailed = ref(false)
 const boardFull = ref(false)
+/**
+ * The board takes the rest of the window below the title and properties, so it opens whole with
+ * no scrolling (on an iPad above all); what follows it (comments, backlinks) is below.
+ */
+const boardSection = ref<HTMLElement | null>(null)
+const boardHeight = ref<number | null>(null)
+function measureBoard() {
+  const el = boardSection.value
+  const main = el?.closest('main')
+  if (!el || !main) return
+  const top = el.getBoundingClientRect().top - main.getBoundingClientRect().top + main.scrollTop
+  const padding = parseFloat(getComputedStyle(main).paddingBottom) || 0
+  boardHeight.value = Math.max(320, Math.floor(main.clientHeight - padding - top - 12))
+}
+let boardObserver: ResizeObserver | undefined
+watch(boardSection, (el) => {
+  boardObserver?.disconnect()
+  const main = el?.closest('main')
+  if (!el || !main) return
+  boardObserver = new ResizeObserver(() => measureBoard())
+  boardObserver.observe(main)
+  void nextTick(measureBoard)
+})
+// Tags or properties added above the board move it down.
+watch(
+  () => [object.value?.tagIds.length, Object.keys(object.value?.props ?? {}).length, object.value?.title],
+  () => void nextTick(measureBoard)
+)
 /** Full screen, with the keys going to the board (Esc, the tools). */
 function toggleBoardFull() {
   boardFull.value = !boardFull.value
@@ -208,6 +236,7 @@ onBeforeUnmount(() => {
   void save()
   text.value?.release()
   if (board.value !== text.value) board.value?.release()
+  boardObserver?.disconnect()
 })
 
 // Cover ---------------------------------------------------------------------
@@ -645,7 +674,7 @@ async function startFrom(template: ObjectRecord) {
     </div>
     <input ref="coverInput" type="file" accept="image/*" class="hidden" @change="uploadCover" />
 
-    <div class="relative" :class="embedded ? '' : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
+    <div class="relative" :class="embedded ? '' : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
       <template v-if="!embedded">
       <button
         v-if="object.icon"
@@ -881,9 +910,10 @@ async function startFrom(template: ObjectRecord) {
         <QueryResults class="mt-4" :query="object.query ?? { typeIds: [] }" :parent-id="object.id" @table="setQuery({ ...(object.query ?? { typeIds: [] }), table: $event })" @board="setQuery({ ...(object.query ?? { typeIds: [] }), board: $event })" />
       </section>
 
-      <section v-if="isWhiteboard && !embedded" class="mt-6">
+      <section v-if="isWhiteboard && !embedded" ref="boardSection" class="mt-4">
         <div
-          :class="boardFull ? 'fixed inset-0 z-40' : 'relative h-[max(28rem,calc(100dvh-16rem))] overflow-hidden rounded-xl border border-line'"
+          :class="boardFull ? 'fixed inset-0 z-40' : 'relative h-[max(20rem,calc(100dvh-16rem))] overflow-hidden rounded-xl border border-line'"
+          :style="!boardFull && boardHeight ? { height: `${boardHeight}px` } : undefined"
           @keydown.esc="!$event.defaultPrevented && (boardFull = false)"
         >
           <WhiteboardCanvas v-if="board" :doc="board.doc" :board-id="object.id" :readonly="!!object.deletedAt" />
