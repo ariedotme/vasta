@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.6.1 (2026-11-06)
+
 ### Added
 
 - Name the other side of a relation: in a type's settings, a relation's "Name on the other side" is what the objects it links to show, e.g. "Wrote" on a person instead of "Books · Author". Agents see it too.
