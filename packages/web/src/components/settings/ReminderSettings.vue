@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // Reminders: where they go (an ntfy topic, on ntfy.sh or your own server, the Telegram bot, and
-// system notifications in the desktop app) and what reminds you (habits at their "Remind at" time,
+// system notifications in the desktop app, and notifications of the browsers and phones that turned
+// them on, each with its own choice of what reminds it) and what reminds you (habits at their "Remind at" time,
 // timed events and tasks before they start, and in spaces that track food: what is left of the
 // day, the week's summary, meals with nothing logged). The server sends them
 // (server/src/reminders.ts), so ntfy and Telegram get them with every app closed.
 import { computed, onMounted, ref } from 'vue'
 import { isNutritionOn } from '@vasta/core'
-import { authApi, type FoodReminders, type ReminderSettings, type WorkNotifications } from '../../lib/api.ts'
+import { authApi, type FoodReminders, type PushDevice, type PushKinds, type ReminderSettings, type WorkNotifications } from '../../lib/api.ts'
 import { desktop as desktopApp } from '../../lib/platform.ts'
+import { currentSubscription, deviceName, pushUnsupported, subscribe } from '../../lib/push.ts'
 import { systemType, workspace } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
 import SettingsSection from './SettingsSection.vue'
@@ -71,7 +73,66 @@ onMounted(async () => {
   } catch (failure) {
     unavailable.value = (failure as Error).message
   }
+  await findThisDevice()
 })
+
+// Notifications on devices (Web Push) -----------------------------------------
+const pushWhy = pushUnsupported()
+/** This browser's subscription endpoint, to tell which listed device is this one. */
+const thisEndpoint = ref<string | null>(null)
+const pushBusy = ref(false)
+const pushError = ref('')
+const devices = computed(() => current.value?.push?.devices ?? [])
+const thisDevice = computed(() => devices.value.find((d) => d.endpoint === thisEndpoint.value))
+const KINDS = computed(() => [
+  { key: 'habits' as const, label: 'Habits' },
+  { key: 'events' as const, label: 'Events and tasks' },
+  ...(tracksFood.value ? [{ key: 'food' as const, label: 'Food' }] : []),
+  { key: 'work' as const, label: "Others' work" },
+])
+
+async function findThisDevice() {
+  try {
+    const subscription = await currentSubscription()
+    thisEndpoint.value = subscription?.endpoint ?? null
+    // Still subscribed here but no longer listed (removed elsewhere, or a new server key): tell the server again.
+    if (subscription && current.value?.push && !thisDevice.value) {
+      show(await authApi.addPushDevice(subscription.toJSON(), deviceName()))
+    }
+  } catch {
+    thisEndpoint.value = null
+  }
+}
+
+async function pushStep(step: () => Promise<void>) {
+  pushBusy.value = true
+  pushError.value = ''
+  try {
+    await step()
+  } catch (failure) {
+    pushError.value = (failure as Error).message
+  } finally {
+    pushBusy.value = false
+  }
+}
+
+const turnOnHere = () =>
+  pushStep(async () => {
+    const subscription = await subscribe(current.value!.push!.publicKey)
+    thisEndpoint.value = subscription.endpoint
+    show(await authApi.addPushDevice(subscription.toJSON(), deviceName()))
+  })
+
+const setKind = (device: PushDevice, kind: keyof PushKinds, on: boolean) => pushStep(async () => show(await authApi.updatePushDevice(device.id, { kinds: { [kind]: on } })))
+
+const removeDevice = (device: PushDevice) =>
+  pushStep(async () => {
+    if (device.endpoint === thisEndpoint.value) {
+      await (await currentSubscription())?.unsubscribe()
+      thisEndpoint.value = null
+    }
+    show(await authApi.removePushDevice(device.id))
+  })
 
 const dirty = computed(() => {
   const s = current.value
@@ -132,7 +193,10 @@ async function test() {
   try {
     const results = await authApi.testReminders()
     const names: Record<string, string> = { ntfy: 'ntfy', telegram: 'Telegram', desktop: 'Desktop app' }
-    note.value = results.map((r) => `${names[r.channel] ?? r.channel}: ${r.ok ? 'sent' : r.error}`).join(' · ')
+    const name = (channel: string) => names[channel] ?? channel.replace(/^push:/, '')
+    note.value = results.map((r) => `${name(r.channel)}: ${r.ok ? 'sent' : r.error}`).join(' · ')
+    // A device the push service no longer knows was removed: show the list as it is now.
+    if (results.some((r) => r.channel.startsWith('push:') && !r.ok)) show(await authApi.reminders())
   } catch (failure) {
     error.value = (failure as Error).message
   } finally {
@@ -144,7 +208,7 @@ const habitType = computed(() => systemType('habit'))
 </script>
 
 <template>
-  <SettingsSection id="reminders" title="Reminders" description="Sent by the server, so they arrive with the app closed: on your phone and computer through ntfy, from the Telegram bot, or as notifications of the desktop app.">
+  <SettingsSection id="reminders" title="Reminders" description="Sent by the server, so they arrive with the app closed: as notifications on your phone and in browsers, through ntfy, from the Telegram bot, or in the desktop app.">
     <p v-if="unavailable" class="text-sm text-ink-soft">{{ unavailable }}</p>
     <form v-else-if="current" class="space-y-5" @submit.prevent="save">
       <div>
@@ -190,6 +254,37 @@ const habitType = computed(() => systemType('habit'))
           </span>
         </span>
       </label>
+
+      <div v-if="current.push" class="space-y-2" data-push-devices>
+        <h3 class="flex items-center gap-1.5 text-sm font-medium"><AppIcon fallback="ph:device-mobile" class="text-ink-faint" /> Notifications on phones and browsers</h3>
+        <p class="text-xs text-ink-faint">Turn them on in each device you want them in (open Vasta there): each one picks what reminds it.</p>
+        <ul v-if="devices.length" class="divide-y divide-line rounded-lg border border-line">
+          <li v-for="device in devices" :key="device.id" class="px-3 py-2.5 text-sm">
+            <div class="flex items-center gap-2">
+              <span class="min-w-0 flex-1 truncate font-medium">
+                {{ device.name }}
+                <span v-if="device.endpoint === thisEndpoint" class="ml-1 text-xs font-normal text-ink-faint">this device</span>
+              </span>
+              <button type="button" class="text-xs text-ink-faint hover:text-ink" :disabled="pushBusy" @click="removeDevice(device)">Remove</button>
+            </div>
+            <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+              <label v-for="kind in KINDS" :key="kind.key" class="flex items-center gap-1.5 text-ink-soft">
+                <input
+                  type="checkbox"
+                  class="h-3.5 w-3.5 accent-[var(--color-accent)]"
+                  :checked="device.kinds[kind.key]"
+                  :disabled="pushBusy"
+                  @change="setKind(device, kind.key, ($event.target as HTMLInputElement).checked)"
+                />
+                {{ kind.label }}
+              </label>
+            </div>
+          </li>
+        </ul>
+        <p v-if="pushWhy" class="text-xs text-ink-faint">{{ pushWhy }}</p>
+        <button v-else-if="!thisDevice" type="button" :class="secondary" :disabled="pushBusy" @click="turnOnHere">Turn on notifications on this device</button>
+        <p v-if="pushError" :class="errorText">{{ pushError }}</p>
+      </div>
 
       <div class="space-y-3 border-t border-line pt-4">
         <label class="flex items-start gap-2.5 text-sm">
@@ -256,7 +351,7 @@ const habitType = computed(() => systemType('habit'))
 
       <div class="flex flex-wrap items-center gap-2">
         <button type="submit" :class="primary" :disabled="!dirty || busy">Save</button>
-        <button type="button" :class="secondary" :disabled="busy || (!topic.trim() && !telegram && !desktop)" @click="test">Send a test</button>
+        <button type="button" :class="secondary" :disabled="busy || (!topic.trim() && !telegram && !desktop && !devices.length)" @click="test">Send a test</button>
         <span v-if="note" class="text-sm text-ink-soft">{{ note }}</span>
         <span v-if="error" :class="errorText">{{ error }}</span>
       </div>

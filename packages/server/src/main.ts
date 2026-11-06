@@ -43,6 +43,7 @@ import { CaptureService } from './capture.ts'
 import { ChangeFeed, DesktopListeners } from './events.ts'
 import { createMediaStore, describeMediaStore } from './media.ts'
 import { ChannelSettings } from './channels.ts'
+import { PushService } from './push.ts'
 import { ReminderService } from './reminders.ts'
 import { TelegramBot, telegramAccess } from './telegram.ts'
 import { purgeNotifications } from './notifications.ts'
@@ -122,7 +123,7 @@ const desktop = new DesktopListeners()
 const reminders =
   env.VASTA_REMINDERS === '0'
     ? undefined
-    : new ReminderService({ store, accounts, calendars, desktop, ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(bot ? { telegram: (chat: number, text: string) => bot!.send(chat, text) } : {}) })
+    : new ReminderService({ store, accounts, calendars, desktop, push: new PushService({ store, ...(env.VASTA_WEB_URL ? { subject: env.VASTA_WEB_URL } : {}) }), ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(bot ? { telegram: (chat: number, text: string) => bot!.send(chat, text) } : {}) })
 reminders?.start()
 
 const server = serve({ fetch: createApp({ store, media, feed, capture, accounts, calendars, weblinks, reminders, desktop, telegram: { username: () => bot?.username, running: !!bot, channels }, replica: process.env.VASTA_REPLICA !== '0', ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(webDir ? { webDir } : {}), ...(localKey ? { localKey } : {}) }).fetch, port, hostname }, () => {

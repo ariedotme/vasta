@@ -7,6 +7,8 @@
 // Changes (POST/PUT/DELETE), logins, the live event stream and sync (the local replica, which
 // keeps its own copy and must never take an old answer for a new one) always go to the network.
 // The app deletes the API and media caches when the user logs out (lib/session.ts).
+// Reminders sent by Web Push (server/src/push.ts) are shown here, with the app closed too; a tap
+// opens the reminder's page in an open window of the app, or a new one.
 const SHELL = 'vasta-shell'
 const ASSETS = 'vasta-assets'
 const MEDIA = 'vasta-media'
@@ -68,4 +70,39 @@ self.addEventListener('fetch', (event) => {
   // A space's export (a ZIP of everything) goes straight to the network, never into the cache.
   if (/^\/api\/spaces\/[^/]+\/export$/.test(url.pathname)) return
   if (url.pathname.startsWith('/api/')) return event.respondWith(networkFirst(request, API))
+})
+
+self.addEventListener('push', (event) => {
+  let message = {}
+  try {
+    message = event.data ? event.data.json() : {}
+  } catch {
+    message = { title: 'Vasta', body: event.data ? event.data.text() : '' }
+  }
+  event.waitUntil(
+    self.registration.showNotification(message.title || 'Vasta', {
+      body: message.body || '',
+      icon: '/icon-192.png',
+      ...(message.tag ? { tag: message.tag } : {}),
+      data: { url: message.url || '/' },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  // Only pages of this app: an event of a subscribed calendar may carry its own link.
+  const target = new URL(event.notification.data?.url || '/', self.location.origin)
+  const url = target.origin === self.location.origin ? target.href : self.location.origin + '/'
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const open = windows.find((w) => new URL(w.url).origin === self.location.origin)
+      if (open) {
+        await open.focus()
+        return open.navigate(url).catch(() => self.clients.openWindow(url))
+      }
+      return self.clients.openWindow(url)
+    })()
+  )
 })

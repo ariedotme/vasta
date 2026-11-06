@@ -6,6 +6,10 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- Reminders as notifications on your phone and in browsers (Web Push): turn them on in Settings › Reminders on each device, and pick what each one reminds you of. On iPhone and iPad, in Vasta added to the Home Screen (iOS 16.4 or later); on Android and computers, in the browser too. Nothing to set up on the server.
+
 ## 0.6.1 (2026-11-06)
 
 ### Added

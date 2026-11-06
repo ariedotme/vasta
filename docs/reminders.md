@@ -65,6 +65,24 @@ Each user picks the channels in Settings › Reminders, stored in the database's
   Desktop 0.1.10 heard them through its page instead (`/api/events?desktop=1`), which WebKit does
   not keep open once the window is closed: the first test arrived, the next ones did not.
 
-"Send a test" sends through every channel set and says what each answered. The service looks every
+- **Phones and browsers** (Web Push, `packages/server/src/push.ts`): notifications of the web
+  app, shown by its service worker (`public/sw.js`) with the app closed; a tap opens the page in an
+  open window of the app, or a new one. Each device turns them on in Settings › Reminders ("Turn
+  on notifications on this device", a tap, since iOS asks for permission only then) and keeps its
+  own choice of what reminds it (habits, events and tasks, food, others' work), on top of the
+  user's settings. iPhone and iPad take them in the app added to the Home Screen (iOS 16.4 and
+  later); Android, macOS, Windows and Linux browsers in a tab too. The desktop app has its own
+  channel above and does not offer this. Nothing to configure: the server makes its key pair
+  (VAPID, RFC 8292) on first use and keeps it in meta (`push.vapid`); messages are encrypted for
+  each device (aes128gcm, RFC 8291) with node:crypto and posted to the address the browser gave
+  (its push service: Apple's, Google's, Mozilla's), through `safeFetch`. VAPID's contact is
+  `VASTA_WEB_URL`, else the https address devices subscribed from (`push.subject`): Apple's
+  service refuses a JWT without a real one. Devices are kept in meta (`push.devices.<userId>`,
+  at most 20); one its push service no longer knows (404, 410) is dropped. Routes:
+  `POST /api/auth/reminders/devices` (`{ subscription, name }`, again refreshes the device),
+  `PATCH …/devices/:id` (`{ name?, kinds? }`), `DELETE …/devices/:id`.
+
+"Send a test" sends through every channel set (to every device, whatever each chose) and says
+what each answered. The service looks every
 30 seconds at what fell due since it last looked, and sends each reminder once; what fell due
 while the server was down is not sent late. `VASTA_REMINDERS=0` turns the service off.

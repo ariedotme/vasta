@@ -82,6 +82,25 @@ export interface ReminderSettings {
   /** Desktop apps listening for this user right now. */
   desktopApps: number
   work: WorkNotifications
+  /** Web Push, when the server sends it: its key and the devices that turned it on. */
+  push?: { publicKey: string; devices: PushDevice[] }
+}
+
+/** What a device is reminded of (Web Push); the settings above decide what is sent at all. */
+export interface PushKinds {
+  habits: boolean
+  events: boolean
+  food: boolean
+  work: boolean
+}
+
+/** A browser that gets reminders as notifications (server/src/push.ts). */
+export interface PushDevice {
+  id: string
+  name: string
+  endpoint: string
+  kinds: PushKinds
+  createdAt: string
 }
 
 /** Food reminders, in spaces that track food; times "HH:MM". */
@@ -190,6 +209,10 @@ export const authApi = {
   telegram: () => request<{ linked: boolean; bot?: string }>('GET', '/api/auth/telegram'),
   reminders: () => request<ReminderSettings>('GET', '/api/auth/reminders'),
   saveReminders: (changes: ReminderChanges) => request<ReminderSettings>('PUT', '/api/auth/reminders', changes),
+  /** Turn on notifications for this browser (its PushSubscription as JSON); again refreshes it. */
+  addPushDevice: (subscription: unknown, name: string) => request<ReminderSettings>('POST', '/api/auth/reminders/devices', { subscription, name }),
+  updatePushDevice: (id: string, changes: { name?: string; kinds?: Partial<PushKinds> }) => request<ReminderSettings>('PATCH', `/api/auth/reminders/devices/${id}`, changes),
+  removePushDevice: (id: string) => request<ReminderSettings>('DELETE', `/api/auth/reminders/devices/${id}`),
   testReminders: () => request<{ channel: string; ok: boolean; error?: string }[]>('POST', '/api/auth/reminders/test'),
   /** A token for the desktop app to hear reminders with (scope notify); replaces the device's last one. */
   desktopToken: (device: string) => request<{ token: string }>('POST', '/api/auth/desktop-token', { device }),

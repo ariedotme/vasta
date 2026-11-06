@@ -1,3 +1,4 @@
+import { createECDH } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -8,6 +9,7 @@ import { NodeStore } from '@vasta/core/node'
 import { AccountService } from '../src/accounts.ts'
 import { CaptureService } from '../src/capture.ts'
 import { ChangeFeed, DesktopListeners, type DesktopNotification } from '../src/events.ts'
+import { PushService } from '../src/push.ts'
 import { ReminderService } from '../src/reminders.ts'
 
 const AT = '2026-10-20T09:00:00.000Z'
@@ -65,7 +67,7 @@ describe('reminders', () => {
     expect(() => reminders.save('u', { food: { dayLeft: '25:00' } })).toThrow('HH:MM')
     expect(() => reminders.save('u', { food: { week: { day: 7, at: '20:00' } } })).toThrow('weekday')
     reminders.save('u', { desktop: false })
-    await expect(reminders.test('u')).rejects.toThrow('set up ntfy, Telegram or the desktop app')
+    await expect(reminders.test('u')).rejects.toThrow('set up ntfy, Telegram, the desktop app or notifications on a device')
     reminders.save('u', { ntfy: { topic: 'vasta' } })
     expect(await reminders.test('u')).toEqual([{ channel: 'ntfy', ok: true }])
   })
@@ -132,5 +134,31 @@ describe('desktop listeners', () => {
     old() // …and the old stream's loop ends, letting go again.
     expect(desktop.send('u', { key: 'new', title: 'T', message: 'M' })).toBe(1)
     expect(heard).toEqual(['new'])
+  })
+})
+
+describe('reminders on devices (Web Push)', () => {
+  it('sends the test to every device, and habits only to those that want them', async () => {
+    const store = new NodeStore(':memory:')
+    const accounts = new AccountService({ store })
+    store.putUser({ id: 'u', username: 'arie', name: 'Arie', createdAt: AT }, 'x')
+    const urls: string[] = []
+    const fakeFetch = async (url: string) => (urls.push(url), new Response(null, { status: 201 }))
+    const push = new PushService({ store, fetch: fakeFetch })
+    const reminders = new ReminderService({ store, accounts, push, fetch: fakeFetch })
+    const keys = createECDH('prime256v1')
+    keys.generateKeys()
+    const subscription = (endpoint: string) => ({ endpoint, keys: { p256dh: keys.getPublicKey().toString('base64url'), auth: Buffer.alloc(16).toString('base64url') } })
+    push.subscribe('u', subscription('https://push.example/phone'), 'Phone')
+    const laptop = push.subscribe('u', subscription('https://push.example/laptop'), 'Laptop')
+    push.update('u', laptop.id, { kinds: { work: false } })
+    expect(reminders.view('u').push?.devices.map((d) => d.name)).toEqual(['Phone', 'Laptop'])
+    expect((await reminders.test('u')).filter((r) => r.channel.startsWith('push:'))).toEqual([
+      { channel: 'push:Phone', ok: true },
+      { channel: 'push:Laptop', ok: true },
+    ])
+    urls.length = 0
+    await reminders.notify('u', 'assigned', { key: 'a', title: 'Assigned', message: 'A task', tag: 'pushpin' })
+    expect(urls).toEqual(['https://push.example/phone'])
   })
 })
