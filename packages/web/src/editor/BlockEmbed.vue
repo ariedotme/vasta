@@ -6,7 +6,6 @@
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import { blockAsDoc, findBlock, type ObjectRecord } from '@vasta/core'
 import { computed, inject, onBeforeUnmount, provide, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { api } from '../lib/api.ts'
 import { iconTextClasses } from '../lib/colors.ts'
@@ -15,9 +14,9 @@ import { displayTitle } from '../lib/format.ts'
 import { BLOCK_EMBED_DEPTH } from '../lib/page.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { createExtensions } from './extensions.ts'
+import { openObject } from '../lib/open.ts'
 
 const props = defineProps<{ objectId: string; blockId: string }>()
-const router = useRouter()
 const depth = inject(BLOCK_EMBED_DEPTH, 0)
 provide(BLOCK_EMBED_DEPTH, depth + 1)
 
@@ -26,7 +25,7 @@ const failed = ref(false)
 const summary = computed(() => summaryOf(props.objectId) ?? object.value)
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
 const found = computed(() => (object.value ? findBlock(object.value, props.blockId) : undefined))
-const open = () => router.push(`/o/${props.objectId}#b-${props.blockId}`)
+const open = () => openObject(props.objectId, { block: props.blockId })
 
 async function load() {
   if (depth > 0) return

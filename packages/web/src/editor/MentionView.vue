@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { iconTextClasses } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { openDay } from '../lib/actions.ts'
+import { openObject } from '../lib/open.ts'
 
 const props = defineProps(nodeViewProps)
-const router = useRouter()
 const objectId = computed(() => props.node.attrs.objectId as string)
 const summary = computed(() => summaryOf(objectId.value))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
@@ -21,7 +20,7 @@ const blockLabel = computed(() => props.node.attrs.blockLabel as string | null)
 const day = computed(() => (/^daily-.+-(\d{4}-\d{2}-\d{2})$/.exec(objectId.value) ?? [])[1])
 function open() {
   if (!summary.value && day.value) return void openDay(day.value)
-  void router.push(blockId.value ? `/o/${objectId.value}#b-${blockId.value}` : `/o/${objectId.value}`)
+  void openObject(objectId.value, { block: blockId.value ?? undefined })
 }
 </script>
 

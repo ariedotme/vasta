@@ -8,6 +8,7 @@ import { primeSummaries, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
 import TypeIcon from './TypeIcon.vue'
+import ObjectLink from './ObjectLink.vue'
 
 /** `hideTagged`: a tag's page lists what it tags itself (TagPanel). */
 const props = defineProps<{ objectId: Id; title?: string; hideTagged?: boolean }>()
@@ -50,10 +51,10 @@ const groups = computed(() => {
     </h2>
     <div v-for="group in groups" :key="group.label" class="mb-4">
       <h3 class="mb-1 text-xs font-medium text-ink-faint">{{ group.label }}</h3>
-      <RouterLink
+      <ObjectLink
         v-for="link in group.items"
         :key="link.object.id"
-        :to="`/o/${link.object.id}`"
+        :id="link.object.id"
         class="flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-hover"
       >
         <TypeIcon :icon="link.object.icon ?? typesById.get(link.object.typeId)?.icon" fallback="ph:file-text" class="mt-0.5" :color="objectColor(link.object, typesById.get(link.object.typeId))" />
@@ -62,7 +63,7 @@ const groups = computed(() => {
           <div v-if="link.object.preview" class="truncate text-xs text-ink-faint">{{ link.object.preview }}</div>
         </div>
         <span class="shrink-0 text-xs text-ink-faint">{{ formatRelative(link.object.updatedAt) }}</span>
-      </RouterLink>
+      </ObjectLink>
     </div>
   </section>
 </template>

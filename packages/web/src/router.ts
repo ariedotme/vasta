@@ -18,7 +18,18 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: HomeView },
-    { path: '/o/:id', component: pages.object, props: true },
+    {
+      path: '/o/:id',
+      component: pages.object,
+      // The page reads its address only through these, so the side pane can show it without one.
+      props: (route) => ({
+        id: route.params.id,
+        isNew: route.query.new === '1',
+        capture: typeof route.query.capture === 'string' ? route.query.capture : undefined,
+        cursor: typeof route.query.cursor === 'string' ? route.query.cursor : undefined,
+        block: route.hash.startsWith('#b-') ? route.hash.slice(3) : undefined,
+      }),
+    },
     { path: '/t/:id', component: pages.type, props: true },
     { path: '/day/:day', component: pages.day, props: true },
     { path: '/calendar', component: pages.calendar },

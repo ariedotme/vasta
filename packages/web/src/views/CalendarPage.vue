@@ -38,6 +38,7 @@ import { swatchClasses } from '../lib/colors.ts'
 import { onChange } from '../lib/events.ts'
 import { cachedSummary, lastError, primeFromObject, primeSummaries, refreshCounts, typesById, workspace } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { keepPane, openObject } from '../lib/open.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,7 +70,7 @@ const title = computed(() => viewTitle(view.value, days.value, anchor.value))
 function go(next: { view?: CalendarView; date?: string }) {
   const nextView = next.view ?? view.value
   storage.set(VIEW_KEY, nextView)
-  void router.replace({ path: '/calendar', query: { view: nextView, date: next.date ?? anchor.value } })
+  void router.replace({ path: '/calendar', query: keepPane({ view: nextView, date: next.date ?? anchor.value }) })
 }
 
 // Data -----------------------------------------------------------------------
@@ -333,7 +334,7 @@ const sourcesOpen = ref(false)
 const openDayView = (day: string) => go({ view: 'day', date: day })
 const openNote = (day: string) => {
   const id = dailyNotes.value.get(day)
-  if (id) void router.push(`/o/${id}`)
+  if (id) void openObject(id)
 }
 </script>
 

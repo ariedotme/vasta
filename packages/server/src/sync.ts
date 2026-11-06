@@ -87,6 +87,7 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   sprints: optional((v) => isObject(v) && isNonEmpty((v as { name?: unknown }).name) && isNonEmpty((v as { pluralName?: unknown }).pluralName)),
   properties: Array.isArray,
   views: Array.isArray,
+  openIn: optional((v) => v === 'page' || v === 'pane'),
   aliases: isStringArray,
   tagIds: isStringArray,
   collectionIds: isStringArray,

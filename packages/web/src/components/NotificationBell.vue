@@ -2,7 +2,6 @@
 // The bell: someone assigned you, mentioned you, or commented on something you follow. A dot
 // counts what is unread; opening one marks it read.
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import type { Notice } from '../lib/api.ts'
 import { formatRelative } from '../lib/format.ts'
 import { notices, readNotices, refreshNotices, watchNotices } from '../lib/notices.ts'
@@ -10,9 +9,9 @@ import { personName } from '../lib/people.ts'
 import AppIcon from './AppIcon.vue'
 import PersonAvatar from './PersonAvatar.vue'
 import PopoverMenu from './PopoverMenu.vue'
+import { openObject } from '../lib/open.ts'
 
 defineProps<{ buttonClass: string; size?: number; placement?: 'top-start' | 'bottom-end' }>()
-const router = useRouter()
 const anchor = ref<HTMLElement | null>(null)
 const open = ref(false)
 onMounted(watchNotices)
@@ -27,7 +26,7 @@ const VERBS: Record<Notice['kind'], string> = { assigned: 'assigned you', mentio
 function go(notice: Notice) {
   open.value = false
   if (!notice.read) void readNotices([notice.id])
-  void router.push(`/o/${notice.objectId}`)
+  void openObject(notice.objectId)
 }
 </script>
 

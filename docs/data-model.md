@@ -14,8 +14,9 @@ object ids; one id may sit in several sections, as in Capacities. A space is als
 time zone, a capture space and a linked Telegram user id. Not part of the synced note data.
 
 **Type** — what kind of thing an object is (Book, Person, Meeting…). A type has a name, plural
-name, icon, color, custom property definitions and saved views. Built-in types carry a `system`
-key because the app gives them special behavior:
+name, icon, color, custom property definitions, saved views and where a click on one of its
+objects in a view opens it (`openIn`: `'pane'`, the side pane, or unset, the page). Built-in types
+carry a `system` key because the app gives them special behavior:
 
 | system key   | behavior |
 |--------------|----------|
@@ -218,6 +219,11 @@ When a relation points to several objects, a positive operator (`is`, `contains`
 `is-empty`, `is-not-checked`) when none matches its positive form; trashed targets do not count.
 `runQuery` reads the related objects through `QueryContext.related`: `querySpace` (server and
 replica) loads them from the store, the type page from the app's summary cache.
+
+**Where objects open** (`ViewDef.openIn`, `QueryDef.openIn`): `'pane'` opens a clicked object in
+the side pane, `'page'` on its page; unset, each object follows its type's `openIn` (unset there
+too: the page). `ObjectCollection` provides the choice to the links inside it (`VIEW_OPENS` in
+`lib/open.ts`), so every layout follows it. The type's `openIn` is the column `types.open_in`.
 
 The table layout's columns are `TableSettings` (`ViewDef.table`, `QueryDef.table`): an ordered list
 of `{ field, width?, hidden?, wrap? }`, the field a property id or a built-in field (title, tags,

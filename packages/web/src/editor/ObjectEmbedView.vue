@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { computed, inject, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import EmbedFrame from '../components/EmbedFrame.vue'
 import QueryEmbed from '../components/QueryEmbed.vue'
@@ -13,9 +12,9 @@ import { displayTitle } from '../lib/format.ts'
 import { imageOf } from '../lib/media.ts'
 import { PAGE_OBJECT_ID } from '../lib/page.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
+import { openObject } from '../lib/open.ts'
 
 const props = defineProps(nodeViewProps)
-const router = useRouter()
 const objectId = computed(() => props.node.attrs.objectId as string)
 const display = computed(() => props.node.attrs.display as string)
 const blockId = computed(() => props.node.attrs.blockId as string | null)
@@ -23,7 +22,7 @@ const summary = computed(() => summaryOf(objectId.value))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
 const title = computed(() => displayTitle(summary.value, type.value))
 const image = computed(() => (summary.value ? imageOf(summary.value) : undefined))
-const open = () => router.push(`/o/${objectId.value}`)
+const open = () => openObject(objectId.value)
 /** The picture would not load (e.g. a HEIC photo outside Safari): show the card instead. */
 const broken = ref(false)
 const asImage = computed(() => display.value === 'image' && !!image.value && !broken.value)

@@ -30,6 +30,7 @@ import { formatLongDay } from '../../lib/format.ts'
 import { dailyNotesBetween, formatGrams, formatKcal, useFoodLibrary } from '../../lib/nutrition.ts'
 import AppIcon from '../AppIcon.vue'
 import NutrientLine from './NutrientLine.vue'
+import ObjectLink from '../ObjectLink.vue'
 
 const props = defineProps<{ object: ObjectRecord }>()
 const emit = defineEmits<{ set: [key: string, value: PropertyValue | undefined] }>()
@@ -135,7 +136,7 @@ const small = 'rounded-md border border-line bg-surface px-2 py-1 text-sm tabula
       <h2 class="mb-2 flex items-center gap-1.5 font-semibold text-ink-soft"><AppIcon fallback="ph:list-bullets" /> Ingredients</h2>
       <div class="space-y-0.5">
         <div v-for="(item, index) in ingredients" :key="`${item.id}-${index}`" class="group flex items-center gap-2 rounded-md px-1.5 py-0.5 hover:bg-hover">
-          <RouterLink v-if="lookup(item.id)" :to="`/o/${item.id}`" class="min-w-0 flex-1 truncate hover:underline">{{ lookup(item.id)!.title || 'Untitled' }}</RouterLink>
+          <ObjectLink v-if="lookup(item.id)" :id="item.id" class="min-w-0 flex-1 truncate hover:underline">{{ lookup(item.id)!.title || 'Untitled' }}</ObjectLink>
           <span v-else class="min-w-0 flex-1 truncate text-ink-faint">Deleted food</span>
           <input :value="formatGrams(item.grams)" :class="small" class="w-20 text-right" inputmode="decimal" :aria-label="`Grams of ${lookup(item.id)?.title ?? 'ingredient'}`" @change="changeGrams(index, ($event.target as HTMLInputElement).value)" />
           <span class="text-ink-faint">g</span>
@@ -212,7 +213,7 @@ const small = 'rounded-md border border-line bg-surface px-2 py-1 text-sm tabula
 
     <p v-if="inRecipes.length" class="mt-3 text-xs text-ink-faint">
       In
-      <template v-for="(r, index) in inRecipes" :key="r.id"><RouterLink :to="`/o/${r.id}`" class="text-ink-soft hover:underline">{{ r.title || 'Untitled' }}</RouterLink>{{ index < inRecipes.length - 1 ? ', ' : '.' }}</template>
+      <template v-for="(r, index) in inRecipes" :key="r.id"><ObjectLink :id="r.id" class="text-ink-soft hover:underline">{{ r.title || 'Untitled' }}</ObjectLink>{{ index < inRecipes.length - 1 ? ', ' : '.' }}</template>
     </p>
     <p v-if="usage" class="mt-1 text-xs text-ink-faint">
       <template v-if="usage.count">Eaten {{ usage.count }} {{ usage.count === 1 ? 'time' : 'times' }} in the last year, last on {{ formatLongDay(`${usage.lastDay}T00:00:00.000Z`) }}.</template>

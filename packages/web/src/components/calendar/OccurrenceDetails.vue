@@ -9,6 +9,7 @@ import { changeEntryTimes, describeRepeat, entryTime, formatDayShort } from '../
 import { displayTitle } from '../../lib/format.ts'
 import { lastError, summaryOf, typesById } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
+import ObjectLink from '../ObjectLink.vue'
 
 const props = defineProps<{ entry: CalendarEntry }>()
 const emit = defineEmits<{ done: [] }>()
@@ -80,7 +81,7 @@ function save() {
     <div class="flex items-start gap-2">
       <AppIcon :icon="summary?.icon ?? type?.icon" fallback="ph:cube" class="mt-0.5 shrink-0 text-ink-soft" />
       <div class="min-w-0">
-        <RouterLink :to="`/o/${entry.objectId}`" class="font-semibold leading-snug hover:underline" @click="emit('done')">{{ title }}</RouterLink>
+        <ObjectLink :id="entry.objectId!" class="font-semibold leading-snug hover:underline" @click="emit('done')">{{ title }}</ObjectLink>
         <div class="text-xs text-ink-soft">{{ when }}</div>
       </div>
     </div>
@@ -101,9 +102,9 @@ function save() {
     </form>
 
     <div v-else class="flex items-center gap-1.5 border-t border-line pt-2 text-xs">
-      <RouterLink :to="`/o/${entry.objectId}`" class="flex items-center gap-1 rounded-md bg-hover px-2 py-1 text-ink-soft hover:text-ink" @click="emit('done')">
+      <ObjectLink :id="entry.objectId!" class="flex items-center gap-1 rounded-md bg-hover px-2 py-1 text-ink-soft hover:text-ink" @click="emit('done')">
         <AppIcon fallback="ph:arrow-square-out" :size="13" /> Open
-      </RouterLink>
+      </ObjectLink>
       <button class="flex items-center gap-1 rounded-md bg-hover px-2 py-1 text-ink-soft hover:text-ink" @click="editing = true">
         <AppIcon fallback="ph:clock" :size="13" /> Change time
       </button>

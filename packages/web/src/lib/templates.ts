@@ -13,7 +13,7 @@ import { onChange } from './events.ts'
 import { asksDialog, confirmDialog, promptDialog } from './overlays.ts'
 import { meId, people } from './people.ts'
 import { lastError, notice, primeFromObject, summaryOf, systemType, typesById, workspace } from './state.ts'
-import { router } from '../router.ts'
+import { openObject } from './open.ts'
 
 export const templates = reactive({
   spaceId: '' as Id,
@@ -110,7 +110,7 @@ export async function createFromTemplate(type: ObjectType, template: ObjectRecor
   try {
     const object = await api.createObject({ ...data, typeId: type.id })
     primeFromObject(object)
-    if (open) await router.push({ path: `/o/${object.id}`, query: { new: '1', ...(made ? cursorQuery(made) : {}) } })
+    if (open) await openObject(object.id, { query: { new: '1', ...(made ? cursorQuery(made) : {}) } })
     return object
   } catch (error) {
     lastError.value = (error as Error).message
@@ -152,7 +152,7 @@ export async function saveAsTemplate(object: ObjectRecord, type: ObjectType) {
   const { id: _id, ...data } = draft
   const template = await api.createObject({ ...data, typeId: type.id })
   remember(template)
-  notice.value = { message: `Saved as a template of ${type.name}`, action: { label: 'Open', run: () => router.push(`/o/${template.id}`) } }
+  notice.value = { message: `Saved as a template of ${type.name}`, action: { label: 'Open', run: () => openObject(template.id) } }
 }
 
 /** A new, empty template of a type, opened to edit. */
@@ -161,7 +161,7 @@ export async function newTemplate(type: ObjectType) {
   if (!name) return
   const template = await api.createObject({ typeId: type.id, title: '', template: { kind: 'template', name, ...(templatesOf(type.id).length ? {} : { default: true }) } })
   remember(template)
-  await router.push(`/o/${template.id}`)
+  await openObject(template.id)
 }
 
 /** Make a template the type's default (the others stop being it), or stop it being the default. */
@@ -205,8 +205,8 @@ export async function saveAsSnippet(content: DocNode[], open = false) {
   if (!name) return
   const snippet = await api.createObject({ typeId: page.id, title: name, content: { [BODY_PROPERTY_ID]: { type: 'doc', content: content.length ? content : [{ type: 'paragraph' }] } }, template: { kind: 'snippet', name } })
   remember(snippet)
-  if (open) await router.push(`/o/${snippet.id}`)
-  else notice.value = { message: `Snippet “${name}” saved`, action: { label: 'Open', run: () => router.push(`/o/${snippet.id}`) } }
+  if (open) await openObject(snippet.id)
+  else notice.value = { message: `Snippet “${name}” saved`, action: { label: 'Open', run: () => openObject(snippet.id) } }
 }
 
 /** Change a snippet's trigger and scope (Settings › Snippets). */

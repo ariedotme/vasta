@@ -7,6 +7,7 @@ import { dayKey } from '../lib/actions.ts'
 import { typesById } from '../lib/state.ts'
 import { deleteTemplate, loadTemplates, newTemplate, setDefaultTemplate, snippets, templatesOf } from '../lib/templates.ts'
 import AppIcon from './AppIcon.vue'
+import { objectPath } from '../lib/open.ts'
 
 const props = defineProps<{ type: ObjectType }>()
 /** Before leaving for a template's page (the settings may have unsaved changes). */
@@ -23,7 +24,7 @@ async function create() {
   emit('leave', '')
   await newTemplate(props.type)
 }
-const open = (t: ObjectRecord) => emit('leave', `/o/${t.id}`)
+const open = (t: ObjectRecord) => emit('leave', objectPath(t.id))
 </script>
 
 <template>

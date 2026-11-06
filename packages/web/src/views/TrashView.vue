@@ -13,6 +13,7 @@ import { onChange } from '../lib/events.ts'
 import { displayTitle, formatRelative } from '../lib/format.ts'
 import { confirmDialog, openContextMenu } from '../lib/overlays.ts'
 import { lastError, loadWorkspace, notice, refreshCounts, typesById, workspace } from '../lib/state.ts'
+import { openObject } from '../lib/open.ts'
 
 const router = useRouter()
 const trash = ref<Trash>({ types: [], objects: [] })
@@ -113,7 +114,7 @@ function restore(entry: Entry) {
       const { object, type } = await restoreObjectFlow(entry.id)
       notice.value = {
         message: type ? `Restored “${entry.title}” and its type “${type.name}”` : `Restored “${entry.title}”`,
-        action: { label: 'Open', run: () => router.push(`/o/${object.id}`) },
+        action: { label: 'Open', run: () => openObject(object.id) },
       }
     }
   })
@@ -151,7 +152,7 @@ async function emptyTrash() {
 }
 
 function open(entry: Entry) {
-  if (entry.kind === 'object') void router.push(`/o/${entry.id}`)
+  if (entry.kind === 'object') void openObject(entry.id)
 }
 
 function entryMenu(event: MouseEvent, entry: Entry) {

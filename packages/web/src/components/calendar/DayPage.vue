@@ -14,6 +14,7 @@ import TypeIcon from '../TypeIcon.vue'
 import CalendarEntryItem from './CalendarEntryItem.vue'
 import HabitChecklist from '../HabitChecklist.vue'
 import FoodDay from '../nutrition/FoodDay.vue'
+import ObjectLink from '../ObjectLink.vue'
 
 const props = defineProps<{
   day: string
@@ -79,11 +80,11 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
     <section class="mt-10">
       <div class="mb-3 flex items-center">
         <h2 :class="heading"><AppIcon fallback="ph:calendar-check" /> Daily note</h2>
-        <RouterLink v-if="noteId" :to="`/o/${noteId}`" class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-faint hover:bg-hover hover:text-ink">
+        <ObjectLink v-if="noteId" :id="noteId" class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-faint hover:bg-hover hover:text-ink">
           Open <AppIcon fallback="ph:arrow-up-right" :size="12" />
-        </RouterLink>
+        </ObjectLink>
       </div>
-      <ObjectPage v-if="noteId" :id="noteId" :key="noteId" embedded backlinks-title="References to this day" />
+      <ObjectPage v-if="noteId" :id="noteId" :key="noteId" variant="embedded" backlinks-title="References to this day" />
       <form v-else class="space-y-2" @submit.prevent="draft.trim() && emit('start-note', draft)">
         <textarea v-model="draft" :disabled="starting" aria-label="Daily note" placeholder="Write something about this day…" class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" rows="3" />
         <button class="rounded-lg px-3 py-2 text-sm ring-1 ring-line hover:bg-hover disabled:opacity-50" :disabled="starting || !draft.trim()">
@@ -94,11 +95,11 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
 
     <section v-if="created.length" class="mt-10">
       <h2 :class="heading" class="mb-2"><AppIcon fallback="ph:sparkle" /> Created on this day <span class="font-normal text-ink-faint">{{ created.length }}</span></h2>
-      <RouterLink v-for="object in created" :key="object.id" :to="`/o/${object.id}`" class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-hover">
+      <ObjectLink v-for="object in created" :key="object.id" :id="object.id" class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-hover">
         <TypeIcon :icon="object.icon ?? typesById.get(object.typeId)?.icon" fallback="ph:file-text" :color="typesById.get(object.typeId)?.color" />
         <span class="min-w-0 flex-1 truncate">{{ displayTitle(object, typesById.get(object.typeId)) }}</span>
         <span class="shrink-0 text-xs text-ink-faint">{{ typesById.get(object.typeId)?.name }}</span>
-      </RouterLink>
+      </ObjectLink>
     </section>
   </div>
 </template>

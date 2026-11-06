@@ -2,7 +2,7 @@
 import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout } from '@vasta/core'
+import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { RANK_PROPERTY_ID, matchesFilter, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -26,6 +26,7 @@ import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
+import { keepPane, openObject } from '../lib/open.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -138,7 +139,7 @@ watch(
 )
 function closeSettings() {
   settingsOpen.value = false
-  if (route.query.settings) void router.replace({ query: {} })
+  if (route.query.settings) void router.replace({ query: keepPane({}) })
 }
 
 function saveViews(mutate: (views: ViewDef[]) => void) {
@@ -193,7 +194,7 @@ async function deleteType() {
 function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, type.value) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/o/${object.id}`) },
+    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
     pinMenu(object.id),
     { kind: 'separator' },
     {
@@ -330,6 +331,12 @@ const layouts: { layout: ViewLayout; label: string; icon: string }[] = [
 ]
 const layoutAnchor = ref<HTMLElement | null>(null)
 const layoutOpen = ref(false)
+/** Where the view opens what is clicked: as the type says (unset), or its own choice. */
+const openChoices = computed<{ openIn: ViewOpenIn | undefined; label: string }[]>(() => [
+  { openIn: undefined, label: `Same as ${type.value?.name ?? 'the type'} (${type.value?.openIn === 'pane' ? 'side pane' : 'full page'})` },
+  { openIn: 'pane', label: 'Side pane' },
+  { openIn: 'page', label: 'Full page' },
+])
 const sortAnchor = ref<HTMLElement | null>(null)
 const sortOpen = ref(false)
 const columnsAnchor = ref<HTMLElement | null>(null)
@@ -559,7 +566,7 @@ async function newMenu(event: MouseEvent) {
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
         <ColumnsMenu :table="view.table" :type-ids="[id]" @update="updateView({ table: $event })" />
       </PopoverMenu>
-      <PopoverMenu v-model:open="layoutOpen" :anchor="layoutAnchor" placement="bottom-end" width="11rem">
+      <PopoverMenu v-model:open="layoutOpen" :anchor="layoutAnchor" placement="bottom-end" width="15rem">
         <button
           v-for="l in layouts"
           :key="l.layout"
@@ -568,6 +575,18 @@ async function newMenu(event: MouseEvent) {
         >
           <AppIcon :fallback="l.icon" class="text-ink-soft" /> {{ l.label }}
           <AppIcon v-if="view.layout === l.layout" fallback="ph:check" class="ml-auto text-accent" />
+        </button>
+        <div class="my-1 border-t border-line" />
+        <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Open in</div>
+        <button
+          v-for="o in openChoices"
+          :key="o.label"
+          class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover"
+          :aria-pressed="view.openIn === o.openIn"
+          @click="updateView({ openIn: o.openIn }), (layoutOpen = false)"
+        >
+          {{ o.label }}
+          <AppIcon v-if="view.openIn === o.openIn" fallback="ph:check" class="ml-auto text-accent" />
         </button>
       </PopoverMenu>
     </div>
@@ -593,6 +612,7 @@ async function newMenu(event: MouseEvent) {
       :table="view.table"
       :board="view.board"
       :manual="manual"
+      :open-in="view.openIn"
       @table="updateView({ table: $event })"
       @board="updateView({ board: $event })"
       @manual="updateView({ sort: undefined })"

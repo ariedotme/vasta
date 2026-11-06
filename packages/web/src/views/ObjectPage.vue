@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import BacklinksPanel from '../components/BacklinksPanel.vue'
@@ -36,6 +36,7 @@ import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
 import { openRemoteText } from '../lib/remote-text.ts'
 import { PAGE_OBJECT_ID } from '../lib/page.ts'
+import { closePane } from '../lib/open.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { colorSource, tagAncestors, tagColor } from '../lib/tags.ts'
@@ -49,10 +50,27 @@ import DocPreview from '../components/DocPreview.ts'
 import ModalDialog from '../components/ModalDialog.vue'
 import { writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
 
-/** `embedded`: only the text and what links here, inside another page (the calendar's day). */
-const props = defineProps<{ id: string; embedded?: boolean; backlinksTitle?: string }>()
-const route = useRoute()
+/**
+ * `variant`: 'page' (its own page), 'pane' (the side pane next to another page: no comments or
+ * activity, which stay on the page) or 'embedded' (only the text and what links here, inside
+ * another page: the calendar's day). What the page's address says comes in as props (router.ts):
+ * `isNew` (just made: the title gets the cursor), `capture` (an item captured into the text to
+ * reveal), `cursor` ("<block>:<offset>", from a template) and `block` (a linked block to scroll to).
+ */
+const props = defineProps<{
+  id: string
+  variant?: 'page' | 'pane' | 'embedded'
+  isNew?: boolean
+  capture?: string | undefined
+  cursor?: string | undefined
+  block?: string | undefined
+  backlinksTitle?: string
+}>()
 const router = useRouter()
+const embedded = computed(() => props.variant === 'embedded')
+const inPane = computed(() => props.variant === 'pane')
+/** Somewhere else to go once this object is gone (deleted for good): the pane just closes. */
+const leave = (to: string) => (inPane.value ? closePane() : router.push(to))
 provide(PAGE_OBJECT_ID, props.id)
 
 const object = ref<ObjectRecord | null>(null)
@@ -81,9 +99,6 @@ const authorship = computed(() => {
 })
 const showAllFields = ref(false)
 const hiddenCount = computed(() => valueFields.value.length - visibleFields.value.length)
-const isNew = computed(() => route.query.new === '1')
-/** A link to one of the text's blocks (#b-<id>): the editors scroll to it. */
-const linkedBlock = computed(() => (route.hash.startsWith('#b-') ? route.hash.slice(3) : undefined))
 /** Dashboards built with columns need room; everything else reads better at text width. */
 const wide = computed(() => isWhiteboard.value || Object.values(object.value?.content ?? {}).some((doc) => doc.content.some((node) => node.type === 'columns')))
 
@@ -213,23 +228,23 @@ onMounted(async () => {
     return
   }
   if (useReplica()) text.value = await openText(props.id).catch(() => null)
-  if (isWhiteboard.value && !props.embedded) {
+  if (isWhiteboard.value && !embedded.value) {
     board.value = text.value ?? (await openRemoteText(props.id).catch(() => null))
     boardFailed.value = !board.value
   }
   editorsReady.value = true
   await nextTick()
   autosize()
-  if (typeof route.query.capture === 'string') revealCapture(route.query.capture)
+  if (props.capture) revealCapture(props.capture)
   // Made from a template that says where the cursor goes.
-  const at = typeof route.query.cursor === 'string' ? /^(.+):(\d+)$/.exec(route.query.cursor) : null
+  const at = props.cursor ? /^(.+):(\d+)$/.exec(props.cursor) : null
   if (at) {
     cursorTarget.value = { blockId: at[1]!, offset: Number(at[2]) }
     return
   }
   if (!object.value.template) void loadTemplates()
   // A new weblink starts with its address field (WeblinkPanel focuses it).
-  if (isNew.value && !(isWeblink.value && !object.value.media?.url)) titleInput.value?.focus()
+  if (props.isNew && !(isWeblink.value && !object.value.media?.url)) titleInput.value?.focus()
 })
 onBeforeUnmount(() => {
   stopListening()
@@ -514,7 +529,7 @@ async function restore() {
 async function deleteForever() {
   if (!object.value) return
   menuOpen.value = false
-  if (await deleteForeverFlow(object.value.id, displayTitle(object.value, type.value))) await router.push('/trash')
+  if (await deleteForeverFlow(object.value.id, displayTitle(object.value, type.value))) await leave('/trash')
 }
 
 const article = ref<HTMLElement | null>(null)
@@ -593,7 +608,7 @@ async function removeTemplate() {
   const kind = object.value.template.kind
   const typeId = object.value.typeId
   clearTimeout(timer)
-  if (await deleteTemplate(object.value)) await router.push(kind === 'snippet' ? '/settings#snippets' : `/t/${typeId}?settings=1`)
+  if (await deleteTemplate(object.value)) await leave(kind === 'snippet' ? '/settings#snippets' : `/t/${typeId}?settings=1`)
 }
 
 async function saveTemplateFrom() {
@@ -604,7 +619,7 @@ async function saveTemplateFrom() {
 }
 
 /** Offered on an object of a type with templates while its text is empty. */
-const offeredTemplates = computed(() => (type.value && !info.value && !props.embedded && !object.value?.deletedAt ? templatesOf(type.value.id) : []))
+const offeredTemplates = computed(() => (type.value && !info.value && !embedded.value && !object.value?.deletedAt ? templatesOf(type.value.id) : []))
 const bodyEmpty = computed(() => Object.values(object.value?.content ?? {}).every((doc) => doc.content.every((n) => n.type === 'paragraph' && !n.content?.length)))
 
 async function startFrom(template: ObjectRecord) {
@@ -628,7 +643,7 @@ async function startFrom(template: ObjectRecord) {
 <template>
   <div v-if="missing" class="grid h-full place-items-center text-sm text-ink-soft">This object does not exist or was deleted for good.</div>
 
-  <article v-else-if="object" ref="article" :class="embedded ? '' : 'pb-32'">
+  <article v-else-if="object" ref="article" :class="embedded ? '' : inPane ? 'pb-16' : 'pb-32'">
     <div v-if="object.deletedAt && !embedded" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
       <AppIcon fallback="ph:trash" class="shrink-0" />
       <span class="min-w-0 flex-1 max-sm:min-w-[80%]">In the trash since {{ formatDate({ start: object.deletedAt, resolution: 'time' }) }}. It goes for good 30 days later.</span>
@@ -659,7 +674,7 @@ async function startFrom(template: ObjectRecord) {
         <p class="text-xs text-ink-faint">As made now. Questions show their own words; a daily note's template leaves out the time, you and the answers.</p>
       </div>
     </ModalDialog>
-    <div v-if="object.coverUrl && !embedded" class="group/cover relative h-56 w-full overflow-hidden bg-hover max-md:h-40">
+    <div v-if="object.coverUrl && !embedded" class="group/cover relative w-full overflow-hidden bg-hover" :class="inPane ? 'h-32' : 'h-56 max-md:h-40'">
       <img :src="object.coverUrl" alt="" class="h-full w-full object-cover" />
       <button
         class="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-surface/90 px-2.5 py-1 text-xs font-medium text-ink shadow-sm ring-1 ring-line backdrop-blur transition-opacity hover:bg-surface md:opacity-0 md:group-hover/cover:opacity-100 md:focus-visible:opacity-100 [@media(hover:none)]:opacity-100 max-md:py-1.5"
@@ -670,7 +685,7 @@ async function startFrom(template: ObjectRecord) {
     </div>
     <input ref="coverInput" type="file" accept="image/*" class="hidden" @change="uploadCover" />
 
-    <div class="relative" :class="embedded ? '' : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
+    <div class="relative" :class="embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
       <template v-if="!embedded">
       <button
         v-if="object.icon"
@@ -933,20 +948,20 @@ async function startFrom(template: ObjectRecord) {
           :doc="object.content[field.id]"
           :text="textFields[field.id]"
           :object-id="object.id"
-          :reveal="linkedBlock"
+          :reveal="block"
           :template="!!info"
           :cursor="cursorTarget"
           @change="setContent(field.id, $event)"
         />
       </div>
 
-      <ObjectComments v-if="!embedded && !day && !object.deletedAt && !isTagObject && !info" :object="object" />
+      <ObjectComments v-if="!embedded && !inPane && !day && !object.deletedAt && !isTagObject && !info" :object="object" />
 
       <TagPanel v-if="isTagObject && !embedded" :tag-id="object.id" />
 
       <template v-if="!info">
         <BacklinksPanel :object-id="object.id" :title="backlinksTitle" :hide-tagged="isTagObject" />
-        <ObjectActivity v-if="!embedded && !day" :object-id="object.id" :type="type" />
+        <ObjectActivity v-if="!embedded && !inPane && !day" :object-id="object.id" :type="type" />
       </template>
     </div>
   </article>

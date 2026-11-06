@@ -4,15 +4,14 @@
 // properties, and a condition on the object's values. Their text is edited on their own page.
 import { scopeAppliesSomewhere, type ObjectRecord, type PropertyDef, type SnippetScope } from '@vasta/core'
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { PROPERTY_KINDS } from '../../lib/properties.ts'
 import { workspace } from '../../lib/state.ts'
 import { deleteTemplate, loadTemplates, saveAsSnippet, saveSnippetInfo, snippets } from '../../lib/templates.ts'
 import AppIcon from '../AppIcon.vue'
 import SettingsSection from './SettingsSection.vue'
 import { field, label, secondary } from './styles.ts'
+import { openObject } from '../../lib/open.ts'
 
-const router = useRouter()
 onMounted(() => void loadTemplates())
 const list = computed(() => snippets.value)
 const open = ref<string | null>(null)
@@ -82,7 +81,7 @@ function removeRequirement(snippet: ObjectRecord, index: number) {
       <div v-for="snippet in list" :key="snippet.id" class="px-3 py-2">
         <div class="flex items-center gap-2">
           <AppIcon fallback="ph:brackets-curly" class="text-ink-faint" />
-          <button class="min-w-0 truncate text-sm font-medium hover:underline" @click="router.push(`/o/${snippet.id}`)">{{ snippet.template!.name }}</button>
+          <button class="min-w-0 truncate text-sm font-medium hover:underline" @click="openObject(snippet.id)">{{ snippet.template!.name }}</button>
           <span v-if="infoOf(snippet)?.trigger" class="font-mono text-xs text-ink-faint">/{{ infoOf(snippet)!.trigger }}</span>
           <span class="min-w-0 flex-1 truncate text-xs" :class="scopeAppliesSomewhere(infoOf(snippet)?.scope, workspace.types) ? 'text-ink-faint' : 'text-amber-600'">
             {{ scopeAppliesSomewhere(infoOf(snippet)?.scope, workspace.types) ? describe(snippet) : 'Applies nowhere' }}

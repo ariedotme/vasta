@@ -278,6 +278,14 @@ describe('sync', () => {
     a.editText('obj-dune', 'body', paragraphs('spice'))
     expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, undefined, undefined])
     expect(store.getType('type-book')).toMatchObject({ name: 'Book', pluralName: 'Book', spaceId: 's' })
+    // Where its objects open: the side pane, the page, or (null) as by default; nothing else.
+    a.edit('types', 'type-book', { openIn: 'pane' }, 's')
+    a.edit('types', 'type-book', { openIn: 'side' }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for openIn'])
+    expect(store.getType('type-book')?.openIn).toBe('pane')
+    a.edit('types', 'type-book', { openIn: null }, 's')
+    await a.push()
+    expect(store.getType('type-book')).not.toHaveProperty('openIn')
     const dune = (await (await user.request('/api/objects/obj-dune')).json()) as ObjectRecord
     expect(dune).toMatchObject({ title: 'Dune', typeId: 'type-book', spaceId: 's', aliases: [] })
     expect(((await (await user.request('/api/spaces/s/search?q=spice')).json()) as ObjectRecord[]).map((o) => o.id)).toEqual(['obj-dune'])

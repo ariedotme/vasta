@@ -9,6 +9,7 @@ import { promptDialog } from '../lib/overlays.ts'
 import { lastError, systemType } from '../lib/state.ts'
 import { tagColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
+import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{ tags: ObjectSummary[]; filter?: string }>()
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
@@ -114,9 +115,9 @@ async function newSubTag(parent: ObjectSummary) {
         <AppIcon :fallback="folded.has(row.tag.id) && !shownIds ? 'ph:caret-right' : 'ph:caret-down'" :size="13" />
       </button>
       <AppIcon :icon="row.tag.icon" :fallback="row.hasChildren ? (folded.has(row.tag.id) && !shownIds ? 'ph:folder-simple' : 'ph:folder-open') : 'ph:hash'" :size="15" class="shrink-0 text-ink-faint" />
-      <RouterLink :to="`/o/${row.tag.id}`" class="min-w-0 truncate rounded-md px-2 py-0.5 text-sm font-medium hover:brightness-95" :class="chip(tagColor(row.tag))">
+      <ObjectLink :id="row.tag.id" class="min-w-0 truncate rounded-md px-2 py-0.5 text-sm font-medium hover:brightness-95" :class="chip(tagColor(row.tag))">
         {{ row.tag.title || 'Untitled' }}
-      </RouterLink>
+      </ObjectLink>
       <span v-if="row.hasChildren" class="text-xs text-ink-faint">{{ row.count }}</span>
       <button
         class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-ink-faint opacity-0 hover:bg-surface hover:text-ink group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"

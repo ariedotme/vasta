@@ -10,6 +10,7 @@ import { promptDialog } from '../lib/overlays.ts'
 import { lastError, systemType } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
+import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{ day: string; variant?: 'column' | 'inline' }>()
 const { habits, loaded, load } = useHabits()
@@ -58,9 +59,9 @@ async function newHabit() {
     <div v-if="variant !== 'inline'" class="space-y-0.5">
       <div v-for="row in rows" :key="row.habit.id" class="group flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-hover" :class="row.scheduled ? '' : 'opacity-50'">
         <HabitCheck :habit="row.habit" :day="day" />
-        <RouterLink :to="`/o/${row.habit.id}`" class="min-w-0 flex-1 truncate hover:underline" :class="row.done ? 'text-ink-soft line-through decoration-ink-faint/50' : ''">
+        <ObjectLink :id="row.habit.id" class="min-w-0 flex-1 truncate hover:underline" :class="row.done ? 'text-ink-soft line-through decoration-ink-faint/50' : ''">
           {{ row.habit.title || 'Untitled' }}
-        </RouterLink>
+        </ObjectLink>
         <span v-if="row.amount" class="shrink-0 text-[11px] tabular-nums text-ink-faint">{{ row.amount }}</span>
         <span v-if="!row.scheduled" class="text-[11px] text-ink-faint">day off</span>
         <span v-else-if="row.streak > 1" class="flex items-center gap-0.5 text-[11px] tabular-nums text-orange-600 dark:text-orange-400" :title="`${row.streak} in a row`">

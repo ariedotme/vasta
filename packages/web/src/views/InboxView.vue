@@ -3,7 +3,6 @@
 // browser extension…), newest first and grouped by day. Marking an item reviewed (or the user's word
 // for it, lib/inbox.ts) hides it here and checks it in its daily note; "Show reviewed" brings it back.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { addDays } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import DocPreview from '../components/DocPreview.ts'
@@ -14,12 +13,12 @@ import { channelIconName, formatCaptureTime, formatChannel, formatLongDay } from
 import { reviewed } from '../lib/inbox.ts'
 import { openContextMenu } from '../lib/overlays.ts'
 import { lastError, notice, primeSummaries, systemType, workspace } from '../lib/state.ts'
+import { openObject } from '../lib/open.ts'
 
 const STEP = 14
 const MAX_DAYS = 365
 const SHOW_DONE_KEY = 'vasta.inbox.showDone'
 
-const router = useRouter()
 const items = ref<InboxItem[]>([])
 const days = ref(STEP)
 const loading = ref(true)
@@ -86,7 +85,7 @@ async function setDone(item: InboxItem, done: boolean, undoable = true) {
   }
 }
 
-const openInNote = (item: InboxItem) => router.push({ path: `/o/${item.noteId}`, query: { capture: item.id } })
+const openInNote = (item: InboxItem) => openObject(item.noteId, { query: { capture: item.id } })
 
 function itemMenu(event: MouseEvent, item: InboxItem) {
   openContextMenu(event, [

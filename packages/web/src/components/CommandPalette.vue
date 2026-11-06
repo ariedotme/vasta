@@ -22,6 +22,7 @@ import { GO, keysOf, toggleSidebar } from '../lib/shortcuts.ts'
 import { cycleTheme } from '../lib/theme.ts'
 import AppIcon from './AppIcon.vue'
 import TypeIcon from './TypeIcon.vue'
+import { openObject } from '../lib/open.ts'
 
 type Result =
   | { kind: 'object'; object: ObjectSummary }
@@ -154,7 +155,7 @@ async function choose(result: Result | undefined) {
   if (result.kind === 'typed') return createObject(result.type.id, {}, true, result.line)
   if (result.kind === 'food') return logLine(result.line)
   if (result.kind === 'command') return result.command.run()
-  if (result.kind === 'object') await router.push(`/o/${result.object.id}`)
+  if (result.kind === 'object') await openObject(result.object.id)
   else if (result.kind === 'type') await router.push(`/t/${result.type.id}`)
   else if (result.kind === 'weblink') await saveWeblink(result.url)
   else await createObject(result.type.id, { title: result.title })
@@ -179,7 +180,7 @@ async function saveWeblink(url: string) {
     const object = await api.saveWeblink(workspace.space.id, url)
     primeFromObject(object)
     void refreshCounts()
-    await router.push(`/o/${object.id}`)
+    await openObject(object.id)
   } catch (error) {
     lastError.value = (error as Error).message
   }

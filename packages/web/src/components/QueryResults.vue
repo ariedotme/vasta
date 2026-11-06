@@ -2,7 +2,6 @@
 // Live results of a query, laid out as the query says. Re-runs when the query changes and when
 // objects change anywhere (debounced), so embedded queries stay current.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import type { BoardSettings, Id, ObjectSummary, QueryDef, TableSettings } from '@vasta/core'
 import { pinMenu } from '../lib/actions.ts'
 import { onChange } from '../lib/events.ts'
@@ -11,6 +10,7 @@ import { openContextMenu } from '../lib/overlays.ts'
 import { runServerQuery } from '../lib/query.ts'
 import { primeSummaries, typesById } from '../lib/state.ts'
 import ObjectCollection from './ObjectCollection.vue'
+import { openObject } from '../lib/open.ts'
 
 /** `readonly`: property cells of a table do not edit (a whiteboard card, a page that cannot be edited). */
 const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number; readonly?: boolean }>()
@@ -59,12 +59,11 @@ function moved(saved: ObjectSummary) {
   void load()
 }
 
-const router = useRouter()
 
 function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, typesById.value.get(object.typeId)) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/o/${object.id}`) },
+    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
     pinMenu(object.id),
   ])
 }
@@ -86,6 +85,7 @@ defineExpose({ count: computed(() => results.value.length) })
         :table="query.table"
         :board="query.board"
         :manual="!query.sort?.length"
+        :open-in="query.openIn"
         :readonly="readonly"
         @table="emit('table', $event)"
         @board="emit('board', $event)"

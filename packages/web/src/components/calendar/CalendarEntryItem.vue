@@ -11,6 +11,7 @@ import { chip } from '../../lib/colors.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { summaryOf, typesById } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
+import ObjectLink from '../ObjectLink.vue'
 
 const props = defineProps<{
   entry: CalendarEntry
@@ -69,10 +70,8 @@ function onContextMenu(event: MouseEvent) {
 <template>
   <!-- Occurrences of repeating dates open their details, so they are no links. -->
   <component
-    :is="opens ? 'RouterLink' : 'div'"
-    :to="opens ? `/o/${entry.objectId}` : undefined"
-    :role="opens ? undefined : 'button'"
-    :tabindex="opens ? undefined : 0"
+    :is="opens ? ObjectLink : 'div'"
+    v-bind="opens ? { id: entry.objectId } : { role: 'button', tabindex: 0 }"
     :title="tooltip"
     draggable="false"
     data-calendar-entry

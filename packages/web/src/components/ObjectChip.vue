@@ -8,6 +8,7 @@ import { displayTitle } from '../lib/format.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { tagAncestors, tagColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
+import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{ id: Id; removable?: boolean; tag?: boolean }>()
 defineEmits<{ remove: [] }>()
@@ -25,7 +26,7 @@ const title = computed(() => (summary.value?.title.trim() && isTag.value ? summa
     :class="isTag ? chip(tagColor(summary)) : 'bg-hover'"
     :title="isTag ? displayTitle(summary, type) : undefined"
   >
-    <RouterLink :to="`/o/${id}`" class="inline-flex min-w-0 items-center gap-1 hover:underline">
+    <ObjectLink :id="id" class="inline-flex min-w-0 items-center gap-1 hover:underline">
       <AppIcon
         :icon="summary?.icon ?? (isTag ? undefined : type?.icon)"
         :fallback="isTag ? undefined : 'ph:file-text'"
@@ -33,7 +34,7 @@ const title = computed(() => (summary.value?.title.trim() && isTag.value ? summa
         :class="!isTag && type?.color ? iconTextClasses[type.color] : ''"
       />
       <span class="truncate"><span v-if="parents.length" class="opacity-60">{{ parents.map((p) => p.title).join('/') }}/</span>{{ title }}</span>
-    </RouterLink>
+    </ObjectLink>
     <button v-if="removable" class="hidden opacity-60 hover:opacity-100 group-hover:inline" title="Remove" @click="$emit('remove')">
       <AppIcon fallback="ph:x" :size="12" />
     </button>
