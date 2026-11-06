@@ -13,7 +13,8 @@ const SHELL = 'vasta-shell'
 const ASSETS = 'vasta-assets'
 const MEDIA = 'vasta-media'
 const API = 'vasta-api'
-const MAX_ASSETS = 40
+// A build has some 85 assets (the app fetches them all for offline use), so this keeps a few builds.
+const MAX_ASSETS = 300
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL).then((cache) => cache.addAll(['/', '/manifest.webmanifest', '/icon.svg', '/favicon.svg'])).then(() => self.skipWaiting()))
@@ -26,7 +27,8 @@ self.addEventListener('activate', (event) => {
 async function networkFirst(request, cacheName, fallbackUrl) {
   const cache = await caches.open(cacheName)
   try {
-    const response = await fetch(request)
+    // Pages past the browser's HTTP cache: an old index.html names assets a new version lacks.
+    const response = await fetch(request, fallbackUrl ? { cache: 'no-cache' } : undefined)
     // The shell must stay the app: a page opened from /media/ or a download is not one.
     const keep = !fallbackUrl || response.headers.get('content-type')?.startsWith('text/html')
     if (response.ok && keep) await cache.put(fallbackUrl ?? request, response.clone())
@@ -50,9 +52,20 @@ async function cacheFirst(request, cacheName, limit) {
   if (response.ok) {
     await cache.put(request, response.clone())
     if (limit) {
-      // Old builds' assets pile up; keys come back in insertion order.
+      // Old builds' assets pile up; keys come back in insertion order. The ones the cached app
+      // shell loads stay: without them it opens blank offline.
       const keys = await cache.keys()
-      for (const key of keys.slice(0, Math.max(0, keys.length - limit))) await cache.delete(key)
+      let extra = keys.length - limit
+      if (extra > 0) {
+        const shell = await (await caches.open(SHELL)).match('/')
+        const html = shell ? await shell.text() : ''
+        for (const key of keys) {
+          if (extra <= 0) break
+          if (html.includes(new URL(key.url).pathname)) continue
+          await cache.delete(key)
+          extra--
+        }
+      }
     }
   }
   return response

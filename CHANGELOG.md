@@ -10,6 +10,10 @@ GitHub release page.
 
 - Reminders as notifications on your phone and in browsers (Web Push): turn them on in Settings › Reminders on each device, and pick what each one reminds you of. On iPhone and iPad, in Vasta added to the Home Screen (iOS 16.4 or later); on Android and computers, in the browser too. Nothing to set up on the server.
 
+### Fixed
+
+- A blank white window after an update (desktop app, Safari, the installed web app). The browser could keep opening the previous version's page, whose files the new version no longer has; now the page is always checked with the server, the files of the current version stay saved for offline use, and a page that still comes up broken reloads itself once.
+
 ## 0.6.1 (2026-11-06)
 
 ### Added

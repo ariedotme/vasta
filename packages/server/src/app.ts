@@ -1607,6 +1607,12 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       await next()
       c.header('cache-control', 'no-cache')
     })
+    // Pages ("/" and /index.html too, which serveStatic answers): without a cache-control a browser
+    // may reuse an old index.html, whose assets a new version no longer has (a blank window).
+    app.use('*', async (c, next) => {
+      await next()
+      if (c.res.headers.get('content-type')?.startsWith('text/html')) c.header('cache-control', 'no-cache')
+    })
     app.use('*', serveStatic({ root: webDir }))
     app.get('*', async (c, next) => {
       if (/^\/(api|media|assets|desktop)\//.test(c.req.path)) return c.json({ error: 'not found' }, 404)
