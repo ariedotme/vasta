@@ -44,6 +44,11 @@ GitHub release page.
   remove or replace), `icon` (an emoji or `ph:<name>`) and `color` on `create_object` and
   `update_object`; `--tag`, `--remove-tag`, `--set-tags`, `--icon` and `--color` on `vasta new`
   and `vasta set`. Missing tags are created, nested ones by path (`recipe/breakfast`).
+- **Edit in tables.** Click a property's cell in a table view, or in a query shown as a table (also
+  one embedded in a page), to change it right there: pick from a select, a person or a related
+  object, set a date, type a text, number or link, and a checkbox toggles with one click. With the
+  keyboard, Tab moves between cells, Enter or Space opens one, Enter saves what you typed and
+  Escape puts it back. Formulas and long text stay read-only; the title still opens the object.
 
 ### Fixed
 
