@@ -35,13 +35,33 @@ export async function setProperty(id: Id, propertyId: Id, value: PropertyValue |
   return saved
 }
 
-/** Adds an option to a select property of a type (one made from a value editor) and saves the type. */
+/** Saves of each type in flight: they go one after another, each sending the latest copy. */
+const typeSaves = new Map<Id, Promise<void>>()
+
+/**
+ * Adds an option to a select property of a type (one made from a value editor) and saves the type.
+ * The option shows at once, and one added before this save answers builds on it, so options
+ * created in quick succession all stay.
+ */
 export async function addSelectOption(type: ObjectType, propertyId: Id, option: SelectOption) {
-  const next = clone(type)
+  const next = clone(typesById.value.get(type.id) ?? type)
   const target = next.properties.find((p) => p.id === propertyId)
   if (target?.kind !== 'select') return
   target.options.push(option)
-  replaceType(await api.saveType(next))
+  replaceType(next)
+  const save: Promise<void> = (typeSaves.get(type.id) ?? Promise.resolve())
+    .catch(() => {}) // an earlier save that failed does not stop this one
+    .then(async () => {
+      const saved = await api.saveType(clone(typesById.value.get(type.id) ?? next))
+      // A later save sends a newer copy; until it answers, the local one is the fullest.
+      if (typeSaves.get(type.id) === save) replaceType(saved)
+    })
+  typeSaves.set(type.id, save)
+  try {
+    await save
+  } finally {
+    if (typeSaves.get(type.id) === save) typeSaves.delete(type.id)
+  }
 }
 
 /** "YYYY-MM-DD" of a date in this device's calendar. */

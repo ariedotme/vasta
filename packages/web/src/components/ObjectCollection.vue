@@ -31,6 +31,8 @@ const props = defineProps<{
   /** The board layout's settings, and whether its cards keep their manual order (no sort chosen). */
   board?: BoardSettings
   manual?: boolean
+  /** Shown where nothing should change (a whiteboard card, a page that cannot be edited): property cells do not edit. */
+  readonly?: boolean
 }>()
 const emit = defineEmits<{
   menu: [event: MouseEvent, object: ObjectSummary]
@@ -93,7 +95,7 @@ function startResize(event: PointerEvent, column: Column) {
 // embed and lose track of the document. A value shows as soon as it is picked (`edits`) and is saved like the object page
 // saves it; only the latest edit of a cell clears it, so quick changes do not flicker back.
 const EDITABLE = new Set<PropertyDef['kind']>(['text', 'url', 'number', 'checkbox', 'date', 'select', 'relation', 'person'])
-const editable = (column: Column) => !!column.def && EDITABLE.has(column.def.kind)
+const editable = (column: Column) => !props.readonly && !!column.def && EDITABLE.has(column.def.kind)
 const cellKey = (object: ObjectSummary, column: Column) => `${object.id} ${column.field}`
 const editing = ref('')
 const edits = ref<Record<string, PropertyValue | null>>({})
@@ -112,6 +114,13 @@ function startEdit(object: ObjectSummary, column: Column) {
     const value = valueOf(object, column)
     void saveCell(object, column, { kind: 'checkbox', value: !(value?.kind === 'checkbox' && value.value) })
   } else editing.value = cellKey(object, column)
+}
+
+/** A click in a cell edits it, except on a link out (a URL's address), which opens as before. */
+function cellClick(event: MouseEvent, object: ObjectSummary, column: Column) {
+  if ((event.target as Element).closest('a[target="_blank"]')) return
+  event.preventDefault()
+  startEdit(object, column)
 }
 
 /** Editing ended; the focus goes back to the cell when nothing else took it (Enter, Escape). */
@@ -251,7 +260,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                   :data-edit="column.field"
                   :data-cell="cellKey(object, column)"
                   @mousedown.stop
-                  @click.capture.prevent="startEdit(object, column)"
+                  @click.capture="cellClick($event, object, column)"
                   @keydown.enter.self.prevent="startEdit(object, column)"
                   @keydown.space.self.prevent="startEdit(object, column)"
                 >

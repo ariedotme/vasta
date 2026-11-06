@@ -10,7 +10,8 @@ import AppIcon from './AppIcon.vue'
 import QueryEditor from './QueryEditor.vue'
 import QueryResults from './QueryResults.vue'
 
-const props = defineProps<{ objectId: Id; parentId?: Id }>()
+/** `readonly`: in a page that cannot be edited, the results' table cells do not edit either. */
+const props = defineProps<{ objectId: Id; parentId?: Id; readonly?: boolean }>()
 
 const summary = computed(() => summaryOf(props.objectId))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
@@ -55,7 +56,7 @@ onBeforeUnmount(() => void save())
       <QueryEditor :query="query" @update="edit" />
     </div>
     <div class="border-t border-line px-3 py-3">
-      <QueryResults :query="query" :parent-id="parentId" :limit="24" @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
+      <QueryResults :query="query" :parent-id="parentId" :limit="24" :readonly="readonly" @table="edit({ ...query, table: $event })" @board="edit({ ...query, board: $event })" />
     </div>
   </div>
 </template>

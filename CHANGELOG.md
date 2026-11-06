@@ -49,6 +49,7 @@ GitHub release page.
   object, set a date, type a text, number or link, and a checkbox toggles with one click. With the
   keyboard, Tab moves between cells, Enter or Space opens one, Enter saves what you typed and
   Escape puts it back. Formulas and long text stay read-only; the title still opens the object.
+  Thanks to @bokehsec (#50).
 
 ### Fixed
 

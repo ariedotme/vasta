@@ -12,7 +12,8 @@ import { runServerQuery } from '../lib/query.ts'
 import { primeSummaries, typesById } from '../lib/state.ts'
 import ObjectCollection from './ObjectCollection.vue'
 
-const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number }>()
+/** `readonly`: property cells of a table do not edit (a whiteboard card, a page that cannot be edited). */
+const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number; readonly?: boolean }>()
 const emit = defineEmits<{ table: [table: TableSettings]; board: [board: BoardSettings] }>()
 
 const results = ref<ObjectSummary[]>([])
@@ -85,6 +86,7 @@ defineExpose({ count: computed(() => results.value.length) })
         :table="query.table"
         :board="query.board"
         :manual="!query.sort?.length"
+        :readonly="readonly"
         @table="emit('table', $event)"
         @board="emit('board', $event)"
         @moved="moved({ ...$event, preview: '' })"

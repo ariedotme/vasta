@@ -68,7 +68,7 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
     </figure>
 
     <!-- Queries show their live results -->
-    <QueryEmbed v-else-if="isQuery" :object-id="objectId" :parent-id="pageId" />
+    <QueryEmbed v-else-if="isQuery" :object-id="objectId" :parent-id="pageId" :readonly="!editor.isEditable" />
 
     <!-- Weblink player, with a line that opens the weblink -->
     <div v-else-if="player" class="max-w-2xl">

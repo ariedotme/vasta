@@ -29,7 +29,7 @@ import ReverseRelations from '../components/ReverseRelations.vue'
 import WeblinkPanel from '../components/WeblinkPanel.vue'
 import WhiteboardCanvas from '../components/whiteboard/WhiteboardCanvas.vue'
 import DocEditor from '../editor/DocEditor.vue'
-import { dayKey, deleteForeverFlow, deleteObjectFlow, isInSidebar, openDay, pinItems, restoreObjectFlow, tagFromPath } from '../lib/actions.ts'
+import { addSelectOption, dayKey, deleteForeverFlow, deleteObjectFlow, isInSidebar, openDay, pinItems, restoreObjectFlow, tagFromPath } from '../lib/actions.ts'
 import { api, mediaUrl, serverApi } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { offline } from '../lib/network.ts'
@@ -384,11 +384,7 @@ function setProp(def: PropertyDef, value: PropertyValue | undefined) {
 }
 
 async function addOption(def: PropertyDef, option: SelectOption) {
-  if (!type.value || def.kind !== 'select') return
-  const next = clone(type.value)
-  const target = next.properties.find((p) => p.id === def.id)
-  if (target?.kind === 'select') target.options.push(option)
-  replaceType(await api.saveType(next))
+  if (type.value) await addSelectOption(type.value, def.id, option)
 }
 
 // Tags ---------------------------------------------------------------------

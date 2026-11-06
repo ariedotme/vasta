@@ -38,7 +38,7 @@ onBeforeUnmount(stop)
     </div>
     <!-- The contents scroll with the wheel (the board pans once they reach an end). -->
     <div data-scroll class="pointer-events-auto min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      <QueryResults v-if="isQuery && object.query" :query="object.query" :parent-id="boardId" :limit="30" class="p-2 text-sm" />
+      <QueryResults v-if="isQuery && object.query" :query="object.query" :parent-id="boardId" :limit="30" readonly class="p-2 text-sm" />
       <img v-else-if="image" :src="image" alt="" class="pointer-events-none h-full w-full object-cover" />
       <div v-else-if="content.length" class="prose-sm space-y-1 px-3 py-2 text-sm text-ink">
         <DocPreview v-for="(doc, i) in content" :key="i" :content="doc.content" />
