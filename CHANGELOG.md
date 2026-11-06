@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.6.0 (2026-11-06)
+
 ### Added
 
 - **Whiteboards** (first version): a new built-in type whose page is an endless canvas. Put
