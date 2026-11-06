@@ -8,7 +8,7 @@ import { chip } from '../lib/colors.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
-import { lastError, typesById } from '../lib/state.ts'
+import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
 import BoardView from './BoardView.vue'
@@ -49,13 +49,9 @@ const emit = defineEmits<{
 
 const types = computed(() => typesOf(props.typeIds))
 const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
-// Where the objects shown open, for every link and card inside (lib/open.ts, VIEW_OPENS): the
-// view's choice, else the object's type's, else its page.
-const byId = computed(() => new Map(props.objects.map((o) => [o.id, o])))
-provide(VIEW_OPENS, (id) => {
-  const object = byId.value.get(id)
-  return object ? (props.openIn ?? typeOf(object)?.openIn) : undefined
-})
+// Where links inside open, for every link, card and relation chip (lib/open.ts, VIEW_OPENS): the
+// view's choice, else the type's of the object linked, else its page.
+provide(VIEW_OPENS, (id) => props.openIn ?? typesById.value.get(summaryOf(id)?.typeId ?? '')?.openIn)
 const groups = computed<Group[]>(() => groupObjects(props.objects, props.groupField, types.value))
 
 // A group shows its first STEP objects, and more as the page scrolls to its end: drawing a type's

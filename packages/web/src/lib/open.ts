@@ -30,10 +30,9 @@ export function objectRoute(id: Id, options: Pick<OpenOptions, 'block' | 'query'
 }
 
 /**
- * Where a view (a type's view or a query) opens the objects it shows, by id: its own choice, else
- * the object's type's; undefined for anything else in it, which opens its page. Provided by the
- * collection, read by every ObjectLink inside it, whatever the layout; a relation's chip
- * (ObjectChip) always opens the page, even of an object the view also shows.
+ * Where a view (a type's view or a query) opens what is linked inside it, by id: its own choice,
+ * else the type's of the object linked (a relation's chip included); undefined opens its page.
+ * Provided by the collection, read by every ObjectLink inside it, whatever the layout.
  */
 export const VIEW_OPENS: InjectionKey<(id: Id) => OpenPlace | undefined> = Symbol('view-opens')
 

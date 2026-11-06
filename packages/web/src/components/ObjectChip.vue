@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Small link to an object (relations, tags). Optional remove button. A tag (or a relation to one)
-// takes the tag's color and shows its path, the parents faded: recipe/breakfast. It opens the
-// object's page, also inside a view that opens its objects in the side pane.
+// takes the tag's color and shows its path, the parents faded: recipe/breakfast. Inside a view it
+// opens where the view opens things (VIEW_OPENS), elsewhere the object's page.
 import { computed } from 'vue'
 import type { Id } from '@vasta/core'
 import { chip, iconTextClasses } from '../lib/colors.ts'
@@ -27,7 +27,7 @@ const title = computed(() => (summary.value?.title.trim() && isTag.value ? summa
     :class="isTag ? chip(tagColor(summary)) : 'bg-hover'"
     :title="isTag ? displayTitle(summary, type) : undefined"
   >
-    <ObjectLink :id="id" opens="page" class="inline-flex min-w-0 items-center gap-1 hover:underline">
+    <ObjectLink :id="id" class="inline-flex min-w-0 items-center gap-1 hover:underline">
       <AppIcon
         :icon="summary?.icon ?? (isTag ? undefined : type?.icon)"
         :fallback="isTag ? undefined : 'ph:file-text'"

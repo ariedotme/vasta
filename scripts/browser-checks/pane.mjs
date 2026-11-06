@@ -3,7 +3,7 @@
 // (Full page, Side pane, Same as the type); then a click on an object in a list, table, board, a
 // query (as each type says, or its own choice) opens it next to the page (?pane=<id>), where it
 // is edited (the calendar still opens the page);
-// another click switches it in place (one Back closes it); a relation chip opens the page; back and forward, reload, Esc, "Open full page", resizing (kept after
+// another click switches it in place (one Back closes it); a relation chip opens where the view does; back and forward, reload, Esc, "Open full page", resizing (kept after
 // a reload), the calendar keeping it while its view changes, a move to the trash from the pane (and
 // Undo), and that links still go to the object's page. On a phone profile, the same click opens
 // the page.
@@ -67,7 +67,7 @@ const task = (await get(`/api/spaces/${space.id}`)).types.find((t) => t.system =
 const day = '2027-06-09' // away from the weeks calendar.mjs drags in
 // Tasks left by an earlier run that failed.
 for (const object of await get(`/api/spaces/${space.id}/search?q=Pane&limit=100`)) {
-  if (/^Pane (Alpha|Bravo|Charlie)/.test(object.title)) await page.request.delete(`${base}/api/objects/${object.id}`, { headers })
+  if (/^Pane (Alpha|Bravo|Charlie|Delta)/.test(object.title)) await page.request.delete(`${base}/api/objects/${object.id}`, { headers })
 }
 const { views, properties } = await get(`/api/types/${task.id}`)
 const made = {}
@@ -186,17 +186,29 @@ if (phone) {
   await page.locator(`main table a[href="/o/${made.Bravo.id}"]`).first().click()
   await until(() => paneId() === made.Bravo.id, 'Bravo from the table')
 
-  step('table: a relation chip opens the page, even of an object the view shows')
+  step('table: a relation chip opens where the view opens things')
   const withLink = await get(`/api/types/${task.id}`)
-  await put(`/api/types/${task.id}`, { ...withLink, properties: [...withLink.properties, { id: 'panelink', name: 'Pane link', kind: 'relation', targetTypeIds: [task.id], multiple: false }] })
-  await put(`/api/objects/${made.Alpha.id}`, { ...(await get(`/api/objects/${made.Alpha.id}`)), props: { ...(await get(`/api/objects/${made.Alpha.id}`)).props, panelink: { kind: 'relation', value: [made.Charlie.id] } } })
-  await openType()
-  const chipLink = page.locator(`main table tr:has(a[href="/o/${made.Alpha.id}"]) span a[href="/o/${made.Charlie.id}"]`).first()
-  await until(async () => (await chipLink.count()) > 0, 'the chip in the table', 20000)
-  await chipLink.click() // a click on the cell edits it; the chip in the editor is the link
-  await until(async () => (await page.getByPlaceholder(/^Search/).count()) > 0, 'the cell is editing')
-  await page.locator(`main table tr:has(a[href="/o/${made.Alpha.id}"]) span a[href="/o/${made.Charlie.id}"]`).first().click()
-  await until(() => new URL(page.url()).pathname === `/o/${made.Charlie.id}` && !paneId(), 'the chip opened the page of Charlie')
+  await put(`/api/types/${task.id}`, { ...withLink, properties: [...withLink.properties, { id: 'panelink', name: 'Pane link', kind: 'relation', targetTypeIds: [], multiple: true }] })
+  const pageType = (await get(`/api/spaces/${space.id}`)).types.find((t) => t.system === 'page')
+  made.Delta = await post('/api/objects', { typeId: pageType.id, title: `Pane Delta ${tag}` })
+  const alpha = await get(`/api/objects/${made.Alpha.id}`)
+  await put(`/api/objects/${made.Alpha.id}`, { ...alpha, props: { ...alpha.props, panelink: { kind: 'relation', value: [made.Charlie.id, made.Delta.id] } } })
+  const clickChip = async (target) => {
+    await openType()
+    const chipLink = page.locator(`main table tr:has(a[href="/o/${made.Alpha.id}"]) span a[href="/o/${target.id}"]`).first()
+    await until(async () => (await chipLink.count()) > 0, 'the chip in the table', 20000)
+    await chipLink.click() // a click on the cell edits it; the chip in the editor is the link
+    await until(async () => (await page.getByPlaceholder(/^Search/).count()) > 0, 'the cell is editing')
+    await page.locator(`main table tr:has(a[href="/o/${made.Alpha.id}"]) span a[href="/o/${target.id}"]`).first().click()
+  }
+  await clickChip(made.Charlie)
+  await until(() => paneId() === made.Charlie.id && new URL(page.url()).pathname === `/t/${task.id}`, 'a task chip: the pane, as Task says')
+  await clickChip(made.Delta)
+  await until(() => new URL(page.url()).pathname === `/o/${made.Delta.id}` && !paneId(), 'a page chip: its page, as Page says')
+  await setLayout('table', 'pane')
+  await clickChip(made.Delta)
+  await until(() => paneId() === made.Delta.id && new URL(page.url()).pathname === `/t/${task.id}`, 'view set to Side pane: the page chip in the pane')
+  await setLayout('table')
 
   step('board: a card opens the pane')
   await setLayout('kanban')
