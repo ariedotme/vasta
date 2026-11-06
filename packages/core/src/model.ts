@@ -151,6 +151,8 @@ export interface ObjectType {
   color?: ColorName
   properties: PropertyDef[]
   views: ViewDef[]
+  /** Where a click on one of its objects in a view or query opens it, unless the view says; unset: its page. */
+  openIn?: ViewOpenIn
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
   /** Set when the type is in the trash; its objects are trashed with it. */
@@ -493,6 +495,8 @@ export interface QueryDef {
   table?: TableSettings
   /** The board layout's settings. */
   board?: BoardSettings
+  /** Where a click on a result opens it; unset: as each result's type says. */
+  openIn?: ViewOpenIn
 }
 
 export interface FilterGroup {
@@ -538,7 +542,12 @@ export interface ViewDef {
   groupBy?: GroupRule[]
   table?: TableSettings
   board?: BoardSettings
+  /** Where a click on an object opens it; unset: as the type says. */
+  openIn?: ViewOpenIn
 }
+
+/** Where a view opens the object clicked: its own page, or the side pane next to the view. */
+export type ViewOpenIn = 'page' | 'pane'
 
 /**
  * The board layout's settings: which fields cards show, a second grouping in rows (swimlanes),

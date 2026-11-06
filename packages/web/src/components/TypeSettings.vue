@@ -43,6 +43,11 @@ function setColor(color: ColorName) {
 
 // Properties ---------------------------------------------------------------
 
+function setOpenIn(pane: boolean) {
+  if (pane) draft.value.openIn = 'pane'
+  else delete draft.value.openIn
+}
+
 const richTextCount = computed(() => draft.value.properties.filter((p) => p.kind === 'rich-text').length)
 
 function move(index: number, delta: number) {
@@ -230,6 +235,13 @@ async function leave(path: string) {
     <section class="mt-4">
       <div class="mb-1.5 text-xs text-ink-faint">Color</div>
       <ColorPicker :color="draft.color" @pick="setColor" />
+    </section>
+    <section class="mt-4">
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" class="accent-[var(--color-accent)]" :checked="draft.openIn === 'pane'" @change="setOpenIn(($event.target as HTMLInputElement).checked)" />
+        Open in side pane
+      </label>
+      <p class="mt-0.5 pl-6 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it next to the page. A view can choose otherwise.</p>
     </section>
 
     <TypeTemplates :type="type" @leave="leave" />

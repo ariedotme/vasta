@@ -9,6 +9,7 @@ import { habitColor, useFoodHabits } from '../lib/habits.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
+import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{ habits: ObjectSummary[]; filter?: string }>()
 const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
@@ -46,12 +47,12 @@ const rows = computed(() => {
       <tbody>
         <tr v-for="row in rows" :key="row.habit.id" class="group" :class="row.paused ? 'opacity-50' : ''" @contextmenu.prevent="emit('menu', $event, row.habit)">
           <td class="sticky left-0 z-10 max-w-[14rem] border-t border-line/70 bg-surface py-1.5 pr-3">
-            <RouterLink :to="`/o/${row.habit.id}`" class="flex min-w-0 items-center gap-2 hover:underline">
+            <ObjectLink :id="row.habit.id" class="flex min-w-0 items-center gap-2 hover:underline">
               <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="swatchClasses[habitColor(row.habit)]" />
               <span class="truncate font-medium">{{ row.habit.title || 'Untitled' }}</span>
               <span v-if="row.paused" class="text-xs text-ink-faint">paused</span>
               <span v-else-if="habitTarget(row.habit)" class="shrink-0 text-xs text-ink-faint">{{ habitTarget(row.habit) }} {{ habitUnit(row.habit) }}</span>
-            </RouterLink>
+            </ObjectLink>
           </td>
           <td v-for="day in days" :key="day" class="border-t border-line/70 py-1.5 text-center">
             <HabitCheck :habit="row.habit" :day="day" :size="24" square class="mx-auto" :class="isHabitScheduled(row.habit, day) || isHabitDone(row.habit, day) ? '' : 'opacity-40'" />

@@ -53,6 +53,7 @@ import ModalDialog from '../ModalDialog.vue'
 import FoodPicker from './FoodPicker.vue'
 import NutrientLine from './NutrientLine.vue'
 import WeekBudgetCard from './WeekBudgetCard.vue'
+import { openObject } from '../../lib/open.ts'
 
 const props = defineProps<{ day: string }>()
 const { note, entries, goal, budget, loaded, setNote } = useFoodDay(toRef(props, 'day'))
@@ -147,7 +148,7 @@ function entryMenu(event: MouseEvent, item: DayEntry, meal: Meal) {
     ...meals.value.filter((m) => m.id !== meal.id).map((m): MenuItem => ({ label: `Move to ${m.name}`, icon: 'ph:arrow-right', run: () => moveTo(item, m) })),
     { kind: 'separator' },
     { label: 'Update from the food', icon: 'ph:arrows-clockwise', disabled: !item.entry.sourceId || !library.lookup(item.entry.sourceId), run: () => refresh(item) },
-    { label: 'Open the food', icon: 'ph:arrow-up-right', disabled: !item.entry.sourceId || !library.lookup(item.entry.sourceId), run: () => router.push(`/o/${item.entry.sourceId}`) },
+    { label: 'Open the food', icon: 'ph:arrow-up-right', disabled: !item.entry.sourceId || !library.lookup(item.entry.sourceId), run: () => openObject(item.entry.sourceId!) },
     { kind: 'separator' },
     { label: 'Delete', icon: 'ph:trash', danger: true, run: () => remove(item.id) },
   ]
@@ -182,7 +183,7 @@ async function saveAsRecipe(meal: Meal, items: DayEntry[]) {
   if (!title?.trim()) return
   try {
     const recipe = await createObject(nutritionTypeId('recipe'), { title: title.trim(), props: { ingredients: ingredientsValue(ingredients), servings: { kind: 'number', value: 1 } } }, false)
-    notice.value = { message: `Saved “${recipe.title}”.`, action: { label: 'Open', run: () => router.push(`/o/${recipe.id}`) } }
+    notice.value = { message: `Saved “${recipe.title}”.`, action: { label: 'Open', run: () => openObject(recipe.id) } }
   } catch (error) {
     lastError.value = (error as Error).message
   }

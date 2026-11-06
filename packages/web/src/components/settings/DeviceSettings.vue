@@ -10,6 +10,7 @@ import { dismissRefused, replica, syncNow, useReplica } from '../../lib/replica.
 import AppIcon from '../AppIcon.vue'
 import SettingsSection from './SettingsSection.vue'
 import { secondary } from './styles.ts'
+import ObjectLink from '../ObjectLink.vue'
 
 const KIND: Record<RefusedChange['table'], string> = { objects: '', types: 'Type ', spaces: 'Space ', calendar_sources: 'Calendar ' }
 
@@ -54,7 +55,7 @@ const built = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short
         <ul class="mt-2 space-y-1.5">
           <li v-for="change in replica.refused" :key="change.id" class="flex items-start gap-2">
             <div class="min-w-0 flex-1">
-              <RouterLink v-if="change.table === 'objects'" :to="`/o/${change.rowId}`" class="font-medium hover:underline">{{ change.title || 'Untitled' }}</RouterLink>
+              <ObjectLink v-if="change.table === 'objects'" :id="change.rowId" class="font-medium hover:underline">{{ change.title || 'Untitled' }}</ObjectLink>
               <span v-else class="font-medium">{{ KIND[change.table] }}{{ change.title || change.rowId }}</span>
               <span class="text-ink-soft"> · {{ change.reason }} · {{ formatRelative(change.at) }}</span>
             </div>

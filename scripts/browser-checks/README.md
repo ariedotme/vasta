@@ -33,6 +33,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node import.mjs <export.zip> [base]   # Settings › Import: a Capacities full export into a new space, the report, a type and an object (SHOTS=<dir>)
     node nutrition.mjs [chromium|webkit] [base] [phone]   # food tracking: Settings, a weekly goal, the picker, editing, a recipe, portions, /food in ⌘K, the Nutrition page, kcal in the month (MODE=json too)
     node board.mjs [chromium|webkit] [base] [phone]   # drag between columns and within one (manual order), "+", WIP limit, folding, swimlanes, card fields, Blocked; phone = long press (chromium) (MODE=json too)
+    node pane.mjs [chromium|webkit] [base] [phone]    # the side pane: off by default, Type settings' switch, a view's Full page choice, list, table, board and query clicks, the calendar still opening the page, editing, back/forward, reload, Esc, Open full page, resizing, trash + Undo; phone = the page (MODE=json too)
     node sprints.mjs [chromium|webkit] [base]   # Settings › Sprints (on, named Rodada), Current rodada and Backlog, a sprint's panel, Finish, Next (MODE=json too)
     node metrics.mjs [chromium|webkit] [base]  # the Tasks page's Metrics: numbers, done per week, cumulative flow (hover), what waits longest (SHOTS=<dir>: light and dark)
     node people.mjs [chromium|webkit] [base]   # a shared space: Assignee picked on a task, "Edited … by", Mine, a filter on Me, a board by assignee, assignee: in ⌘K, comments, the bell, activity (needs a second account: see the script; MODE=json too)

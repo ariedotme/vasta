@@ -2,7 +2,6 @@
 // Covers what captures contain: paragraphs with marks and links, lists, quotes, code (Mermaid
 // diagrams drawn), mentions and embedded objects; other containers show their children.
 import { defineComponent, h, type PropType, type VNode } from 'vue'
-import { RouterLink } from 'vue-router'
 import type { DocMark, DocNode } from '@vasta/core'
 import { displayTitle } from '../lib/format.ts'
 import { imageOf } from '../lib/media.ts'
@@ -12,6 +11,7 @@ import { MERMAID } from '../lib/mermaid.ts'
 import AppIcon from './AppIcon.vue'
 import MermaidDiagram from './MermaidDiagram.vue'
 import ObjectChip from './ObjectChip.vue'
+import ObjectLink from './ObjectLink.vue'
 
 const safeHref = (href: string) => (/^(https?:|mailto:)/i.test(href) ? href : undefined)
 
@@ -41,11 +41,11 @@ function embed(objectId: string): VNode {
   const image = summary && (type?.system === 'image' || type?.system === 'weblink') ? imageOf(summary) : undefined
   const title = displayTitle(summary, type)
   if (image && type?.system === 'image') {
-    return h(RouterLink, { to: `/o/${objectId}`, class: 'my-1 block w-fit' }, () =>
+    return h(ObjectLink, { id: objectId, class: 'my-1 block w-fit' }, () =>
       h('img', { src: image, alt: '', loading: 'lazy', class: 'max-h-56 max-w-full rounded-lg', width: summary?.media?.width, height: summary?.media?.height })
     )
   }
-  return h(RouterLink, { to: `/o/${objectId}`, class: 'my-1 flex max-w-full items-center gap-2.5 rounded-lg border border-line bg-surface p-1.5 pr-3 hover:bg-hover' }, () => [
+  return h(ObjectLink, { id: objectId, class: 'my-1 flex max-w-full items-center gap-2.5 rounded-lg border border-line bg-surface p-1.5 pr-3 hover:bg-hover' }, () => [
     image
       ? h('img', { src: image, alt: '', loading: 'lazy', class: 'h-10 w-14 shrink-0 rounded object-cover' })
       : h('span', { class: 'grid h-8 w-8 shrink-0 place-items-center rounded bg-hover' }, [

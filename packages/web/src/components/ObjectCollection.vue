@@ -1,14 +1,14 @@
 <script setup lang="ts">
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
-import { computed, nextTick, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout } from '@vasta/core'
+import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
+import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
-import { lastError, typesById } from '../lib/state.ts'
+import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
 import BoardView from './BoardView.vue'
@@ -18,6 +18,8 @@ import ObjectChip from './ObjectChip.vue'
 import PersonChip from './PersonChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
 import PropertyValueEditor from './PropertyValueEditor.vue'
+import ObjectLink from './ObjectLink.vue'
+import { VIEW_OPENS } from '../lib/open.ts'
 
 const props = defineProps<{
   objects: ObjectSummary[]
@@ -31,6 +33,8 @@ const props = defineProps<{
   /** The board layout's settings, and whether its cards keep their manual order (no sort chosen). */
   board?: BoardSettings
   manual?: boolean
+  /** Where a click on an object opens it, as saved on the view or query; unset: as its type says. */
+  openIn?: ViewOpenIn
   /** Shown where nothing should change (a whiteboard card, a page that cannot be edited): property cells do not edit. */
   readonly?: boolean
 }>()
@@ -45,6 +49,9 @@ const emit = defineEmits<{
 
 const types = computed(() => typesOf(props.typeIds))
 const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
+// Where links inside open, for every link, card and relation chip (lib/open.ts, VIEW_OPENS): the
+// view's choice, else the type's of the object linked, else its page.
+provide(VIEW_OPENS, (id) => props.openIn ?? typesById.value.get(summaryOf(id)?.typeId ?? '')?.openIn)
 const groups = computed<Group[]>(() => groupObjects(props.objects, props.groupField, types.value))
 
 // A group shows its first STEP objects, and more as the page scrolls to its end: drawing a type's
@@ -189,14 +196,14 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- List -->
       <div v-if="layout === 'list'" class="divide-y divide-line/70">
-        <RouterLink v-for="object in shown(group)" :key="object.id" :to="`/o/${object.id}`" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
+        <ObjectLink v-for="object in shown(group)" :key="object.id" :id="object.id" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
           <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
           <span class="min-w-0 flex-1 truncate font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
           <span class="hidden gap-1 md:flex" @click.prevent>
             <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
           </span>
           <span class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
-        </RouterLink>
+        </ObjectLink>
       </div>
 
       <!-- Table: fixed column widths; the last, empty column takes the space left. -->
@@ -227,9 +234,9 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 class="overflow-hidden px-3 py-2 align-top"
                 :class="column.wrap ? 'break-words' : 'whitespace-nowrap text-ellipsis'"
               >
-                <RouterLink v-if="column.field === 'title'" :to="`/o/${object.id}`" class="font-medium hover:underline">
+                <ObjectLink v-if="column.field === 'title'" :id="object.id" class="font-medium hover:underline">
                   <AppIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" class="mr-2 inline-block align-[-2px] text-ink-soft" />{{ displayTitle(object, typeOf(object)) }}
-                </RouterLink>
+                </ObjectLink>
                 <span v-else-if="column.field === 'tags' || column.field === 'collections'" class="flex gap-1" :class="column.wrap ? 'flex-wrap' : 'overflow-hidden'">
                   <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
                 </span>

@@ -11,13 +11,14 @@ import { previewLine, typedLine, type CompletionSource } from './typed-line.ts'
 import { people } from './people.ts'
 import { loadTemplates, templates } from './templates.ts'
 import { router } from '../router.ts'
+import { closePane, openObject, pageObjectId, paneObjectId } from './open.ts'
 
 /** With `line`, the title and properties are read from it, e.g. `Dune author:"Frank Herbert"`. */
 export async function createObject(typeId: Id, data: Partial<ObjectRecord> = {}, open = true, line?: string): Promise<ObjectRecord> {
   const object = await api.createObject({ ...data, typeId }, line)
   primeFromObject(object)
   void refreshCounts()
-  if (open) await router.push({ path: `/o/${object.id}`, query: { new: '1' } })
+  if (open) await openObject(object.id, { query: { new: '1' } })
   return object
 }
 
@@ -140,7 +141,11 @@ export async function openCapture(space: Space, answer: CaptureAnswer, made?: Id
   const id = made ?? (answer.dailyNoteId || answer.sourceId)
   if (!id) return
   if (workspace.space?.id !== space.id) await loadWorkspace(space.id)
-  await router.push({ path: `/o/${id}`, ...(id === answer.sourceId ? { query: { capture: answer.blockId } } : {}) })
+  if (id === answer.sourceId) {
+    await openObject(id, { query: { capture: answer.blockId } })
+    return
+  }
+  await openObject(id)
 }
 
 /**
@@ -235,12 +240,14 @@ export async function deleteObjectFlow(id: Id): Promise<boolean> {
   const summary = summaryOf(id)
   const title = displayTitle(summary, typesById.value.get(summary?.typeId ?? ''))
   const places = sidebarPlaces(id)
-  const wasOpen = router.currentRoute.value.path === `/o/${id}`
+  const onPage = pageObjectId.value === id
+  const inPane = paneObjectId.value === id
   await api.deleteObject(id)
   forgetSummary(id)
   void refreshCounts()
   if (places.length) await updateSidebar((space) => removeEverywhere(space, id))
-  if (wasOpen) await router.push(summary ? `/t/${summary.typeId}` : '/')
+  if (onPage) await router.push(summary ? `/t/${summary.typeId}` : '/')
+  else if (inPane) await closePane()
   notice.value = {
     message: `Moved “${title}” to the trash`,
     action: {
@@ -248,7 +255,7 @@ export async function deleteObjectFlow(id: Id): Promise<boolean> {
       run: async () => {
         await restoreObjectFlow(id)
         await restorePlaces(id, places)
-        if (wasOpen) await router.push(`/o/${id}`)
+        if (onPage || inPane) await openObject(id, { where: inPane ? 'pane' : 'page' })
       },
     },
   }

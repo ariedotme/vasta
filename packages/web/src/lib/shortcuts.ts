@@ -1,10 +1,11 @@
 // The app's keyboard shortcuts, in one place: the handler installed by App.vue, the list the
 // shortcuts dialog (⌘/) shows, and the hints in the sidebar and ⌘K. ⌘1–3 (the sidebar's top rows,
 // in order) and ⌘D (today, "day") work while typing too; "G then a letter" (as in Linear or GitHub)
-// only outside text fields, and also in a browser tab, where ⌘1–3 switch tabs. ⌘K lives in
-// CommandPalette, the desktop app's ⌘[ ⌘] ⌘, in platform.ts.
+// only outside text fields, and also in a browser tab, where ⌘1–3 switch tabs; so does Esc for the
+// side pane. ⌘K lives in CommandPalette, the desktop app's ⌘[ ⌘] ⌘, in platform.ts.
 import { router } from '../router.ts'
 import { openToday } from './actions.ts'
+import { closePane, paneObjectId } from './open.ts'
 import { systemType, ui, workspace } from './state.ts'
 
 export const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -45,6 +46,7 @@ export const SHORTCUTS: { group: string; items: Shortcut[] }[] = [
     items: [
       { id: 'search', label: 'Search or create', keys: [`${mod}K`] },
       { id: 'sidebar', label: 'Show or hide the sidebar', keys: [`${mod}\\`] },
+      { id: 'pane', label: 'Close the side pane', keys: ['Esc'] },
       { id: 'shortcuts', label: 'Keyboard shortcuts', keys: [`${mod}/`] },
     ],
   },
@@ -82,6 +84,12 @@ function onKey(event: KeyboardEvent) {
     return
   }
   if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target) || overlayOpen()) return
+  // Esc while typing stays with the editor (it selects blocks there).
+  if (event.key === 'Escape' && paneObjectId.value) {
+    event.preventDefault()
+    void closePane()
+    return
+  }
   const key = event.key.toLowerCase()
   if (key === 'g' && !event.shiftKey) {
     pendingG = Date.now()

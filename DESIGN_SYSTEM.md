@@ -21,6 +21,13 @@ back/forward and where you are (an object's type, then the object); the page is 
 (`bg-surface`, border, faint shadow) sitting on the canvas. On phones the panel is flat and full
 width, the sidebar is a drawer, and the top bar shows the menu, the page and Search.
 
+**Side pane**: objects in views and queries can open in a second panel to the right of the page
+(`SidePane`, same surface and border), keeping the list in view: when the view or query says
+`openIn: 'pane'`, or says nothing and their type does (Type settings › "Open in side pane"; unset
+everywhere: the page). Links elsewhere (mentions, the sidebar, ⌘K, the calendar) open the page. Everything that opens an object goes through `lib/open.ts`
+(`openObject`, and `ObjectLink` in templates), which decides page or pane; the pane is `?pane=<id>`
+on the page's address. The link of the object the pane shows is tinted (`bg-hover`). Phones: no pane.
+
 **Sidebar top**: Calendar, Inbox and Tasks (⌘1, ⌘2, ⌘3, in that order), the places visited every
 day, above the user's sections; Tasks is never listed again among the types. Today is not a row:
 ⌘D ("day"), G then T.
@@ -126,3 +133,4 @@ keys the app already handled (`defaultPrevented`).
   instead of the native one. Needs a desktop release and the drag permission for the server's
   origin.
 - Tabs or split view were set aside on 2026-10-19; the top bar has room for them if that changes.
+  The side pane's `lib/open.ts` (a place to open an object in) is where they would plug in.

@@ -38,6 +38,7 @@ import { swatchClasses } from '../lib/colors.ts'
 import { onChange } from '../lib/events.ts'
 import { cachedSummary, lastError, primeFromObject, primeSummaries, refreshCounts, typesById, workspace } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
+import { openObject } from '../lib/open.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -333,7 +334,7 @@ const sourcesOpen = ref(false)
 const openDayView = (day: string) => go({ view: 'day', date: day })
 const openNote = (day: string) => {
   const id = dailyNotes.value.get(day)
-  if (id) void router.push(`/o/${id}`)
+  if (id) void openObject(id)
 }
 </script>
 

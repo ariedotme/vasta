@@ -11,6 +11,7 @@ import { api } from '../lib/api.ts'
 import AppIcon from './AppIcon.vue'
 import BarChart, { type Bar } from './charts/BarChart.vue'
 import FlowChart from './charts/FlowChart.vue'
+import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{ type: ObjectType }>()
 
@@ -116,7 +117,7 @@ const retention = computed(() => metrics.value?.retentionDays ?? 0)
         <p v-if="!aging.length" class="text-sm text-ink-faint">Nothing open.</p>
         <ul v-else class="divide-y divide-line rounded-xl border border-line">
           <li v-for="item in aging" :key="item.id" class="flex items-center gap-3 px-3 py-2 text-sm">
-            <RouterLink :to="`/o/${item.id}`" class="min-w-0 flex-1 truncate hover:underline">{{ item.title || 'Untitled' }}</RouterLink>
+            <ObjectLink :id="item.id" class="min-w-0 flex-1 truncate hover:underline">{{ item.title || 'Untitled' }}</ObjectLink>
             <span class="text-xs text-ink-faint">{{ LABELS[item.category] }}</span>
             <span class="w-20 text-right tabular-nums" :class="late(item.age) ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-ink-soft'" :title="late(item.age) ? 'Longer than 85% of what got done took' : undefined">
               <AppIcon v-if="late(item.age)" fallback="ph:warning" :size="12" class="mr-0.5 inline" />{{ daysText(item.age) }}

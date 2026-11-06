@@ -25,6 +25,7 @@ import { lastError, systemType, workspace } from '../lib/state.ts'
 import AppIcon from '../components/AppIcon.vue'
 import BarChart, { type Bar } from '../components/charts/BarChart.vue'
 import WeekBudgetCard from '../components/nutrition/WeekBudgetCard.vue'
+import ObjectLink from '../components/ObjectLink.vue'
 
 const today = dayKey()
 const RANGES = [7, 30, 90] as const
@@ -290,15 +291,15 @@ const heading = 'mb-3 flex items-center gap-2 text-sm font-semibold text-ink-sof
         </form>
 
         <p v-if="!history.length && !form" class="rounded-lg border border-dashed border-line px-3 py-3 text-sm text-ink-faint">No goal yet. Set one to see each day and week against it.</p>
-        <RouterLink v-for="{ object, goal } in history" :key="object.id" :to="`/o/${object.id}`" class="flex items-baseline gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-hover" :class="goal.start > today ? 'opacity-70' : ''">
+        <ObjectLink v-for="{ object, goal } in history" :key="object.id" :id="object.id" class="flex items-baseline gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-hover" :class="goal.start > today ? 'opacity-70' : ''">
           <span class="w-28 shrink-0 tabular-nums text-ink-soft">{{ shortDay.format(at(goal.start)) }}</span>
           <span class="min-w-0 flex-1 text-ink">{{ goalLine(goal) }}</span>
           <span v-if="goal.id === currentId" class="shrink-0 rounded-md bg-accent/10 px-1.5 py-0.5 text-[11px] text-accent">current</span>
           <span v-else-if="goal.start > today" class="shrink-0 text-[11px] text-ink-faint">from then on</span>
-        </RouterLink>
+        </ObjectLink>
         <p v-if="unfinished.length" class="mt-2 text-xs text-ink-faint">
           {{ unfinished.length }} {{ unfinished.length === 1 ? 'goal has' : 'goals have' }} no start day or kcal yet and {{ unfinished.length === 1 ? 'does' : 'do' }} not count:
-          <template v-for="(o, i) in unfinished" :key="o.id"><RouterLink :to="`/o/${o.id}`" class="text-ink-soft hover:underline">{{ o.title || 'Untitled' }}</RouterLink>{{ i < unfinished.length - 1 ? ', ' : '.' }}</template>
+          <template v-for="(o, i) in unfinished" :key="o.id"><ObjectLink :id="o.id" class="text-ink-soft hover:underline">{{ o.title || 'Untitled' }}</ObjectLink>{{ i < unfinished.length - 1 ? ', ' : '.' }}</template>
         </p>
       </section>
     </template>

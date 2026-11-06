@@ -34,6 +34,7 @@ import IconPicker from './IconPicker.vue'
 import TypeIcon from './TypeIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
 import TypePicker from './TypePicker.vue'
+import { objectPath, openObject } from '../lib/open.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,7 +54,7 @@ const sections = computed(() =>
   (workspace.space?.sidebar ?? []).map((section) => ({
     ...section,
     entries: section.items.flatMap((id, index): Item[] =>
-      id === taskType.value?.id ? [] : [{ id, index, kind: typesById.value.has(id) ? 'type' : 'object', to: typesById.value.has(id) ? `/t/${id}` : `/o/${id}` }]
+      id === taskType.value?.id ? [] : [{ id, index, kind: typesById.value.has(id) ? 'type' : 'object', to: typesById.value.has(id) ? `/t/${id}` : objectPath(id) }]
     ),
   }))
 )
@@ -118,7 +119,7 @@ function typeMenu(event: MouseEvent, type: ObjectType, sectionId?: string) {
 function objectMenu(event: MouseEvent, id: Id, sectionId: string) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(summaryOf(id)) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => router.push(`/o/${id}`) },
+    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(id) },
     { kind: 'separator' },
     pinMenu(id),
     ...inSectionItems(id, sectionId),

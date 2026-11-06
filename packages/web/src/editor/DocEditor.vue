@@ -19,6 +19,7 @@ import { lastError, notice, primeFromObject, refreshCounts } from '../lib/state.
 import { saveAsSnippet, selectedBlocks } from '../lib/templates.ts'
 import { flashBlock } from './block-attributes.ts'
 import { createExtensions } from './extensions.ts'
+import { openObject } from '../lib/open.ts'
 
 const props = defineProps<{
   doc: Doc | undefined
@@ -52,7 +53,7 @@ const editor = useEditor({
     handleClick: (view, _pos, event) => {
       const quote = (event.target as HTMLElement | null)?.closest?.('mark[data-quote-id]')
       if (quote && view.state.selection.empty && event.button === 0 && !event.shiftKey) {
-        void router.push(`/o/${quote.getAttribute('data-quote-id')}`)
+        void openObject(quote.getAttribute('data-quote-id')!)
         return true
       }
       const link = (event.target as HTMLElement | null)?.closest?.('a[href]')
@@ -177,7 +178,7 @@ async function quote() {
     primeFromObject(created)
     void refreshCounts()
     editor.value?.chain().focus().setTextSelection({ from, to }).setMark('highlight', { color: 'yellow', quoteId: created.id }).run()
-    notice.value = { message: 'Quote saved', action: { label: 'Open', run: () => router.push(`/o/${created.id}`) } }
+    notice.value = { message: 'Quote saved', action: { label: 'Open', run: () => openObject(created.id) } }
   } catch (error) {
     lastError.value = (error as Error).message
   }

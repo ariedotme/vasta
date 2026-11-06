@@ -18,7 +18,18 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: HomeView },
-    { path: '/o/:id', component: pages.object, props: true },
+    {
+      path: '/o/:id',
+      component: pages.object,
+      // The page reads its address only through these, so the side pane can show it without one.
+      props: (route) => ({
+        id: route.params.id,
+        isNew: route.query.new === '1',
+        capture: typeof route.query.capture === 'string' ? route.query.capture : undefined,
+        cursor: typeof route.query.cursor === 'string' ? route.query.cursor : undefined,
+        block: route.hash.startsWith('#b-') ? route.hash.slice(3) : undefined,
+      }),
+    },
     { path: '/t/:id', component: pages.type, props: true },
     { path: '/day/:day', component: pages.day, props: true },
     { path: '/calendar', component: pages.calendar },
@@ -27,6 +38,18 @@ export const router = createRouter({
     { path: '/inbox', component: pages.inbox },
     { path: '/nutrition', component: pages.nutrition },
   ],
+})
+
+// The side pane (lib/open.ts) lives in the query, as ?pane=<id>&paneBlock=<id>. A page that
+// changes only its own query (the calendar's view and date, a type page closing its settings)
+// keeps it: its part is carried over, so no page has to remember it. Not while closePane is
+// closing it, nor on back/forward (the entry already says).
+export const paneNavigation = { closing: false }
+router.beforeEach((to, from) => {
+  const { pane, paneBlock } = from.query
+  if (!pane || paneNavigation.closing || to.path !== from.path || 'pane' in to.query) return
+  if (router.options.history.state.current === to.fullPath) return
+  return { path: to.path, hash: to.hash, query: { ...to.query, pane, ...(paneBlock ? { paneBlock } : {}) } }
 })
 
 export function warmRoutes() {

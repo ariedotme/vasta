@@ -9,6 +9,7 @@ import { primeFromObject, summaryOf, typesById } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import QueryEditor from './QueryEditor.vue'
 import QueryResults from './QueryResults.vue'
+import ObjectLink from './ObjectLink.vue'
 
 /** `readonly`: in a page that cannot be edited, the results' table cells do not edit either. */
 const props = defineProps<{ objectId: Id; parentId?: Id; readonly?: boolean }>()
@@ -43,7 +44,7 @@ onBeforeUnmount(() => void save())
   <div class="vasta-ui rounded-xl border border-line bg-surface">
     <header class="flex items-center gap-2 px-3 py-2" data-drag-handle>
       <AppIcon :icon="summary?.icon ?? type?.icon" fallback="ph:funnel" class="text-ink-soft" />
-      <RouterLink :to="`/o/${objectId}`" class="truncate text-sm font-semibold hover:underline">{{ displayTitle(summary, type) }}</RouterLink>
+      <ObjectLink :id="objectId" class="truncate text-sm font-semibold hover:underline">{{ displayTitle(summary, type) }}</ObjectLink>
       <button
         class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-1 text-xs"
         :class="editing ? 'bg-hover text-ink' : 'text-ink-faint hover:bg-hover hover:text-ink'"

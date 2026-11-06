@@ -67,6 +67,7 @@ function rowToType(row: Row): ObjectType {
     ...(row.color ? { color: row.color as ObjectType['color'] } : {}),
     properties: parse(row.properties) ?? [],
     views: parse(row.views) ?? [],
+    ...(row.open_in ? { openIn: row.open_in as ObjectType['openIn'] } : {}),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     ...(row.deleted_at ? { deletedAt: row.deleted_at as string } : {}),
@@ -523,12 +524,12 @@ export class Store {
       const stamp = this.syncStamp('types', type.spaceId, this.syncRow('types', type.id), type, clock)
       this.db
         .prepare(
-          `INSERT OR REPLACE INTO types (id, space_id, system, name, plural_name, description, icon, color, properties, views, created_at, updated_at, deleted_at, rev, clock)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT OR REPLACE INTO types (id, space_id, system, name, plural_name, description, icon, color, properties, views, open_in, created_at, updated_at, deleted_at, rev, clock)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           type.id, type.spaceId, type.system ?? null, type.name, type.pluralName, type.description ?? null,
-          json(type.icon), type.color ?? null, json(type.properties), json(type.views), type.createdAt, type.updatedAt,
+          json(type.icon), type.color ?? null, json(type.properties), json(type.views), type.openIn ?? null, type.createdAt, type.updatedAt,
           type.deletedAt ?? null, stamp.rev, stamp.clock
         )
       this.db.prepare("DELETE FROM sync_tombstones WHERE kind = 'types' AND id = ?").run(type.id)

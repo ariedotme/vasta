@@ -11,6 +11,7 @@ import { formulaValue } from '../lib/properties.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
 import PropertyDisplay from './PropertyDisplay.vue'
+import ObjectLink from './ObjectLink.vue'
 
 const props = defineProps<{ object: ObjectSummary; type: ObjectType | undefined; variant: 'grid' | 'wall' | 'gallery' | 'kanban'; fields?: PropertyDef[]; hide?: string[] }>()
 
@@ -29,8 +30,8 @@ const shownProps = computed(() =>
 </script>
 
 <template>
-  <RouterLink
-    :to="`/o/${object.id}`"
+  <ObjectLink
+    :id="object.id"
     class="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-sm transition hover:border-line-strong hover:shadow-md"
     :class="variant === 'wall' ? 'mb-3 break-inside-avoid' : ''"
   >
@@ -73,5 +74,5 @@ const shownProps = computed(() =>
         <ObjectChip v-for="id in object.tagIds" :key="id" :id="id" tag />
       </div>
     </div>
-  </RouterLink>
+  </ObjectLink>
 </template>

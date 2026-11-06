@@ -36,6 +36,8 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'objects', column: 'updated_by', definition: 'TEXT' },
   // JSON TemplateInfo: the object is a template or a snippet, kept out of every listing.
   { table: 'objects', column: 'template', definition: 'TEXT' },
+  // Where a type's objects open from views: 'pane' (the side pane) or 'page' (ObjectType.openIn).
+  { table: 'types', column: 'open_in', definition: 'TEXT' },
 ]
 
 /** Indexes on added columns; run after ADDED_COLUMNS, since an older table may lack them before. */
