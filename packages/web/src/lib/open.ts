@@ -1,11 +1,12 @@
 // Where an object opens: its own page (/o/<id>), or the side pane next to the page that is
 // showing (?pane=<id> on that page's address). Everything that opens an object goes through here,
 // so the choice is made in one place. The pane lives in the address, so back/forward, reload and
-// copied links bring it back; leaving the page closes it.
+// copied links bring it back; leaving the page closes it, and a page changing only its own query
+// (the calendar's view and date) keeps it (the guard in router.ts).
 import { computed, type InjectionKey } from 'vue'
 import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router'
 import type { Id } from '@vasta/core'
-import { router } from '../router.ts'
+import { paneNavigation, router } from '../router.ts'
 import { isPhone } from './viewport.ts'
 
 export type OpenPlace = 'page' | 'pane'
@@ -17,6 +18,7 @@ export interface OpenOptions {
   query?: LocationQueryRaw
   /** 'pane' opens it next to the current page where there is room for one; the default is its page. */
   where?: OpenPlace
+  /** Replace the current history entry; a pane already open is always replaced (see openObject). */
   replace?: boolean
 }
 
@@ -29,8 +31,9 @@ export function objectRoute(id: Id, options: Pick<OpenOptions, 'block' | 'query'
 
 /**
  * Where a view (a type's view or a query) opens the objects it shows, by id: its own choice, else
- * the object's type's; undefined for anything else in it (a relation's chip), which opens its page.
- * Provided by the collection, read by every ObjectLink inside it, whatever the layout.
+ * the object's type's; undefined for anything else in it, which opens its page. Provided by the
+ * collection, read by every ObjectLink inside it, whatever the layout; a relation's chip
+ * (ObjectChip) always opens the page, even of an object the view also shows.
  */
 export const VIEW_OPENS: InjectionKey<(id: Id) => OpenPlace | undefined> = Symbol('view-opens')
 
@@ -68,15 +71,25 @@ function withPane(id: Id | undefined, block?: Id): RouteLocationRaw {
   return { query: { ...rest, ...(id ? { pane: id } : {}), ...(id && block ? { paneBlock: block } : {}) }, hash: router.currentRoute.value.hash }
 }
 
+/**
+ * Opens an object. With the pane already open, showing another object in it replaces the history
+ * entry: reading through a list is one Back to leave it, not one per object.
+ */
 export function openObject(id: Id, options: OpenOptions = {}) {
-  const to = resolvePlace(id, options.where) === 'pane' ? withPane(id, options.block) : objectRoute(id, options)
-  return options.replace ? router.replace(to) : router.push(to)
+  const inPane = resolvePlace(id, options.where) === 'pane'
+  const to = inPane ? withPane(id, options.block) : objectRoute(id, options)
+  return options.replace || (inPane && paneObjectId.value) ? router.replace(to) : router.push(to)
 }
 
-export function closePane(replace = false) {
+export async function closePane(replace = false) {
   if (!paneObjectId.value) return
   const to = withPane(undefined)
-  return replace ? router.replace(to) : router.push(to)
+  paneNavigation.closing = true
+  try {
+    return await (replace ? router.replace(to) : router.push(to))
+  } finally {
+    paneNavigation.closing = false
+  }
 }
 
 /** The pane's object on its own page, in place of the page behind it. */
@@ -85,13 +98,4 @@ export function expandPane(replace = false) {
   if (!id) return
   const to = objectRoute(id, { block: paneBlockId.value })
   return replace ? router.replace(to) : router.push(to)
-}
-
-/**
- * Query for a page that rewrites its own query (the calendar's view and date): the pane's part is
- * kept, so the pane stays open.
- */
-export function keepPane(query: LocationQueryRaw): LocationQueryRaw {
-  const { pane, paneBlock } = router.currentRoute.value.query
-  return { ...query, ...(pane ? { pane } : {}), ...(paneBlock ? { paneBlock } : {}) }
 }

@@ -40,6 +40,18 @@ export const router = createRouter({
   ],
 })
 
+// The side pane (lib/open.ts) lives in the query, as ?pane=<id>&paneBlock=<id>. A page that
+// changes only its own query (the calendar's view and date, a type page closing its settings)
+// keeps it: its part is carried over, so no page has to remember it. Not while closePane is
+// closing it, nor on back/forward (the entry already says).
+export const paneNavigation = { closing: false }
+router.beforeEach((to, from) => {
+  const { pane, paneBlock } = from.query
+  if (!pane || paneNavigation.closing || to.path !== from.path || 'pane' in to.query) return
+  if (router.options.history.state.current === to.fullPath) return
+  return { path: to.path, hash: to.hash, query: { ...to.query, pane, ...(paneBlock ? { paneBlock } : {}) } }
+})
+
 export function warmRoutes() {
   const run = () => void Promise.all(Object.values(pages).map((load) => load())).catch(() => {})
   if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 5000 })

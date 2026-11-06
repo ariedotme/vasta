@@ -3,19 +3,18 @@
 // kept live with the board's document. The frame is the embed's `blockId`, so the scene survives
 // Markdown as vasta://o/<board>#b-<frame>.
 import { computed, onBeforeUnmount, onMounted, shallowRef, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { readBoard, type FrameElement, type Id } from '@vasta/core'
 import type * as Yjs from 'yjs'
 import { openText, useReplica, type TextSession } from '../../lib/replica.ts'
 import { openRemoteText } from '../../lib/remote-text.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { summaryOf, typesById } from '../../lib/state.ts'
+import { openObject } from '../../lib/open.ts'
 import AppIcon from '../AppIcon.vue'
 import WhiteboardCanvas from './WhiteboardCanvas.vue'
 
 const props = defineProps<{ boardId: Id; frameId: Id | null; editable: boolean }>()
 const emit = defineEmits<{ scene: [frameId: Id | null] }>()
-const router = useRouter()
 
 const summary = computed(() => summaryOf(props.boardId))
 const title = computed(() => displayTitle(summary.value, typesById.value.get(summary.value?.typeId ?? '')))
@@ -43,7 +42,7 @@ onBeforeUnmount(() => {
   session.value?.release()
 })
 
-const open = () => router.push(`/o/${props.boardId}`)
+const open = () => openObject(props.boardId)
 </script>
 
 <template>

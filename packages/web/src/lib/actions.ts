@@ -142,7 +142,7 @@ export async function openCapture(space: Space, answer: CaptureAnswer, made?: Id
   if (!id) return
   if (workspace.space?.id !== space.id) await loadWorkspace(space.id)
   if (id === answer.sourceId) {
-    await router.push({ path: `/o/${id}`, query: { capture: answer.blockId } })
+    await openObject(id, { query: { capture: answer.blockId } })
     return
   }
   await openObject(id)

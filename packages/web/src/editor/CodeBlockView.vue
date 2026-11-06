@@ -6,10 +6,10 @@ import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import AppIcon from '../components/AppIcon.vue'
 import type { Mounted } from 'pele/lazy'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { MERMAID, mountDiagram } from '../lib/mermaid.ts'
 import { boardFromMermaid, isMermaidFlowchart } from '../lib/board-actions.ts'
 import { lastError, systemType } from '../lib/state.ts'
+import { openObject } from '../lib/open.ts'
 
 const props = defineProps(nodeViewProps)
 const isDiagram = computed(() => props.node.attrs.language === MERMAID)
@@ -69,7 +69,6 @@ onBeforeUnmount(() => {
 const showCode = computed(() => !isDiagram.value || inside.value || !text.value.trim() || !!error.value)
 
 /** A flowchart becomes an editable whiteboard (a new object), its nodes named like objects their cards. */
-const router = useRouter()
 const canBoard = computed(() => isMermaidFlowchart(text.value) && !error.value && !!systemType('whiteboard'))
 const boarding = ref(false)
 async function turnIntoBoard() {
@@ -79,7 +78,7 @@ async function turnIntoBoard() {
     const firstLabel = /\[([^\]]+)\]|\(([^)]+)\)|\{([^}]+)\}/.exec(text.value)
     const title = firstLabel ? `${(firstLabel[1] ?? firstLabel[2] ?? firstLabel[3])!.trim()} flowchart` : 'Flowchart'
     const id = await boardFromMermaid(text.value, title)
-    await router.push(`/o/${id}`)
+    await openObject(id)
   } catch (error) {
     lastError.value = (error as Error).message
   } finally {

@@ -26,7 +26,7 @@ import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
-import { keepPane, openObject } from '../lib/open.ts'
+import { openObject } from '../lib/open.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -139,7 +139,7 @@ watch(
 )
 function closeSettings() {
   settingsOpen.value = false
-  if (route.query.settings) void router.replace({ query: keepPane({}) })
+  if (route.query.settings) void router.replace({ query: {} })
 }
 
 function saveViews(mutate: (views: ViewDef[]) => void) {

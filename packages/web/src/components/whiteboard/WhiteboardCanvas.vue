@@ -9,7 +9,6 @@
 // Pens: once a pen has touched the board, fingers only move the view (palm rejection) and a pen
 // down makes the board ignore touches; two fingers tapped undo, three redo.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   BOARD_FIELD,
   addBoardElements,
@@ -41,6 +40,7 @@ import { openRemoteText } from '../../lib/remote-text.ts'
 import { api } from '../../lib/api.ts'
 import { cachedSummary, lastError, primeSummaries, systemType, typesById, useSummaries } from '../../lib/state.ts'
 import { openMenuAt, promptDialog, type MenuItem } from '../../lib/overlays.ts'
+import { openObject } from '../../lib/open.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { canvasElements, isMermaidFlowchart, mermaidElements } from '../../lib/board-actions.ts'
 import {
@@ -75,7 +75,6 @@ import SelectionBar from './SelectionBar.vue'
  * a scene of the board) or the whole board.
  */
 const props = defineProps<{ doc: Y.Doc; boardId: Id; title?: string; readonly?: boolean; embedded?: boolean; focus?: Id | null }>()
-const router = useRouter()
 
 /** Origin of this page's writes: what undo covers. */
 const LOCAL = 'whiteboard-local'
@@ -693,7 +692,7 @@ function onDoubleClick(event: MouseEvent) {
   if (props.readonly || (event.target as HTMLElement).closest('[data-ui]') || drawing.value) return
   const elementId = elementAt(event.target)
   const element = elementId ? byId.value.get(elementId) : undefined
-  if (element?.kind === 'card') void router.push(`/o/${element.objectId}`)
+  if (element?.kind === 'card') void openObject(element.objectId)
   else if (element?.kind === 'frame') void renameFrame(element.id)
   else if (element && 'text' in element) startEditing(element.id)
   else if (!element) {
@@ -1090,7 +1089,7 @@ const toFront = () => (bringToFront(props.doc, [...selection.value], LOCAL), now
 const toBack = () => (sendToBack(props.doc, [...selection.value], LOCAL), now())
 function openSelected() {
   const element = selected.value[0]
-  if (element?.kind === 'card') void router.push(`/o/${element.objectId}`)
+  if (element?.kind === 'card') void openObject(element.objectId)
 }
 function removeSelection() {
   if (selection.value.size) remove([...selection.value])
@@ -1206,7 +1205,7 @@ function onKeyDown(event: KeyboardEvent) {
     event.preventDefault()
     if (element?.kind === 'arrow') void labelArrow(element.id)
     else if (element?.kind === 'frame') void renameFrame(element.id)
-    else if (element?.kind === 'card') void router.push(`/o/${element.objectId}`)
+    else if (element?.kind === 'card') void openObject(element.objectId)
     else if (element && 'text' in element) startEditing(element.id)
   } else if (key.startsWith('arrow') && selection.value.size) {
     event.preventDefault()
