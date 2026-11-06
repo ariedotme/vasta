@@ -20,6 +20,10 @@ if (standalone) {
 }
 
 createApp(App).use(router).mount('#app')
+// The app's assets loaded: a later blank page may reload itself again (index.html).
+try {
+  sessionStorage.removeItem('vasta-reloaded')
+} catch {}
 installLongPress()
 warmRoutes()
 

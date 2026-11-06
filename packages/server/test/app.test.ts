@@ -185,6 +185,8 @@ describe('server API', () => {
 
     const index = await app.request('/')
     expect(await index.text()).toContain('<title>Vasta</title>')
+    expect(index.headers.get('cache-control')).toBe('no-cache')
+    expect((await app.request('/index.html')).headers.get('cache-control')).toBe('no-cache')
     const route = await app.request('/o/some-object')
     expect(route.status).toBe(200)
     expect(route.headers.get('cache-control')).toBe('no-cache')

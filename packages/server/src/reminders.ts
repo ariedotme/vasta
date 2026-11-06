@@ -39,6 +39,7 @@ import type { NodeStore } from '@vasta/core/node'
 import type { AccountService } from './accounts.ts'
 import type { CalendarService } from './calendars.ts'
 import type { DesktopListeners } from './events.ts'
+import type { PushDevice, PushKind, PushService } from './push.ts'
 import { safeFetch } from './safe-fetch.ts'
 
 /** Food reminders, in spaces that track food. Times are "HH:MM" in the user's zone. */
@@ -85,6 +86,8 @@ export interface ReminderView {
   telegramReady: boolean
   /** Desktop apps of this user listening right now. */
   desktopApps: number
+  /** Web Push (push.ts), when the server sends it: its key and the user's devices. */
+  push?: { publicKey: string; devices: PushDevice[] }
 }
 
 export const EVENT_LEADS = [0, 5, 10, 15, 30, 60]
@@ -105,6 +108,8 @@ export interface Reminder {
   /** The emoji Telegram's message starts with (⏰ when unset). */
   icon?: string
   url?: string
+  /** What it is about, for the devices that choose (Web Push); a test goes to all. */
+  kind: PushKind | 'test'
 }
 
 export interface ReminderOptions {
@@ -116,6 +121,8 @@ export interface ReminderOptions {
   telegram?: (chatId: number, text: string) => Promise<void>
   /** Desktop apps listening on /api/events?desktop=1. */
   desktop?: DesktopListeners
+  /** Web Push to the devices each user turned it on in. */
+  push?: PushService
   /** Defaults to safeFetch: an ntfy server on the local network needs VASTA_ALLOW_PRIVATE_FETCH. */
   fetch?: (url: string, init?: RequestInit) => Promise<Response>
   now?: () => number
@@ -136,6 +143,11 @@ export class ReminderService {
 
   private get store() {
     return this.options.store
+  }
+
+  /** Web Push, when the server sends it (devices are added and changed in Settings › Reminders). */
+  get push() {
+    return this.options.push
   }
 
   private now() {
@@ -163,6 +175,7 @@ export class ReminderService {
       work: settings.work,
       telegramReady: !!this.options.telegram && this.store.getUser(userId)?.telegramUserId !== undefined,
       desktopApps: this.options.desktop?.count(userId) ?? 0,
+      ...(this.options.push ? { push: { publicKey: this.options.push.publicKey(), devices: this.options.push.devices(userId) } } : {}),
     }
   }
 
@@ -220,19 +233,19 @@ export class ReminderService {
   async test(userId: Id): Promise<{ channel: string; ok: boolean; error?: string }[]> {
     const user = this.store.getUser(userId)
     if (!user) throw new ReminderError('unknown user')
-    const results = await this.deliver(user, this.settings(userId), { key: `test:${this.now()}`, title: 'Vasta reminders work', message: 'Habits, events and food will remind you here.', tag: 'white_check_mark' })
-    if (!results.length) throw new ReminderError('set up ntfy, Telegram or the desktop app first')
+    const results = await this.deliver(user, this.settings(userId), { key: `test:${this.now()}`, title: 'Vasta reminders work', message: 'Habits, events and food will remind you here.', tag: 'white_check_mark', kind: 'test' })
+    if (!results.length) throw new ReminderError('set up ntfy, Telegram, the desktop app or notifications on a device first')
     return results
   }
 
   /** A notification about others' work (notifications.ts), through the user's channels if they want that kind. */
-  async notify(userId: Id, kind: 'assigned' | 'mentioned' | 'comment', reminder: Reminder & { objectId?: Id }) {
+  async notify(userId: Id, kind: 'assigned' | 'mentioned' | 'comment', reminder: Omit<Reminder, 'kind'> & { objectId?: Id }) {
     const user = this.store.getUser(userId)
     if (!user) return
     const settings = this.settings(userId)
     if (!settings.work[kind === 'comment' ? 'comments' : kind]) return
     const { objectId, ...rest } = reminder
-    await this.deliver(user, settings, { ...rest, ...(objectId ? this.link(objectId) : {}) })
+    await this.deliver(user, settings, { ...rest, kind: 'work', ...(objectId ? this.link(objectId) : {}) })
   }
 
   start() {
@@ -251,7 +264,7 @@ export class ReminderService {
     for (const [key, at] of this.sent) if (at < now - 2 * 86_400_000) this.sent.delete(key)
     for (const user of this.store.listUsers()) {
       const settings = this.settings(user.id)
-      if (!settings.ntfy && !settings.telegram && !settings.desktop) continue
+      if (!settings.ntfy && !settings.telegram && !settings.desktop && !this.options.push?.devices(user.id).length) continue
       for (const reminder of this.due(user, settings, from, now)) {
         const key = `${user.id}:${reminder.key}`
         if (this.sent.has(key)) continue
@@ -287,6 +300,7 @@ export class ReminderService {
               title: habit.title || 'A habit',
               message: [amount ? `${amount} so far today` : 'Not done yet today', streak ? `${streak} in a row` : ''].filter(Boolean).join(' · '),
               tag: 'alarm_clock',
+              kind: 'habits',
               ...this.link(habit.id),
             })
           }
@@ -326,7 +340,7 @@ export class ReminderService {
       return nutritionDays(notes, goalsNow(), from, to)
     }
     const reminder = (key: string, nudge: FoodNudge | undefined): Reminder[] =>
-      nudge ? [{ key: `food:${space.id}:${key}`, title: nudge.title, message: nudge.message, tag: 'fork_and_knife', ...this.page('nutrition') }] : []
+      nudge ? [{ key: `food:${space.id}:${key}`, title: nudge.title, message: nudge.message, tag: 'fork_and_knife', kind: 'food', ...this.page('nutrition') }] : []
     const reminders: Reminder[] = []
     for (const day of days) {
       if (food.dayLeft && inWindow(at(day, food.dayLeft))) reminders.push(...reminder(`day:${day}`, foodDayNudge(history(weekStart(day), day), goalsNow(), day)))
@@ -364,6 +378,7 @@ export class ReminderService {
       title,
       message: [minutes ? `At ${clock}, in ${minutes} min` : `Now, ${clock}`, entry.location].filter(Boolean).join(' · '),
       tag: 'calendar',
+      kind: 'events',
       ...(object ? this.link(object.id) : entry.url ? { url: entry.url } : {}),
     }
   }
@@ -399,6 +414,10 @@ export class ReminderService {
       const apps = this.options.desktop.send(user.id, { key: reminder.key, title: reminder.title, message: reminder.message, ...(reminder.url ? { url: reminder.url } : {}) })
       // Not an error when no app is open: the other channels still got it.
       results.push(apps ? { channel: 'desktop', ok: true } : { channel: 'desktop', ok: false, error: 'no desktop app open (Vasta for desktop 0.1.10 or later)' })
+    }
+    if (this.options.push) {
+      const sent = await this.options.push.send(user.id, reminder.kind, { title: reminder.title, body: reminder.message, tag: reminder.key, ...(reminder.url ? { url: reminder.url } : {}) })
+      for (const device of sent) results.push({ channel: `push:${device.device}`, ok: device.ok, ...(device.error ? { error: device.error } : {}) })
     }
     for (const failed of results.filter((r) => !r.ok && r.channel !== 'desktop')) console.warn(`Reminder to ${user.username} through ${failed.channel} failed: ${failed.error}`)
     return results

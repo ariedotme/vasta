@@ -52,6 +52,7 @@ import { currentActor, outsideActor, runAs } from './actor.ts'
 import { AgentTools } from './agent.ts'
 import { CalendarService, CalendarSyncError, normalizeCalendarUrl } from './calendars.ts'
 import { CaptureError, CaptureService, mergeCaptures, type CaptureResult } from './capture.ts'
+import { PushError, type PushKinds, type PushService, type PushSubscriptionJson } from './push.ts'
 import { ReminderError, type ReminderService } from './reminders.ts'
 import { ChannelSettings, type TelegramChat } from './channels.ts'
 import { findOrCreateDailyNote, isValidDay } from './daily.ts'
@@ -391,6 +392,39 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       throw error
     }
   })
+
+  // Web Push devices (Settings › Reminders): this device subscribes, each one picks what reminds it.
+  const pushRoute = (handler: (push: PushService, userId: Id, c: Context<Env>) => Promise<void> | void) => async (c: Context<Env>) => {
+    if (!reminders?.push) return c.json({ error: 'notifications on devices are off on this server' }, 404)
+    try {
+      await handler(reminders.push, c.get('auth').user.id, c)
+      return c.json(reminders.view(c.get('auth').user.id))
+    } catch (error) {
+      if (error instanceof PushError) return c.json({ error: error.message }, 400)
+      throw error
+    }
+  }
+  authApi.post(
+    '/reminders/devices',
+    appAuth,
+    pushRoute(async (push, userId, c) => {
+      const body = await c.req.json<{ subscription?: PushSubscriptionJson; name?: string }>().catch(() => ({}) as { subscription?: PushSubscriptionJson; name?: string })
+      push.subscribe(userId, body.subscription as PushSubscriptionJson, String(body.name ?? ''), isHttps(c) ? new URL(c.req.url).origin.replace(/^http:/, 'https:') : undefined)
+    })
+  )
+  authApi.patch(
+    '/reminders/devices/:id',
+    appAuth,
+    pushRoute(async (push, userId, c) => {
+      const body = await c.req.json<{ name?: string; kinds?: Partial<PushKinds> }>().catch(() => ({}))
+      push.update(userId, c.req.param('id')!, body)
+    })
+  )
+  authApi.delete(
+    '/reminders/devices/:id',
+    appAuth,
+    pushRoute((push, userId, c) => push.remove(userId, c.req.param('id')!))
+  )
 
   /** Whether Telegram is linked, and the bot to write to (absent when the bot does not run). */
   authApi.get('/telegram', appAuth, (c) => {
@@ -1572,6 +1606,12 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     app.use('/manifest.webmanifest', async (c, next) => {
       await next()
       c.header('cache-control', 'no-cache')
+    })
+    // Pages ("/" and /index.html too, which serveStatic answers): without a cache-control a browser
+    // may reuse an old index.html, whose assets a new version no longer has (a blank window).
+    app.use('*', async (c, next) => {
+      await next()
+      if (c.res.headers.get('content-type')?.startsWith('text/html')) c.header('cache-control', 'no-cache')
     })
     app.use('*', serveStatic({ root: webDir }))
     app.get('*', async (c, next) => {

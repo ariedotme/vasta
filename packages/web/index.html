@@ -12,6 +12,22 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      // An old copy of this page (from a cache) names assets a new version no longer has, and would
+      // stay blank: reload it once from the network. main.ts clears the mark once the app runs.
+      addEventListener('error', (event) => {
+        const el = event.target
+        const url = (el && (el.src || el.href)) || ''
+        if (!url.includes('/assets/')) return
+        try {
+          if (sessionStorage.getItem('vasta-reloaded')) return
+          sessionStorage.setItem('vasta-reloaded', '1')
+        } catch {
+          return
+        }
+        location.reload()
+      }, true)
+    </script>
   </head>
   <body>
     <!-- iOS 27 blurs the top of an installed web app; a painted strip there keeps it away (style.css). -->
