@@ -15,6 +15,7 @@
     "@vasta/core": "workspace:*",
     "@vasta/editor-schema": "workspace:*",
     "@vasta/importer-capacities": "workspace:*",
+    "fflate": "0.8.2",
     "hono": "4.13.13",
     "linkedom": "0.18.13",
     "zod": "4.6.5"

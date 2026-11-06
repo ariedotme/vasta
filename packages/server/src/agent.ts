@@ -1147,7 +1147,7 @@ function describeProperty(def: PropertyDef, typeNames: Map<Id, string>, type: Ob
   return base
 }
 
-function dateText(date: DateValue): string {
+export function dateText(date: DateValue): string {
   const one = (iso: string) => (date.resolution === 'day' ? iso.slice(0, 10) : iso)
   return [one(date.start), date.end ? ` – ${one(date.end)}` : '', date.rrule ? ` (repeats: ${date.rrule})` : ''].join('')
 }
@@ -1169,7 +1169,7 @@ function formulaOutput(value: FormulaValue, timeZone: string): unknown {
   }
 }
 
-function valueOf(def: PropertyDef, value: PropertyValue, titles: (ids: Id[]) => { id: Id; title: string }[], personName: (id: Id) => string): unknown {
+export function valueOf(def: PropertyDef, value: PropertyValue, titles: (ids: Id[]) => { id: Id; title: string }[], personName: (id: Id) => string): unknown {
   switch (value.kind) {
     case 'date':
       return dateText(value.value)

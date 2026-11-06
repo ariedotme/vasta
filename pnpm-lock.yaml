@@ -130,6 +130,9 @@ importers:
       '@vasta/importer-capacities':
         specifier: workspace:*
         version: link:../importer-capacities
+      fflate:
+        specifier: 0.8.2
+        version: 0.8.2
       hono:
         specifier: 4.13.13
         version: 4.13.13

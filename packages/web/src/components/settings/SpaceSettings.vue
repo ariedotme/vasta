@@ -16,6 +16,9 @@ import SettingsSection from './SettingsSection.vue'
 import { errorText, field, label, primary, secondary } from './styles.ts'
 
 const spaceId = ref<Id>(workspace.space!.id)
+/** The export is made by the server; it needs a connection (offline, the link fails like any download). */
+const exportMedia = ref(true)
+const exportUrl = computed(() => `/api/spaces/${encodeURIComponent(spaceId.value)}/export${exportMedia.value ? '' : '?media=0'}`)
 const space = computed(() => workspace.spaces.find((s) => s.id === spaceId.value) ?? workspace.space!)
 
 const name = ref('')
@@ -270,6 +273,20 @@ async function remove(member: Member) {
         <option v-for="days in RETENTION_CHOICES" :key="days" :value="days">Keep {{ RETENTION_LABELS[days]!.toLowerCase() }}</option>
       </select>
       <span v-else class="text-sm text-ink-soft">Kept {{ RETENTION_LABELS[retention]?.toLowerCase() ?? `${retention} days` }}</span>
+    </div>
+
+    <div class="mt-6 flex flex-wrap items-center gap-3">
+      <div class="min-w-0 flex-1 text-sm">
+        <div class="font-medium">Export this space</div>
+        <div class="text-xs text-ink-faint">
+          A ZIP to keep or to take elsewhere: a Markdown file per object (Obsidian and other apps open them), their files, and all of it as JSON with nothing left out.
+        </div>
+        <label class="mt-1.5 flex items-center gap-1.5 text-xs text-ink-soft">
+          <input v-model="exportMedia" type="checkbox" class="h-3.5 w-3.5 accent-[var(--color-accent)]" />
+          With pictures and other files
+        </label>
+      </div>
+      <a :class="secondary" :href="exportUrl" download>Export…</a>
     </div>
 
     <div v-if="isOwner" class="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 px-3 py-2.5 dark:border-red-900/60">

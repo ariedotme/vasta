@@ -13,6 +13,7 @@
 //   space share <space>|--all <username> [--role editor|owner]
 //   space unshare <space> <username>
 //   space restore <space>  bring back a space deleted from the app (within 30 days)
+//   space export <space> [file.zip] [--no-media]   everything of a space as a ZIP (docs/export.md)
 //   token add <username> <name> [--scope capture|api]
 //   token list [username]
 //   token revoke <token id>
@@ -24,7 +25,7 @@
 //
 // <space> is a space id or name. Passwords are asked for on the terminal, or read from the first
 // line of stdin when it is not a terminal (scripts). Data: $VASTA_DATA or ./data.
-import { existsSync } from 'node:fs'
+import { createWriteStream, existsSync } from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -35,6 +36,7 @@ import { isValidTimeZone, type Space, type SpaceRole, type TokenScope, type User
 import { S3MediaStore } from '@vasta/core/media-s3'
 import { NodeStore } from '@vasta/core/node'
 import { AccountError, AccountService } from './accounts.ts'
+import { buildExport, zipExport } from './export.ts'
 import { createMediaStore, describeMediaStore, pushMediaFolder, referencedMediaKeys } from './media.ts'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -50,6 +52,7 @@ const { values, positionals } = parseArgs({
     role: { type: 'string', default: 'editor' },
     scope: { type: 'string', default: 'capture' },
     all: { type: 'boolean', default: false },
+    'no-media': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
   },
 })
@@ -72,6 +75,7 @@ pnpm vasta space rename <space> <new name>
 pnpm vasta space share <space>|--all <username> [--role editor|owner]
 pnpm vasta space unshare <space> <username>
 pnpm vasta space restore <space>
+pnpm vasta space export <space> [file.zip] [--no-media]
 pnpm vasta token add <username> <name> [--scope capture|api]
 pnpm vasta token list [username]
 pnpm vasta token revoke <token id>
@@ -238,6 +242,15 @@ async function run() {
     console.info(`Restored ${matches[0]!.name}`)
     return
   }
+  if (group === 'space' && command === 'export') {
+    const space = findSpace(arg(2, 'space'))
+    const exported = buildExport(store, space.id, { now: new Date().toISOString(), media: !values['no-media'] })
+    const file = path.resolve(positionals[3] ?? exported.name)
+    await pipeline(Readable.fromWeb(zipExport(exported, createMediaStore(process.env, dataDir)) as NodeReadableStream), createWriteStream(file))
+    console.info(`Exported ${space.name} to ${file}${values['no-media'] ? ' (without its files)' : ''}`)
+    return
+  }
+
   if (group === 'space' && command === 'create') {
     if (!values.owner) throw new UsageError('pass --owner <username>')
     const space = accounts.createSpace(arg(2, 'name'), findUser(values.owner).id)

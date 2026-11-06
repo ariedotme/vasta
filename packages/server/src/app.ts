@@ -61,6 +61,7 @@ import { handleMcp } from './mcp.ts'
 import { NotificationService } from './notifications.ts'
 import { openApi } from './openapi.ts'
 import { MAX_PULL_LIMIT, MAX_PUSH_CHANGES, MAX_TEXT_OBJECTS, pull, push, textUpdates, type SyncChange } from './sync.ts'
+import { buildExport, zipExport } from './export.ts'
 import { ImportError, MAX_IMPORT_BYTES, Migration, importRows, type ImportBatch, type MigrationInput } from './transfer.ts'
 import { WeblinkError, WeblinkService } from './weblinks.ts'
 
@@ -925,6 +926,22 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       if (error instanceof WeblinkError) return c.json({ error: error.message }, 400)
       throw error
     }
+  })
+
+  // Export -------------------------------------------------------------------
+  /**
+   * The whole space to take away, as a ZIP (export.ts, docs/export.md): Markdown per object,
+   * vasta.json with everything, and the media files (`?media=0` leaves them out).
+   */
+  api.get('/spaces/:id/export', (c) => {
+    const space = store.getSpace(c.req.param('id'))
+    if (!space) return c.json({ error: 'not found' }, 404)
+    const exported = buildExport(store, space.id, { now: now(), media: c.req.query('media') !== '0' })
+    return c.body(zipExport(exported, media), 200, {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="${exported.name.replace(/[^\x20-\x7e]|"/g, '_')}"; filename*=UTF-8''${encodeURIComponent(exported.name)}`,
+      'cache-control': 'no-store',
+    })
   })
 
   // Files --------------------------------------------------------------------

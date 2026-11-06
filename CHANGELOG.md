@@ -50,6 +50,10 @@ GitHub release page.
   keyboard, Tab moves between cells, Enter or Space opens one, Enter saves what you typed and
   Escape puts it back. Formulas and long text stay read-only; the title still opens the object.
   Thanks to @bokehsec (#50).
+- **Export a space** (Settings › Space › Export…, or `pnpm vasta space export` on the server):
+  a ZIP with a Markdown file per object (properties in front matter, links between objects as
+  links between files, so Obsidian and other apps read it), whiteboards as JSON Canvas, the files
+  objects use, and everything as JSON with nothing left out. [Export →](docs/export.md)
 
 ### Fixed
 
