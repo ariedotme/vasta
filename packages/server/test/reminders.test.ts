@@ -121,3 +121,16 @@ describe('reminders', () => {
     expect(shown.find((n) => n.title === 'Your week of food')!.message).toBe('1 700 kcal a day (goal 2 000) · protein 130 g a day (goal 150 g) · on target 1 of 2 days · 1 day on target in a row')
   })
 })
+
+describe('desktop listeners', () => {
+  it('keeps an app that reconnected when the old stream lets go a second time', () => {
+    const desktop = new DesktopListeners()
+    const heard: string[] = []
+    const old = desktop.listen('u', () => heard.push('old'))
+    old() // the old stream is aborted…
+    desktop.listen('u', (n) => heard.push(n.key)) // …the app reconnects…
+    old() // …and the old stream's loop ends, letting go again.
+    expect(desktop.send('u', { key: 'new', title: 'T', message: 'M' })).toBe(1)
+    expect(heard).toEqual(['new'])
+  })
+})

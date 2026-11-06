@@ -47,7 +47,7 @@ export class DesktopListeners {
     this.byUser.set(userId, set)
     return () => {
       set.delete(listener)
-      if (!set.size) this.byUser.delete(userId)
+      if (!set.size && this.byUser.get(userId) === set) this.byUser.delete(userId)
     }
   }
 
