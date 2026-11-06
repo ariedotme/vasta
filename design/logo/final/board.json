@@ -1,0 +1,31 @@
+{
+  "brand": "Vasta",
+  "tagline": "Your notes, everything an object",
+  "brief": "An open-source, self-hosted, local-first notes app where everything is an object: pages, tasks, books, whiteboards. The mark should feel calm, warm and personal, read at 16 px, and stand apart from the purple gems, cubes and letters-in-a-box of its category.",
+  "adjectives": ["vast", "calm", "warm", "yours"],
+  "criteria": "Success: a mark that is its own (not a library icon), works as app icon and favicon, in one colour, on the app's warm light and dark backgrounds.",
+  "industry": "software",
+  "nav": ["Features", "Docs", "GitHub"],
+  "brand_color": "#1F1E1C",
+  "greyscale": false,
+  "designer": "Claude, with Arie",
+  "round": 2,
+  "concepts": [
+    {
+      "name": "Macio",
+      "symbol": "vasta-mark.svg",
+      "lockup": "vasta-horizontal.svg",
+      "symbol_on_tile": "icons/app-icon-rounded.svg",
+      "tile_color": "#1F1E1C",
+      "idea": "A soft tile — an object — with a V cut from its top: the room your notes live in.",
+      "rationale": [
+        "The tile is Vasta's object; the V cut makes it ours and names it",
+        "One radius family on every curve: soft, calm, never sharp",
+        "Its own small-size cut keeps the V open at 16 px",
+        "Warm ink and paper from the app; Vasta blue as the accent"
+      ]
+    }
+  ],
+  "recommendation": "Macio: the tile reads as Vasta's object at every size, and the V cut gives it a name without spelling one.",
+  "next_steps": ["Replace the app's icon, favicon and README logo", "Use the wordmark in the README and site header", "Revisit the 16 px cut after seeing it in real tabs"]
+}

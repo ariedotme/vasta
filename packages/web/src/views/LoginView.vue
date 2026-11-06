@@ -2,7 +2,7 @@
 // Logging in. On a server without accounts, creating the first one with the setup code from the
 // server's log instead; with an invite link (?invite=…), making an account with it.
 import { computed, onMounted, ref } from 'vue'
-import AppIcon from '../components/AppIcon.vue'
+import VastaMark from '../components/VastaMark.vue'
 import { authApi } from '../lib/api.ts'
 import { join, logIn, session, setUp } from '../lib/session.ts'
 
@@ -53,7 +53,7 @@ const field = 'mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 te
   <div class="grid h-full place-items-center bg-canvas px-4">
     <form class="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-sm" @submit.prevent="submit">
       <div class="mb-5 flex items-center gap-2">
-        <AppIcon fallback="ph:planet" class="text-ink-soft" :size="20" />
+        <VastaMark :size="22" class="text-ink" />
         <h1 class="text-lg font-semibold">{{ mode === 'login' ? 'Vasta' : 'Welcome to Vasta' }}</h1>
       </div>
       <template v-if="mode === 'setup'">

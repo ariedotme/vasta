@@ -55,6 +55,13 @@ GitHub release page.
   links between files, so Obsidian and other apps read it), whiteboards as JSON Canvas, the files
   objects use, and everything as JSON with nothing left out. [Export →](docs/export.md)
 
+### Changed
+
+- **A new logo**: a soft tile with a V cut from its top, Vasta's own mark instead of a planet icon.
+  It is the app icon (installed web app, desktop app, browser extension), the favicon (light and
+  dark tabs), and the logo on the login screen and in the README. The files, colours and usage
+  are in `design/logo/`.
+
 ### Fixed
 
 - **Files are only served to the spaces that use them.** A picture, PDF, cover or link preview

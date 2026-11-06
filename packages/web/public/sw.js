@@ -14,7 +14,7 @@ const API = 'vasta-api'
 const MAX_ASSETS = 40
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(SHELL).then((cache) => cache.addAll(['/', '/manifest.webmanifest', '/icon.svg'])).then(() => self.skipWaiting()))
+  event.waitUntil(caches.open(SHELL).then((cache) => cache.addAll(['/', '/manifest.webmanifest', '/icon.svg', '/favicon.svg'])).then(() => self.skipWaiting()))
 })
 
 self.addEventListener('activate', (event) => {
