@@ -13,6 +13,8 @@
     <link rel="manifest" href="/manifest.webmanifest" />
   </head>
   <body>
+    <!-- iOS 27 blurs the top of an installed web app; a painted strip there keeps it away (style.css). -->
+    <div class="ios-blur-guard" aria-hidden="true"></div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

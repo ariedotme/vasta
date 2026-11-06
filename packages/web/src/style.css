@@ -229,3 +229,26 @@ body {
 
 /* A block the page was opened to (an inbox item in its daily note). */
 .vasta-flash { box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 35%, transparent); transition: box-shadow 0.4s; }
+
+/*
+ * iOS and iPadOS 27 draw a blur over the top of a web app installed on the home screen, reaching
+ * into the page's header (issue #45). A thin element painted at the very top keeps it away; it is
+ * clipped to its (absent) text, so nothing shows. Experimental, after
+ * https://tips.ojapp.app/en/ios-27-pwa-top-blur-workaround-2/ : remove it once iOS stops.
+ */
+.ios-blur-guard {
+  display: none;
+}
+@media (display-mode: standalone) {
+  .ios-blur-guard {
+    display: block;
+    position: fixed;
+    inset: 0 0 auto;
+    height: 11px;
+    z-index: 2147483647;
+    pointer-events: none;
+    background: var(--color-canvas);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}

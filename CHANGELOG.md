@@ -60,6 +60,8 @@ GitHub release page.
 - **Files are only served to the spaces that use them.** A picture, PDF, cover or link preview
   opens for members of a space whose objects use it; before, anyone logged in who knew a file's
   name could fetch it (#2).
+- **No blur over the top of the app on iOS and iPadOS 27** when it is installed on the home screen
+  (#45). The fix works around a system effect and may need another look after iOS updates.
 
 ## 0.5.1 (2026-11-04)
 
