@@ -98,6 +98,12 @@ function setAnyType(def: PropertyDef) {
   def.targetTypeIds = []
 }
 
+function setReverseName(def: PropertyDef, name: string) {
+  if (def.kind !== 'relation') return
+  if (name.trim()) def.reverseName = name
+  else delete def.reverseName
+}
+
 function toggleTarget(def: PropertyDef, typeId: string) {
   if (def.kind !== 'relation') return
   def.targetTypeIds = def.targetTypeIds.includes(typeId) ? def.targetTypeIds.filter((t) => t !== typeId) : [...def.targetTypeIds, typeId]
@@ -366,6 +372,16 @@ async function leave(path: string) {
               <label class="flex items-center gap-2">
                 <input v-model="def.multiple" type="checkbox" class="accent-[var(--color-accent)]" />
                 Allow several objects
+              </label>
+              <label class="block">
+                <span class="mb-1.5 block text-xs text-ink-faint">Name on the other side</span>
+                <input
+                  :value="def.reverseName ?? ''"
+                  class="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint focus:border-line-strong"
+                  :placeholder="draft.pluralName || draft.name"
+                  @input="setReverseName(def, ($event.target as HTMLInputElement).value)"
+                />
+                <span class="mt-1 block text-xs text-ink-faint">What the objects it links to show this as, e.g. “Wrote” for a book's Author.</span>
               </label>
               <div>
                 <div class="mb-1.5 text-xs text-ink-faint">Can link to</div>

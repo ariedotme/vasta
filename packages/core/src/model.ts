@@ -189,6 +189,11 @@ export interface RelationPropertyDef extends PropertyDefBase {
   /** Allowed target type ids. Empty means any type. */
   targetTypeIds: Id[]
   multiple: boolean
+  /**
+   * What the other side is called on the objects it points to ("Wrote" for a book's Author, on a
+   * person). Without it, that side shows this type's plural name and the property's.
+   */
+  reverseName?: string
 }
 export interface SelectPropertyDef extends PropertyDefBase {
   kind: 'select'

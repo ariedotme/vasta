@@ -85,8 +85,11 @@ async function unlink(row: Row, other: ObjectSummary) {
   <div v-for="row in rows" :key="row.key" class="vasta-prop-row">
     <div class="vasta-prop-name" :title="`${typesById.get(row.typeId)?.pluralName} whose “${row.def.name}” is this object`">
       <AppIcon :icon="typesById.get(row.typeId)?.icon" fallback="ph:arrows-left-right" class="text-ink-faint" />
-      <span class="truncate">{{ typesById.get(row.typeId)?.pluralName }}</span>
-      <span class="shrink-0 truncate text-xs text-ink-faint">· {{ row.def.name }}</span>
+      <span v-if="row.def.reverseName?.trim()" class="truncate">{{ row.def.reverseName.trim() }}</span>
+      <template v-else>
+        <span class="truncate">{{ typesById.get(row.typeId)?.pluralName }}</span>
+        <span class="shrink-0 truncate text-xs text-ink-faint">· {{ row.def.name }}</span>
+      </template>
     </div>
     <div class="flex min-h-9 flex-1 flex-wrap items-center gap-1 py-1.5">
       <ObjectChip v-for="o in row.objects" :key="o.id" :id="o.id" removable @remove="unlink(row, o)" />

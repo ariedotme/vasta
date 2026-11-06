@@ -108,6 +108,11 @@ describe('MCP endpoint', () => {
     // The author did not exist: a page was made for them, and it links back.
     const author = await call('get_object', { id: created.properties.Author[0].id })
     expect(author).toMatchObject({ title: 'Frank Herbert', type: 'Page', backlinks: [{ id: created.id, title: 'Dune', kind: 'relation' }] })
+    // Named on the other side, the link back carries that name.
+    const book = store.getType(store.getObject(created.id)!.typeId)!
+    store.putType({ ...book, properties: book.properties.map((p) => (p.id === 'author' && p.kind === 'relation' ? { ...p, reverseName: 'Wrote' } : p)) })
+    expect((await call('get_object', { id: author.id })).backlinks).toEqual([{ id: created.id, title: 'Dune', kind: 'relation', as: 'Wrote' }])
+    expect((await call('list_types', {})).find((t: { name: string }) => t.name === 'Book').properties.find((p: { id: string }) => p.id === 'author')).toMatchObject({ reverseName: 'Wrote' })
     expect(store.getObject(created.id)!.content.body!.content[0]).toMatchObject({ type: 'heading', attrs: { level: 1 } })
     expect(events.filter((e) => e.kind === 'object').map((e) => (e as { id: string }).id)).toEqual(expect.arrayContaining([created.id, author.id]))
     expect((await call('search', { query: 'spice' })).map((o: { id: string }) => o.id)).toEqual([created.id])

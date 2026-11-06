@@ -387,7 +387,12 @@ export class AgentTools {
     const backlinks = this.store
       .backlinks(object.id)
       .filter((b) => this.options.accounts.canUse(this.options.user.id, b.object.spaceId) && !b.object.deletedAt)
-      .map((b) => ({ id: b.object.id, title: b.object.title, kind: b.kind }))
+      .map((b) => {
+        // A relation pointing here, under the name its type gives this side ("Wrote").
+        const def = b.kind === 'relation' ? this.store.getType(b.object.typeId)?.properties.find((p) => p.id === b.via) : undefined
+        const as = def?.kind === 'relation' ? def.reverseName?.trim() : undefined
+        return { id: b.object.id, title: b.object.title, kind: b.kind, ...(as ? { as } : {}) }
+      })
     return {
       id: object.id,
       title: object.title,
@@ -1141,7 +1146,7 @@ function describeProperty(def: PropertyDef, typeNames: Map<Id, string>, type: Ob
   const base = { id: def.id, name: def.name, kind: def.kind }
   if (def.kind === 'formula') return { ...base, formula: formulaToNames(def.expression, type, types) }
   if (def.kind === 'select') return { ...base, multiple: def.multiple, options: def.options.map((o) => o.label) }
-  if (def.kind === 'relation') return { ...base, multiple: def.multiple, ...(def.targetTypeIds.length ? { targets: def.targetTypeIds.map((id) => typeNames.get(id) ?? id) } : {}) }
+  if (def.kind === 'relation') return { ...base, multiple: def.multiple, ...(def.targetTypeIds.length ? { targets: def.targetTypeIds.map((id) => typeNames.get(id) ?? id) } : {}), ...(def.reverseName?.trim() ? { reverseName: def.reverseName.trim() } : {}) }
   if (def.kind === 'person') return { ...base, multiple: def.multiple }
   if (def.kind === 'date') return { ...base, ...(def.withTime ? { withTime: true } : {}) }
   return base

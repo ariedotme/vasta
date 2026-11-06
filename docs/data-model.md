@@ -42,7 +42,8 @@ left out of both: a space gets them when it turns on what they are for. A type's
 sync field; a built-in type a device makes offline and pushes is known by its id (`builtinTypeKey`).
 
 **Property definitions** — `text`, `rich-text`, `number`, `checkbox`, `url`, `date`,
-`relation` (links to objects of allowed types, single or multiple), `select`
+`relation` (links to objects of allowed types, single or multiple; `reverseName` names the other
+side, shown on the objects it links to: "Wrote" for a book's Author, on a person), `select`
 (options with colors; an option with a `status` category drives task and kanban behavior),
 `person` (members of the space by user id, single or multiple: see [People](#people)) and
 `formula` (a value computed from the object's other fields, see [Formulas](#formulas)).

@@ -6,6 +6,10 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- Name the other side of a relation: in a type's settings, a relation's "Name on the other side" is what the objects it links to show, e.g. "Wrote" on a person instead of "Books · Author". Agents see it too.
+
 ### Fixed
 
 - Reminders reach the desktop app again after it reconnects (after an update, a restart or a network hiccup). Before, the server could lose track of the new connection and say "no desktop app open".
