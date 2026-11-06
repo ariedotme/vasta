@@ -871,6 +871,8 @@ fn main() {
             app.manage(AppState { settings: Mutex::new(Settings::load(&handle)), capture_item: Mutex::new(None), folder_item: Mutex::new(None), starting: Mutex::new(()), open_capture: Mutex::new(false) });
             app.manage(local::LocalServer::default());
             app.manage(notifications::Notifications::default());
+            #[cfg(target_os = "macos")]
+            notifications::banner_in_front();
             notifications::start(handle.clone(), notifications::Hooks { credentials: notify_credentials, refused: notify_token_refused });
             let clicks = handle.clone();
             let _ = handle.notification().on_action(move |action| {

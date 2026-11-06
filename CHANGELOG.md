@@ -9,6 +9,7 @@ GitHub release page.
 ### Fixed
 
 - Reminders reach the desktop app again after it reconnects (after an update, a restart or a network hiccup). Before, the server could lose track of the new connection and say "no desktop app open".
+- Desktop (macOS): reminders show as a banner while Vasta is the app in front, not only in Notification Center.
 
 ## 0.6.0 (2026-11-06)
 
