@@ -59,8 +59,8 @@ Code and Codex).
 | `nutrition_day` | A day's meals with their entries (ids), totals against the goal, whether it counts, the week's budget |
 | `delete_food_entry` | Take an entry off a day |
 | `save_food` | Make or fill in a food: nutrients per `per` grams as on its label (kept per 100 g), brand, portions |
-| `get_board` | A whiteboard's elements (cards with their object, text, sticky notes, shapes, frames, pen strokes without their ink) with boxes in board coordinates, and its arrows; `format: "canvas"` gives a JSON Canvas instead |
-| `edit_board` | Change a whiteboard in one step: `add` elements (`ref` names one for `arrows` in the same call; without `x`/`y` they are laid out in a grid to the right of the board), `arrows`, `update` (move, resize, recolor, retext, retitle, reshape, relabel, a card's `view`, an arrow's `path`, `heads`, `dashed`; arrows take those when added too), `remove`, `mermaid` (a flowchart laid out as shapes and arrows, nodes named like objects becoming their cards), `canvas` (a JSON Canvas to add) |
+| `get_board` | A whiteboard's elements (cards with their object, text, sticky notes, shapes, frames, pen strokes without their ink) with boxes in board coordinates, and its arrows; `format: "canvas"` gives a JSON Canvas instead, `format: "mermaid"` a Mermaid flowchart (frames as subgraphs) |
+| `edit_board` | Change a whiteboard in one step: `add` elements (`ref` names one for `arrows` in the same call; without `x`/`y` they are laid out in a grid to the right of the board), `arrows`, `update` (move, resize, recolor, retext, retitle, reshape, relabel; `rotation`; a shape's `fill`, `border`, `dash`; a sticky's `fontSize`; a card's `view` and `fields` (property names); a frame's `cover`, the default scene; an arrow's `path`, `heads`, `startTip`/`endTip`, `fromSide`/`toSide`, `dash`, `width`; arrows take those when added too, and new elements their styles), `remove`, `mermaid` (a flowchart laid out as shapes and arrows, nodes named like objects becoming their cards, subgraphs frames), `canvas` (a JSON Canvas to add), `layout` (`down`, `right`, `up`, `left` along the arrows, or `grid`: the whole board laid out after the edit) |
 
 Without `space`, tools use the user's capture space; a space can be named by id or name. Types are
 named by name, plural or built-in key (`page`, `task`…), properties by name, select values by
@@ -191,6 +191,8 @@ vasta board <id>                           # a whiteboard's elements and arrows
 vasta board <id> --canvas > plan.canvas    # as a JSON Canvas file (Obsidian opens it)
 echo 'graph LR; A[Idea] --> B[Plan]' | vasta board <id> --mermaid
 vasta board <id> --import < plan.canvas    # add a JSON Canvas to a board
+vasta board <id> --flowchart               # the board as a Mermaid flowchart
+vasta board <id> --layout right            # lay it out left to right along its arrows
 vasta tool get_object '{"id":"…"}'         # any tool, JSON in and out
 ```
 

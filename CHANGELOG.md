@@ -56,6 +56,10 @@ GitHub release page.
 - **A default scene for whiteboards.** The scenes list renames frames and stars one as the
   board's default scene: where it opens the first time on a device, and what embeds without a
   scene of their own show.
+- **Export a whiteboard as a picture** (PNG or SVG) or copy it as a Mermaid flowchart, and **lay
+  it out** (down or right along its arrows, or in a grid) from the board menu; both act on the
+  selection when there is one. `vasta board <id> --flowchart` and `--layout` do the same in the
+  terminal.
 - **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
   properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
 

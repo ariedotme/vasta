@@ -134,6 +134,8 @@ describe('vasta CLI', () => {
     expect(JSON.parse(canvas).nodes).toHaveLength(2)
     const other = JSON.parse(await vasta(['new', 'Whiteboard', 'Copy', '--json']))
     expect(await vasta(['board', other.id, '--import'], canvas)).toContain('Start → End')
+    expect(await vasta(['board', made.id, '--flowchart'])).toMatch(/^flowchart (TD|LR)\n/)
+    expect(await vasta(['board', made.id, '--layout', 'right'])).toContain('Start → End')
     await expect(vasta(['board', made.id, '--mermaid'], '')).rejects.toThrow('Mermaid')
   })
 })

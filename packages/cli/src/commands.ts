@@ -36,7 +36,8 @@ export const USAGE = `vasta — your Vasta notes from the terminal (for you, scr
   vasta unpin <id|link>            remove an object from all sidebar sections
   vasta board <id|link>             a whiteboard's elements and arrows; --canvas prints it as a JSON Canvas;
                                     --mermaid adds a Mermaid flowchart read from stdin (or given after the id);
-                                    --import adds a JSON Canvas read from stdin
+                                    --import adds a JSON Canvas read from stdin; --flowchart prints it as a Mermaid
+                                    flowchart; --layout down|right|up|left|grid lays it out along its arrows
   vasta capture <text…>             capture into today's note, like the quick capture
   vasta inbox [--days N]            what was captured lately
   vasta habits [YYYY-MM-DD]         your habits: done today (or that day), streaks
@@ -197,6 +198,8 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
       canvas: { type: 'boolean', default: false },
       mermaid: { type: 'boolean', default: false },
       import: { type: 'boolean', default: false },
+      flowchart: { type: 'boolean', default: false },
+      layout: { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
     },
   })
@@ -224,9 +227,11 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
       return out(await call('get_object', { id: idOf(rest[0]) }), show)
     }
     case 'board': {
-      if (!rest[0]) throw new UsageError('vasta board <id|link> [--canvas | --mermaid | --import]')
+      if (!rest[0]) throw new UsageError('vasta board <id|link> [--canvas | --flowchart | --mermaid | --import | --layout <direction>]')
       const id = idOf(rest[0])
       if (values.canvas) return json(await call('get_board', { id, format: 'canvas' }))
+      if (values.flowchart) return ((await call('get_board', { id, format: 'mermaid' })) as { mermaid: string }).mermaid
+      if (values.layout) return out(await call('edit_board', { id, layout: values.layout }), board)
       if (values.mermaid || values.import) {
         const input = await text()
         if (!input.trim()) throw new UsageError(values.mermaid ? 'pipe in a Mermaid flowchart, or give it after the id' : 'pipe in a JSON Canvas file')

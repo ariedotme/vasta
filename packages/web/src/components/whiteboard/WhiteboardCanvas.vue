@@ -15,6 +15,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import {
   BOARD_FIELD,
   addBoardElements,
+  boardToMermaid,
+  layoutBoardElements,
+  type Direction,
   coverFrame,
   setCover,
   arrowDashPatch,
@@ -89,6 +92,7 @@ import PopoverMenu from '../PopoverMenu.vue'
 import BoardItem from './BoardItem.vue'
 import BoardToolbar, { type DrawMode, type Tool } from './BoardToolbar.vue'
 import { activePen, pickHighlighter, pickPen, toolSettings } from '../../lib/board-tools.ts'
+import { boardSvg, download, svgToPng } from '../../lib/board-export.ts'
 import SelectionBar from './SelectionBar.vue'
 
 /**
@@ -1173,6 +1177,39 @@ function addCanvas(canvas: unknown) {
 
 // Board menu: JSON Canvas out and in, a flowchart in.
 const fileInput = ref<HTMLInputElement | null>(null)
+/** The selection, when there is one, else the board. */
+const toExport = () => (selected.value.length ? [...selected.value, ...elements.value.filter((e) => isAttached(e) && selection.value.has(e.parent))] : elements.value)
+const fileName = (extension: string) => `${(props.title || 'Whiteboard').replace(/[\\/:*?"<>|]/g, '-')}.${extension}`
+async function exportPicture(format: 'svg' | 'png') {
+  try {
+    const { svg, width, height } = boardSvg(toExport(), {
+      card: (id) => {
+        const summary = cachedSummary(id)
+        return summary ? { title: displayTitle(summary, typesById.value.get(summary.typeId)), type: typesById.value.get(summary.typeId)?.name } : undefined
+      },
+    })
+    if (format === 'svg') download(new Blob([svg], { type: 'image/svg+xml' }), fileName('svg'))
+    else download(await svgToPng(svg, width, height), fileName('png'))
+  } catch (error) {
+    lastError.value = (error as Error).message
+  }
+}
+async function copyMermaid() {
+  const text = boardToMermaid(toExport(), (id) => cachedSummary(id)?.title)
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    lastError.value = 'Could not copy to the clipboard'
+  }
+}
+/** Lay the board (or the selection) out along its arrows, frames refitted around what they hold. */
+function layOut(direction: Direction | 'grid') {
+  const list = selected.value.length > 1 ? toExport() : elements.value
+  const patches = layoutBoardElements(list, direction)
+  if (!Object.keys(patches).length) return
+  update(patches)
+  void nextTick(() => fit(placed.value.filter((e) => patches[e.id])))
+}
 function exportCanvas() {
   const canvas = boardToJsonCanvas(elements.value, (id) => {
     const summary = cachedSummary(id)
@@ -1202,7 +1239,31 @@ async function askFlowchart() {
 function boardMenu(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   openMenuAt(rect.left, rect.bottom + 6, [
-    { label: 'Export as JSON Canvas', icon: 'ph:download-simple', run: exportCanvas },
+    {
+      kind: 'submenu',
+      label: 'Export',
+      icon: 'ph:download-simple',
+      items: [
+        { label: 'Picture (PNG)', icon: 'ph:image', run: () => exportPicture('png') },
+        { label: 'Vector picture (SVG)', icon: 'ph:file-svg', run: () => exportPicture('svg') },
+        { label: 'JSON Canvas', icon: 'ph:file-code', hint: 'Obsidian and others', run: exportCanvas },
+        { label: 'Copy as Mermaid', icon: 'ph:flow-arrow', run: copyMermaid },
+      ],
+    },
+    ...(props.readonly || !placed.value.length
+      ? []
+      : [
+          {
+            kind: 'submenu' as const,
+            label: 'Lay out',
+            icon: 'ph:tree-structure',
+            items: [
+              { label: 'Down, along the arrows', icon: 'ph:arrow-down', run: () => layOut('down') },
+              { label: 'Right, along the arrows', icon: 'ph:arrow-right', run: () => layOut('right') },
+              { label: 'In a grid', icon: 'ph:grid-four', run: () => layOut('grid') },
+            ],
+          },
+        ]),
     ...(props.readonly
       ? []
       : [

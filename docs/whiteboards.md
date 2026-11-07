@@ -125,8 +125,16 @@ Where the view was is kept per board on each device.
   board menu (**⋯** top right) › Add a Mermaid flowchart. A Mermaid diagram in a note has
   **Turn into whiteboard** (on hover) to make a new board of it. Nodes become shapes (`[ ]`
   rectangle, `(( ))` ellipse, `{ }` diamond, `{{ }}` and `[/ /]` parallelogram, `> ]` triangle)
-  laid out in layers in the chart's direction, edges become arrows with their labels, and a node
-  named exactly like an object of the space becomes its card. Subgraphs and styles are skipped.
+  laid out in layers in the chart's direction (ordered to cross as few arrows as they can, each
+  layer centered), edges become arrows with their labels (dotted `-.->` dashed, `<-->` with both
+  heads, `---` plain), a node named exactly like an object of the space becomes its card, and a
+  `subgraph` becomes a frame around its nodes. Styles and classes are skipped. **Export › Copy
+  as Mermaid** goes the other way: the board (or the selection) as a flowchart, frames as
+  subgraphs.
+- **Lay out** (board menu): the board, or the selection, in layers along its arrows (down or to
+  the right) or in a grid, frames refitted around what they hold; one undo puts it back.
+- **Export** (board menu) the board, or the selection, as a picture: PNG (twice its size) or SVG,
+  drawn in the light theme's colors.
 - **JSON Canvas** ([jsoncanvas.org](https://jsoncanvas.org), Obsidian's `.canvas`): the board menu
   exports the board as one (cards as links to their objects, frames as groups, arrows as edges;
   pen strokes have no place in the format and stay out) and imports one (groups become frames,
@@ -136,7 +144,8 @@ Where the view was is kept per board on each device.
 - **Agents** read a board with `get_board` and change it with `edit_board` over MCP, or with
   `vasta board` in the terminal ([agents.md](agents.md)): elements and arrows by id, new ones
   named by a `ref` within one call, positions laid out when left out, a flowchart or a canvas
-  added the same way. The conversions live in [`core/src/board-graph.ts`](../packages/core/src/board-graph.ts).
+  added the same way, the styles below set, the whole board laid out (`layout`), and the board
+  read as a Mermaid flowchart (`format: "mermaid"`, `vasta board <id> --flowchart`). The conversions live in [`core/src/board-graph.ts`](../packages/core/src/board-graph.ts).
 
 ## How it is stored
 
@@ -147,16 +156,22 @@ writes it.
 
 | kind    | fields |
 |---------|--------|
-| `card`   | `objectId`, `view` (optional: `compact`, `embed`) |
+| `card`   | `objectId`, `view` (optional: `compact`, `embed`, `properties`), `fields` (optional: the property ids a `properties` card lists) |
 | `text`   | `text` |
-| `shape`  | `shape` (rectangle, ellipse, diamond, triangle, parallelogram, star, heart; anything else reads as a rectangle), `text` |
-| `sticky` | `text` |
-| `stroke` | `points` (x, y, pressure in turn, relative to the box's corner, simplified), `size`, `sw`, `sh` (the box the points were drawn in, so a resized stroke scales them), `highlight` (optional), `parent` (optional: the element it is drawn on; then `x`, `y`, `w`, `h` are fractions of that element's box) |
-| `frame`  | `title` (optional) |
-| `arrow`  | `from`, `to` (element ids), `label` (optional), `color` (optional), `relation` (optional: the relation property of the "from" card's object it wrote the "to" object into), `mentioned` (optional: the "to" object was mentioned in the "from" object's text), `path` (`curved`, `elbow`; straight when left out), `heads` (`both`, `none`; the end when left out), `dashed`, `rank` |
+| `shape`  | `shape` (rectangle, ellipse, diamond, triangle, parallelogram, star, heart; anything else reads as a rectangle), `text`, `fill` (optional: `none`, `white`, `solid`; a tint when left out), `border` (optional: the outline's width), `dash` (optional: `dashed`, `dotted`) |
+| `sticky` | `text`, `fontSize` (optional: `sm`, `lg`, `xl`; medium when left out) |
+| `stroke` | `points` (x, y, pressure in turn, relative to the box's corner, simplified), `size`, `sw`, `sh` (the box the points were drawn in, so a resized stroke scales them), `highlight` (optional), `dash` (optional: a pen line drawn `dashed` or `dotted`), `parent` (optional: the element it is drawn on; then `x`, `y`, `w`, `h` are fractions of that element's box) |
+| `frame`  | `title` (optional), `cover` (optional: the board's default scene; one frame at most) |
+| `arrow`  | `from`, `to` (element ids), `label` (optional), `color` (optional), `relation` (optional: the relation property of the "from" card's object it wrote the "to" object into), `mentioned` (optional: the "to" object was mentioned in the "from" object's text), `path` (`curved`, `elbow`; straight when left out), `heads` (`both`, `none`; the end when left out), `dashed`, `rank`; and, all optional: `startTip`, `endTip` (`arrow`, `dot`, `none`; they win over `heads`), `fromSide`, `toSide` (`top`, `right`, `bottom`, `left`; the facing sides when left out), `bend` (how far a right-angled line's middle segment moved), `width`, `tipSize` (`sm`, `lg`), `dash` (`dotted`, `dashed`; wins over `dashed`) |
 
 Every kind but arrows also has `x`, `y`, `w`, `h`, `rank` and an optional `color` (a color name;
-left out, the kind's own: ink, a yellow note).
+left out, the kind's own: ink, a yellow note), and all but frames an optional `rotation` (degrees,
+clockwise, around the middle).
+
+The fields added in November 2026 (styles, tips, sides, rotation, the cover frame) are all
+optional, so a board stays readable on an older version, which ignores them. Where an older device
+would otherwise draw something else, the old field is written too: an arrow's tips also set the
+nearest `heads`, and a dotted line also sets `dashed`.
 
 `rank` is a fractional key ([`rank.ts`](../packages/core/src/rank.ts)): elements are drawn in its
 order (frames always first), so bringing one to the front or sending it back writes only that one. Because each element is its own map,
