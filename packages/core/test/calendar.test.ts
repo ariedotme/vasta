@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import { createBuiltinTypes, newObject, type DateValue, type ObjectRecord, type ObjectSummary, type ObjectType } from '../src/index.ts'
-import { calendarObjects, changeOccurrence, changeOneOccurrence, changeSeries, dayReferences, objectEntries, occurrences, pruneExceptions, spanOf, splitSeries } from '../src/calendar.ts'
+import { calendarObjects, changeOccurrence, changeOneOccurrence, changeSeries, completeRepeat, dayReferences, objectEntries, occurrences, pruneExceptions, spanOf, splitSeries } from '../src/calendar.ts'
 import { Store } from '../src/store.ts'
 import { calendarEntries, parseCalendar } from '../src/ics.ts'
 import { addDays, instantOf, wallTimeIn } from '../src/time.ts'
@@ -203,6 +203,62 @@ describe('changing occurrences in the store', () => {
     const { created } = changeOccurrence(store, edit('following', { cancelled: true }, '2026-10-19T14:00:00.000Z'), later, NY)
     expect(created).toBeUndefined()
     expect(store.getObject('standup')!.deletedAt).toBe(later)
+  })
+})
+
+describe('completing a repeating task', () => {
+  const task = createBuiltinTypes('s', at).find((t) => t.system === 'task')!
+  const make = (due: DateValue, status = 'todo'): ObjectRecord =>
+    newObject(task, { title: 'Pay rent', props: { status: { kind: 'select', value: [status] }, due: { kind: 'date', value: due } } }, 'rent', at)
+  const done = (object: ObjectRecord) => completeRepeat({ ...object, props: { ...object.props, status: { kind: 'select', value: ['done'] } } }, object, task, NY)
+  const statusOf = (object: ObjectRecord) => (object.props.status?.kind === 'select' ? object.props.status.value : undefined)
+  const dueOf = (object: ObjectRecord) => (object.props.due?.kind === 'date' ? object.props.due.value : undefined)
+
+  it('is due next time, and done after the last time', () => {
+    let rent = make({ start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY;COUNT=3' }, 'doing')
+    rent = done(rent)
+    expect(statusOf(rent)).toEqual(['todo'])
+    expect(dueOf(rent)).toEqual({ start: '2026-11-09T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY;COUNT=2' })
+    rent = done(rent)
+    expect(dueOf(rent)).toMatchObject({ start: '2026-11-16T00:00:00.000Z', rrule: 'FREQ=WEEKLY;COUNT=1' })
+    rent = done(rent)
+    expect(statusOf(rent)).toEqual(['done'])
+    expect(dueOf(rent)).toMatchObject({ start: '2026-11-16T00:00:00.000Z' })
+  })
+
+  it('skips cancelled occurrences and keeps moved ones', () => {
+    const rent = done(
+      make({
+        start: '2026-11-02T00:00:00.000Z',
+        resolution: 'day',
+        rrule: 'FREQ=WEEKLY',
+        exceptions: { '2026-11-09T00:00:00.000Z': { cancelled: true }, '2026-11-16T00:00:00.000Z': { start: '2026-11-17T00:00:00.000Z' } },
+      })
+    )
+    expect(dueOf(rent)).toEqual({ start: '2026-11-16T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY', exceptions: { '2026-11-16T00:00:00.000Z': { start: '2026-11-17T00:00:00.000Z' } } })
+  })
+
+  it('keeps the wall-clock time across DST', () => {
+    const rent = done(make({ start: '2026-10-26T13:00:00.000Z', resolution: 'time', rrule: 'FREQ=WEEKLY', timeZone: NY }))
+    expect(dueOf(rent)).toMatchObject({ start: '2026-11-02T14:00:00.000Z', timeZone: NY })
+  })
+
+  it('leaves other saves alone', () => {
+    const weekly: DateValue = { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' }
+    const once = make({ start: '2026-11-02T00:00:00.000Z', resolution: 'day' })
+    expect(statusOf(done(once))).toEqual(['done'])
+    const already = make(weekly, 'done')
+    expect(completeRepeat(already, already, task, NY)).toBe(already)
+    const reopened = make(weekly)
+    expect(completeRepeat(reopened, already, task, NY)).toBe(reopened)
+    // Another option meaning done ends it; a to-do status of its own comes back.
+    const statuses = { ...task, properties: task.properties.map((p) => (p.id === 'status' && p.kind === 'select' ? { ...p, options: [...p.options, { id: 'dropped', label: 'Dropped', status: 'done' as const }, { id: 'next', label: 'Next', status: 'todo' as const }] } : p)) }
+    const set = (object: ObjectRecord, id: string) => ({ ...object, props: { ...object.props, status: { kind: 'select' as const, value: [id] } } })
+    expect(statusOf(completeRepeat(set(reopened, 'dropped'), reopened, statuses, NY))).toEqual(['dropped'])
+    expect(statusOf(completeRepeat(set(reopened, 'done'), set(reopened, 'next'), statuses, NY))).toEqual(['next'])
+    const page = createBuiltinTypes('s', at).find((t) => t.system === 'page')!
+    const edited = { ...make(weekly), props: { ...make(weekly).props, status: { kind: 'select' as const, value: ['done'] } } }
+    expect(completeRepeat(edited, make(weekly), page, NY)).toBe(edited)
   })
 })
 

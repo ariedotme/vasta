@@ -302,6 +302,42 @@ export function splitSeries(value: DateValue, occurrence: IsoDateTime, change: O
   return { before, after: changeSeries(tail, occurrence, change, timeZone) }
 }
 
+/**
+ * A task done whose due date repeats is due next time instead, as reminders in other apps do: its
+ * due date becomes the series from the next occurrence that is not cancelled (splitSeries' rest of
+ * it, so a COUNT ends where it did) and its status goes back to the to-do one it had (or the first
+ * to-do one). Done is the first option meaning done, the one checkboxes set; others (a "Dropped")
+ * end it, as does the last occurrence done. `object` is the task being saved, `stored` the one it
+ * replaces; only a status changed by this save counts, so a merge of changes made elsewhere never
+ * repeats it.
+ */
+export function completeRepeat(object: ObjectRecord, stored: ObjectRecord | undefined, type: ObjectType | undefined, timeZone: string): ObjectRecord {
+  const status = type?.system === 'task' ? type.properties.find((p) => p.id === 'status') : undefined
+  if (status?.kind !== 'select') return object
+  const optionOf = (o: ObjectRecord | undefined) => {
+    const value = o?.props.status
+    return value?.kind === 'select' ? status.options.find((option) => option.id === value.value[0]) : undefined
+  }
+  const done = status.options.find((option) => option.status === 'done')
+  const before = optionOf(stored)
+  const todo = before?.status === 'todo' ? before : status.options.find((option) => option.status === 'todo')
+  const due = object.props.due?.kind === 'date' ? object.props.due.value : undefined
+  const rule = due?.rrule ? parseRule(due.rrule) : undefined
+  if (!done || !todo || !due || !rule || optionOf(object) !== done || before?.status === 'done') return object
+  let next: IsoDateTime | undefined
+  let first = true
+  for (const times of series(due, rule, timeZone)) {
+    if (first) first = false
+    else if (!due.exceptions?.[times.start] || validException(due.exceptions[times.start])) {
+      next = times.start
+      break
+    }
+  }
+  const rest = next ? splitSeries(due, next, currentTimes(due, next), timeZone)?.after : undefined
+  if (!rest) return object
+  return { ...object, props: { ...object.props, status: { kind: 'select', value: [todo.id] }, due: { kind: 'date', value: rest } } }
+}
+
 /** The date of an object's field: its own date ("date") or a date property. */
 export function dateOf(object: ObjectRecord, field: string): DateValue | undefined {
   if (field === 'date') return object.date
