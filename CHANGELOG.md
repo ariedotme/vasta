@@ -25,6 +25,14 @@ GitHub release page.
   (`-.->`) and two-way (`<-->`) links keep their look. Agents can lay a whole board out
   (`edit_board` with `layout`: down, right, up, left or grid) and read a board as a Mermaid
   flowchart (`get_board` with format `mermaid`).
+- **Undo and redo buttons on whiteboards**, next to the zoom, for when there is no keyboard (the
+  two- and three-finger taps still work).
+
+### Fixed
+
+- Whiteboard arrowheads were missing in older Safari (an arrow showed only a gap before the
+  element); they are now drawn in the arrow's color everywhere.
+- A whiteboard's dot grid no longer drifts away from the elements while zooming in Safari.
 
 ## 0.6.2 (2026-11-06)
 

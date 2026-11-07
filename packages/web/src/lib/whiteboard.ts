@@ -327,11 +327,64 @@ export function arrowRoute(a: Box, b: Box, path: 'straight' | 'curved' | 'elbow'
 
 /** An arrow's course as SVG path data, its points mapped (to the screen) first. */
 export function routePath(route: ArrowRoute, map: (p: Point) => Point = (p) => p): string {
-  const pts = route.points.map(map)
+  return pointsPath(route.kind, route.points.map(map))
+}
+
+/** SVG path data through a route's points, already on screen. */
+export function pointsPath(kind: ArrowRoute['kind'], pts: Point[]): string {
   const f = (n: number) => Math.round(n * 100) / 100
   const at = (p: Point) => `${f(p.x)},${f(p.y)}`
-  if (route.kind === 'curve') return `M${at(pts[0]!)} Q${at(pts[1]!)} ${at(pts[2]!)}`
+  if (kind === 'curve') return `M${at(pts[0]!)} Q${at(pts[1]!)} ${at(pts[2]!)}`
   return `M${pts.map(at).join(' L')}`
+}
+
+/** How long an arrow's tips are, in line widths. */
+const TIP_LENGTH: Record<'sm' | 'md' | 'lg', number> = { sm: 3.5, md: 5, lg: 7 }
+
+export type TipMark = { kind: 'arrow' | 'dot'; d: string }
+
+/**
+ * The marks at an arrow's ends (filled triangles or dots, drawn as paths in the line's own color:
+ * older Safari has no `context-stroke` for markers), and the course shortened under its arrowheads
+ * so the line does not poke through their points. `points` and `width` are on screen.
+ */
+export function arrowTipMarks(points: Point[], tips: { start: 'arrow' | 'dot' | 'none'; end: 'arrow' | 'dot' | 'none' }, width: number, size: 'sm' | 'md' | 'lg' = 'md'): { points: Point[]; marks: TipMark[] } {
+  const pts = points.map((p) => ({ ...p }))
+  const marks: TipMark[] = []
+  const length = Math.max(6, width * TIP_LENGTH[size])
+  const f = (n: number) => Math.round(n * 100) / 100
+  const end = (tip: 'arrow' | 'dot' | 'none', at: number, before: number) => {
+    const p = pts[at]!
+    const q = pts[before]!
+    const d = Math.hypot(p.x - q.x, p.y - q.y)
+    if (tip === 'none' || !d) return
+    const ux = (p.x - q.x) / d
+    const uy = (p.y - q.y) / d
+    if (tip === 'dot') {
+      const r = Math.max(3, width * (size === 'sm' ? 1.4 : size === 'lg' ? 2.6 : 1.9))
+      marks.push({ kind: 'dot', d: `M${f(p.x - r)},${f(p.y)} a${f(r)},${f(r)} 0 1,0 ${f(r * 2)},0 a${f(r)},${f(r)} 0 1,0 ${f(-r * 2)},0 Z` })
+      return
+    }
+    const half = length * 0.45
+    const bx = p.x - ux * length
+    const by = p.y - uy * length
+    marks.push({ kind: 'arrow', d: `M${f(p.x)},${f(p.y)} L${f(bx - uy * half)},${f(by + ux * half)} L${f(bx + uy * half)},${f(by - ux * half)} Z` })
+    // The line stops inside the head (not at its point), never past the point before it.
+    const back = Math.min(length * 0.7, d * 0.9)
+    pts[at] = { x: p.x - ux * back, y: p.y - uy * back }
+  }
+  if (pts.length >= 2) {
+    end(tips.end, pts.length - 1, pts.length - 2)
+    end(tips.start, 0, 1)
+  }
+  return { points: pts, marks }
+}
+
+/** An SVG dash pattern for a line of this width (dots need round caps). */
+export function dashArray(dash: 'dashed' | 'dotted' | undefined, width: number): string | undefined {
+  if (dash === 'dashed') return `${width * 4} ${width * 3}`
+  if (dash === 'dotted') return `0 ${width * 2.4}`
+  return undefined
 }
 
 // Snapping a resize -------------------------------------------------------------------------------

@@ -12,7 +12,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import {
   BOARD_FIELD,
   addBoardElements,
+  arrowTips,
   bringToFront,
+  lineDash,
   attachedTo,
   boardToJsonCanvas,
   spotAfter,
@@ -49,7 +51,10 @@ import {
   SHAPE_ICONS,
   SHAPE_LABELS,
   arrowRoute,
+  arrowTipMarks,
+  dashArray,
   edgePoint,
+  pointsPath,
   routePath,
   snapResize,
   boardClipboard,
@@ -107,6 +112,12 @@ const summaries = useSummaries(cardIds)
 const summaryById = computed(() => new Map(summaries.value.map((s) => [s.id, s])))
 
 const undo = new Y.UndoManager(props.doc.getMap(BOARD_FIELD), { trackedOrigins: new Set([LOCAL]), captureTimeout: 300 })
+/** Whether there is something to undo or redo (for the buttons). */
+const history = reactive({ undo: false, redo: false })
+const syncHistory = () => Object.assign(history, { undo: undo.undoStack.length > 0, redo: undo.redoStack.length > 0 })
+for (const name of ['stack-item-added', 'stack-item-popped', 'stack-cleared'] as const) undo.on(name, syncHistory)
+/** Ids in the page's SVG are global: each board (several embeds on a page) gets its own. */
+const gridId = `wb-grid-${Math.random().toString(36).slice(2, 8)}`
 
 /** This page's own writes show at once (a new text gets its editor in the same tick); others' on the next frame. */
 const now = () => {
@@ -301,10 +312,21 @@ const arrowPaths = computed(() =>
     const b = box(to)
     if (!inView(a) && !inView(b)) return []
     const route = arrowRoute(a, b, arrow.path)
-    return [{ arrow, d: routePath(route, (p) => toScreen(p.x, p.y)), mid: route.mid }]
+    const width = lineWidth(arrow.width)
+    const { points, marks } = arrowTipMarks(
+      route.points.map((p) => toScreen(p.x, p.y)),
+      arrowTips(arrow),
+      width,
+      arrow.tipSize ?? 'md'
+    )
+    // The full course (for picking it), and the one drawn, stopping inside its heads.
+    return [{ arrow, d: routePath(route, (p) => toScreen(p.x, p.y)), line: pointsPath(route.kind, points), marks, width, dash: dashArray(lineDash(arrow), width), mid: route.mid }]
   })
 )
 const stroke = computed(() => Math.max(1, 1.75 * camera.zoom))
+/** A line's width on screen: its own (in board units) or the usual one. */
+const lineWidth = (width: number | undefined) => (width ? Math.max(1, width * camera.zoom) : stroke.value)
+const arrowColor = (arrow: { id: Id; color?: ColorName }) => (selection.value.has(arrow.id) ? 'var(--color-accent)' : arrow.color ? BOARD_COLORS[arrow.color] : 'var(--color-ink-soft)')
 
 // Tools ---------------------------------------------------------------------------
 
@@ -1306,9 +1328,16 @@ const tools: { id: Tool; icon: string; label: string; key: string }[] = [
 const narrow = computed(() => size.w < 720)
 const toolIcon = (t: (typeof tools)[number]) => (t.id === 'shape' ? SHAPE_ICONS[shapeKind.value] : t.icon)
 
-const background = computed(() => {
-  const step = 24 * camera.zoom
-  return { backgroundSize: `${step}px ${step}px`, backgroundPosition: `${camera.x}px ${camera.y}px` }
+/**
+ * The dot grid follows the camera exactly: an SVG pattern in board units. (A CSS background rounds
+ * its tile to whole pixels in Safari, so far from the origin the dots drifted away from the
+ * elements while zooming.)
+ */
+const grid = computed(() => {
+  // Zoomed far out, every other dot goes, so they never crowd into a grey wash.
+  let step = 24
+  while (step * camera.zoom < 12) step *= 2
+  return { step, transform: `translate(${camera.x} ${camera.y}) scale(${camera.zoom})`, r: 1 / camera.zoom }
 })
 const marquee = computed(() => {
   const g = gesture.value
@@ -1323,7 +1352,8 @@ const connecting = computed(() => {
   const from = byId.value.get(g.from)
   if (!from || !isPlaced(from)) return null
   const start = edgePoint(box(from), g.end)
-  return { s: toScreen(start.x, start.y), e: toScreen(g.end.x, g.end.y) }
+  const { points, marks } = arrowTipMarks([toScreen(start.x, start.y), toScreen(g.end.x, g.end.y)], { start: 'none', end: 'arrow' }, stroke.value)
+  return { s: points[0]!, e: points[1]!, marks }
 })
 /** The line being drawn, in board coordinates (inside the camera's layer). */
 const ink = computed(() => {
@@ -1366,7 +1396,7 @@ const cursor = computed(() => {
     ref="root"
     tabindex="0"
     class="whiteboard relative h-full w-full touch-none select-none overflow-hidden bg-canvas outline-none"
-    :style="{ ...background, cursor }"
+    :style="{ cursor }"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
@@ -1382,26 +1412,27 @@ const cursor = computed(() => {
     @cut="onCopy($event, true)"
     @paste="onPaste"
   >
-    <svg class="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
+    <svg class="pointer-events-none absolute inset-0 h-full w-full">
       <defs>
-        <marker id="wb-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" markerUnits="strokeWidth">
-          <path d="M0,0 L10,5 L0,10 z" fill="context-stroke" />
-        </marker>
+        <pattern :id="gridId" :width="grid.step" :height="grid.step" patternUnits="userSpaceOnUse" :patternTransform="grid.transform">
+          <circle :cx="grid.step / 2" :cy="grid.step / 2" :r="grid.r" fill="var(--color-line-strong)" />
+        </pattern>
       </defs>
+      <rect width="100%" height="100%" :fill="`url(#${gridId})`" />
+    </svg>
+    <svg class="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
       <g v-for="path in arrowPaths" :key="path.arrow.id" :data-arrow="path.arrow.id">
         <path :d="path.d" fill="none" stroke="transparent" :stroke-width="14" style="pointer-events: stroke" />
         <path
-          v-if="path.arrow.kind === 'arrow'"
-          :d="path.d"
+          :d="path.line"
           fill="none"
-          :stroke="selection.has(path.arrow.id) ? 'var(--color-accent)' : path.arrow.color ? BOARD_COLORS[path.arrow.color] : 'var(--color-ink-soft)'"
-          :stroke-width="stroke"
-          :stroke-dasharray="path.arrow.dashed ? `${stroke * 4} ${stroke * 3}` : undefined"
+          :stroke="arrowColor(path.arrow)"
+          :stroke-width="path.width"
+          :stroke-dasharray="path.dash"
           stroke-linecap="round"
           stroke-linejoin="round"
-          :marker-end="path.arrow.heads === 'none' ? undefined : 'url(#wb-head)'"
-          :marker-start="path.arrow.heads === 'both' ? 'url(#wb-head)' : undefined"
         />
+        <path v-for="(mark, i) in path.marks" :key="i" :d="mark.d" :fill="arrowColor(path.arrow)" :stroke="arrowColor(path.arrow)" :stroke-width="mark.kind === 'arrow' ? path.width * 0.6 : 0" stroke-linejoin="round" />
       </g>
     </svg>
 
@@ -1484,7 +1515,10 @@ const cursor = computed(() => {
 
     <svg class="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
       <line v-for="(g, i) in guideLines" :key="i" v-bind="g" stroke="#e5484d" stroke-width="1" stroke-dasharray="4 3" />
-      <line v-if="connecting" :x1="connecting.s.x" :y1="connecting.s.y" :x2="connecting.e.x" :y2="connecting.e.y" stroke="var(--color-accent)" :stroke-width="stroke" stroke-dasharray="6 4" marker-end="url(#wb-head)" />
+      <template v-if="connecting">
+        <line :x1="connecting.s.x" :y1="connecting.s.y" :x2="connecting.e.x" :y2="connecting.e.y" stroke="var(--color-accent)" :stroke-width="stroke" stroke-dasharray="6 4" />
+        <path v-for="(mark, i) in connecting.marks" :key="i" :d="mark.d" fill="var(--color-accent)" />
+      </template>
       <rect
         v-if="marquee"
         :x="marquee.x"
@@ -1574,7 +1608,7 @@ const cursor = computed(() => {
       v-if="!embedded"
       data-ui
       class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-0.5 overflow-x-auto rounded-xl border border-line bg-surface p-1 shadow-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      :class="narrow ? 'left-3 max-w-[calc(100%-4.75rem)]' : 'left-1/2 max-w-[calc(100%-1.5rem)] -translate-x-1/2'"
+      :class="narrow ? 'left-3 max-w-[calc(100%-8.75rem)]' : 'left-1/2 max-w-[calc(100%-1.5rem)] -translate-x-1/2'"
     >
       <template v-if="!readonly">
         <button
@@ -1606,6 +1640,16 @@ const cursor = computed(() => {
 
     <!-- Zoom -->
     <div v-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-3 flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md">
+      <!-- Undo and redo (also ⌘Z, ⇧⌘Z, and two- and three-finger taps) -->
+      <template v-if="!readonly">
+        <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" title="Undo (⌘Z)" aria-label="Undo" :disabled="!history.undo" @click="undo.undo()">
+          <AppIcon fallback="ph:arrow-counter-clockwise" :size="16" />
+        </button>
+        <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" title="Redo (⇧⌘Z)" aria-label="Redo" :disabled="!history.redo" @click="undo.redo()">
+          <AppIcon fallback="ph:arrow-clockwise" :size="16" />
+        </button>
+        <span class="mx-0.5 h-5 w-px bg-line" :class="narrow ? 'hidden' : ''" />
+      </template>
       <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" title="Zoom out" aria-label="Zoom out" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom / 1.25)">
         <AppIcon fallback="ph:minus" :size="16" />
       </button>
@@ -1677,6 +1721,5 @@ const cursor = computed(() => {
 <style scoped>
 .whiteboard {
   -webkit-touch-callout: none;
-  background-image: radial-gradient(circle, var(--color-line-strong) 1px, transparent 1.2px);
 }
 </style>
