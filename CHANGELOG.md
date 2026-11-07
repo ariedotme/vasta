@@ -28,6 +28,11 @@ GitHub release page.
 - **Undo and redo buttons on whiteboards**, next to the zoom, for when there is no keyboard (the
   two- and three-finger taps still work).
 
+### Changed
+
+- **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
+  properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
+
 ### Fixed
 
 - Whiteboard arrowheads were missing in older Safari (an arrow showed only a gap before the

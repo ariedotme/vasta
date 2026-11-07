@@ -77,7 +77,10 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   the board has frames, a menu in its header picks one, a **scene**, and the embed shows just it.
   What lies outside the scene's frame fades into the background. The scene is the embed's `blockId`, so Markdown keeps it: `![Board](vasta://o/<board>#b-<frame>)`.
   Double-click the embed to open the board.
-- The board fills the page below the title and properties, so it opens whole without scrolling.
+- On its own page the board fills the page under a thin bar with its title. **Details** (in the
+  bar) opens a panel beside it with the tags, properties, comments, backlinks and the rest
+  (over the board on a phone); it stays open or closed on each device. In the side pane, and as a
+  template, the board sits below the title and properties instead.
   The **full screen** button (top right) gives it the whole window; Esc leaves it once nothing is
   selected.
 

@@ -144,6 +144,30 @@ watch(
   () => [object.value?.tagIds.length, Object.keys(object.value?.props ?? {}).length, object.value?.title],
   () => void nextTick(measureBoard)
 )
+/**
+ * On its own page a board fills it: a thin bar with the title above it, and the rest of the object
+ * (tags, properties, comments, backlinks) in a Details panel beside it, closed unless opened. In
+ * the side pane and as a template it stays below the title as before.
+ */
+const boardLayout = computed(() => isWhiteboard.value && !embedded.value && !inPane.value && !info.value)
+const DETAILS_KEY = 'vasta.board-details'
+const detailsOpen = ref(readFlag(DETAILS_KEY))
+watch(detailsOpen, (open) => writeFlag(DETAILS_KEY, open))
+function readFlag(key: string) {
+  try {
+    return localStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+function writeFlag(key: string, on: boolean) {
+  try {
+    localStorage.setItem(key, on ? '1' : '0')
+  } catch {}
+}
+/** Ids of the places the board and its details go in that layout (two pages can be open: the page and the pane). */
+const boardSlot = computed(() => `board-slot-${props.id}`)
+const detailsSlot = computed(() => `board-details-${props.id}`)
 /** Full screen, with the keys going to the board (Esc, the tools). */
 function toggleBoardFull() {
   boardFull.value = !boardFull.value
@@ -643,7 +667,7 @@ async function startFrom(template: ObjectRecord) {
 <template>
   <div v-if="missing" class="grid h-full place-items-center text-sm text-ink-soft">This object does not exist or was deleted for good.</div>
 
-  <article v-else-if="object" ref="article" :class="embedded ? '' : inPane ? 'pb-16' : 'pb-32'">
+  <article v-else-if="object" ref="article" :class="boardLayout ? 'flex h-full flex-col' : embedded ? '' : inPane ? 'pb-16' : 'pb-32'">
     <div v-if="object.deletedAt && !embedded" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
       <AppIcon fallback="ph:trash" class="shrink-0" />
       <span class="min-w-0 flex-1 max-sm:min-w-[80%]">In the trash since {{ formatDate({ start: object.deletedAt, resolution: 'time' }) }}. It goes for good 30 days later.</span>
@@ -674,7 +698,49 @@ async function startFrom(template: ObjectRecord) {
         <p class="text-xs text-ink-faint">As made now. Questions show their own words; a daily note's template leaves out the time, you and the answers.</p>
       </div>
     </ModalDialog>
-    <div v-if="object.coverUrl && !embedded" class="group/cover relative w-full overflow-hidden bg-hover" :class="inPane ? 'h-32' : 'h-56 max-md:h-40'">
+    <!-- A board on its own page: a thin bar, the board, and the details beside it -->
+    <template v-if="boardLayout">
+      <div class="flex h-12 shrink-0 items-center gap-2 border-b border-line px-3 md:px-4">
+        <RouterLink :to="`/t/${object.typeId}`" class="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:brightness-95" :class="chip(type?.color)">
+          <AppIcon :icon="type?.icon" fallback="ph:cube" :size="13" /><span class="max-sm:hidden">{{ type?.name }}</span>
+        </RouterLink>
+        <input
+          v-model="object.title"
+          class="min-w-0 flex-1 truncate rounded-md bg-transparent px-1.5 py-1 text-base font-semibold outline-none placeholder:text-ink-faint/60 hover:bg-hover focus:bg-hover"
+          :placeholder="titlePlaceholder"
+          aria-label="Title"
+          @input="changed()"
+          @keydown.enter="($event.target as HTMLInputElement).blur()"
+        />
+        <span class="shrink-0 text-xs text-ink-faint" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-md:hidden' : ''" :title="authorship.title || undefined">{{
+          status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved'
+        }}</span>
+        <button
+          class="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm ring-1 ring-line hover:bg-hover"
+          :class="detailsOpen ? 'bg-hover text-ink' : 'text-ink-soft'"
+          :aria-pressed="detailsOpen"
+          title="Tags, properties, comments and backlinks"
+          @click="detailsOpen = !detailsOpen"
+        >
+          <AppIcon fallback="ph:sidebar-simple" :size="16" class="-scale-x-100" /><span class="max-sm:hidden">Details</span>
+        </button>
+      </div>
+      <div class="relative flex min-h-0 flex-1">
+        <div :id="boardSlot" class="relative min-w-0 flex-1" />
+        <aside
+          v-show="detailsOpen"
+          class="w-[24rem] shrink-0 overflow-y-auto border-l border-line bg-surface pb-16 max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30 max-md:w-full max-md:max-w-[26rem] max-md:shadow-2xl"
+        >
+          <div class="flex items-center justify-between px-5 pt-3 md:hidden">
+            <span class="text-sm font-semibold">Details</span>
+            <button class="grid h-9 w-9 place-items-center rounded-lg text-ink-soft hover:bg-hover" aria-label="Close details" @click="detailsOpen = false"><AppIcon fallback="ph:x" :size="16" /></button>
+          </div>
+          <div :id="detailsSlot" />
+        </aside>
+      </div>
+    </template>
+
+    <div v-if="object.coverUrl && !embedded && !boardLayout" class="group/cover relative w-full overflow-hidden bg-hover" :class="inPane ? 'h-32' : 'h-56 max-md:h-40'">
       <img :src="object.coverUrl" alt="" class="h-full w-full object-cover" />
       <button
         class="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-surface/90 px-2.5 py-1 text-xs font-medium text-ink shadow-sm ring-1 ring-line backdrop-blur transition-opacity hover:bg-surface md:opacity-0 md:group-hover/cover:opacity-100 md:focus-visible:opacity-100 [@media(hover:none)]:opacity-100 max-md:py-1.5"
@@ -685,7 +751,8 @@ async function startFrom(template: ObjectRecord) {
     </div>
     <input ref="coverInput" type="file" accept="image/*" class="hidden" @change="uploadCover" />
 
-    <div class="relative" :class="embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
+    <Teleport defer :to="`#${detailsSlot}`" :disabled="!boardLayout">
+    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
       <template v-if="!embedded">
       <button
         v-if="object.icon"
@@ -701,7 +768,7 @@ async function startFrom(template: ObjectRecord) {
       </PopoverMenu>
 
       <div class="group/header flex min-h-7 flex-wrap items-center gap-1.5">
-        <RouterLink :to="`/t/${object.typeId}`" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:brightness-95" :class="chip(type?.color)">
+        <RouterLink v-if="!boardLayout" :to="`/t/${object.typeId}`" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:brightness-95" :class="chip(type?.color)">
           <AppIcon :icon="type?.icon" fallback="ph:cube" :size="13" />{{ type?.name }}
         </RouterLink>
         <div v-if="day" class="flex items-center gap-0.5 text-ink-faint">
@@ -719,7 +786,7 @@ async function startFrom(template: ObjectRecord) {
           </button>
         </div>
         <div class="ml-auto flex items-center gap-1 text-xs text-ink-faint">
-          <span :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-sm:hidden' : ''" :title="authorship.title || undefined">{{ status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}${authorship.by}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved' }}</span>
+          <span v-if="!boardLayout" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-sm:hidden' : ''" :title="authorship.title || undefined">{{ status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}${authorship.by}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved' }}</span>
           <button ref="menuAnchor" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:h-9 max-md:w-9" title="More" @click="menuOpen = !menuOpen">
             <AppIcon fallback="ph:dots-three" :size="17" />
           </button>
@@ -756,7 +823,7 @@ async function startFrom(template: ObjectRecord) {
       </div>
 
       <textarea
-        v-if="info?.kind !== 'snippet'"
+        v-if="info?.kind !== 'snippet' && !boardLayout"
         ref="titleInput"
         v-model="object.title"
         data-large-text
@@ -921,10 +988,11 @@ async function startFrom(template: ObjectRecord) {
         <QueryResults class="mt-4" :query="object.query ?? { typeIds: [] }" :parent-id="object.id" @table="setQuery({ ...(object.query ?? { typeIds: [] }), table: $event })" @board="setQuery({ ...(object.query ?? { typeIds: [] }), board: $event })" />
       </section>
 
-      <section v-if="isWhiteboard && !embedded" ref="boardSection" class="mt-4">
+      <Teleport v-if="isWhiteboard && !embedded" defer :to="`#${boardSlot}`" :disabled="!boardLayout">
+      <section :ref="boardLayout ? undefined : 'boardSection'" :class="boardLayout ? 'absolute inset-0' : 'mt-4'">
         <div
-          :class="boardFull ? 'fixed inset-0 z-40' : 'relative h-[max(20rem,calc(100dvh-16rem))] overflow-hidden rounded-xl border border-line'"
-          :style="!boardFull && boardHeight ? { height: `${boardHeight}px` } : undefined"
+          :class="boardFull ? 'fixed inset-0 z-40' : boardLayout ? 'absolute inset-0 overflow-hidden' : 'relative h-[max(20rem,calc(100dvh-16rem))] overflow-hidden rounded-xl border border-line'"
+          :style="!boardFull && !boardLayout && boardHeight ? { height: `${boardHeight}px` } : undefined"
           @keydown.esc="!$event.defaultPrevented && (boardFull = false)"
         >
           <WhiteboardCanvas v-if="board" :doc="board.doc" :board-id="object.id" :title="object.title" :readonly="!!object.deletedAt" />
@@ -939,6 +1007,7 @@ async function startFrom(template: ObjectRecord) {
           </button>
         </div>
       </section>
+      </Teleport>
 
       <div v-for="(field, index) in richFields" :key="field.id" :class="embedded && index === 0 ? '' : 'mt-8'">
         <h2 v-if="richFields.length > 1 || index > 0" class="mb-2 text-sm font-semibold text-ink-soft">{{ field.name }}</h2>
@@ -964,5 +1033,6 @@ async function startFrom(template: ObjectRecord) {
         <ObjectActivity v-if="!embedded && !inPane && !day" :object-id="object.id" :type="type" />
       </template>
     </div>
+    </Teleport>
   </article>
 </template>
