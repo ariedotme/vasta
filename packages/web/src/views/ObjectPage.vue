@@ -42,7 +42,7 @@ import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { colorSource, tagAncestors, tagColor } from '../lib/tags.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { PROPERTY_KINDS, formulaValue, kindIcon, newPropertyDef } from '../lib/properties.ts'
-import { lastError, primeFromObject, replaceType, systemType, typesById, workspace } from '../lib/state.ts'
+import { lastError, loadWorkspace, primeFromObject, replaceType, systemType, typesById, workspace } from '../lib/state.ts'
 import { personName, sharedSpace } from '../lib/people.ts'
 import { openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
 import { clearOtherDefaults, deleteTemplate, loadTemplates, previewTemplate, rememberTemplate, saveAsTemplate, templateFill, templatesOf } from '../lib/templates.ts'
@@ -251,6 +251,9 @@ onMounted(async () => {
     missing.value = true
     return
   }
+  // An object of another space (a link to it) opens that space: its type, so its text and
+  // properties, is among that space's types.
+  if (!inPane.value && !embedded.value && workspace.space?.id !== object.value.spaceId) await loadWorkspace(object.value.spaceId)
   if (useReplica()) text.value = await openText(props.id).catch(() => null)
   if (isWhiteboard.value && !embedded.value) {
     board.value = text.value ?? (await openRemoteText(props.id).catch(() => null))
