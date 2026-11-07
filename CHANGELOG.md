@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.7.1 (2026-11-07)
+
 A hotfix for [0.7.0](https://github.com/ariedotme/vasta/releases/tag/v0.7.0).
 
 ### Added
