@@ -53,6 +53,9 @@ GitHub release page.
   settings.
 - **Cards with properties on whiteboards.** A card's view can be its title and the properties
   you pick (a task's status and due date, a book's author…), shown live.
+- **A default scene for whiteboards.** The scenes list renames frames and stars one as the
+  board's default scene: where it opens the first time on a device, and what embeds without a
+  scene of their own show.
 - **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
   properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
 

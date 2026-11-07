@@ -15,6 +15,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import {
   BOARD_FIELD,
   addBoardElements,
+  coverFrame,
+  setCover,
   arrowDashPatch,
   arrowTips,
   arrowTipsPatch,
@@ -159,9 +161,12 @@ const local = (event: { clientX: number; clientY: number }) => {
   const rect = root.value!.getBoundingClientRect()
   return { x: event.clientX - rect.left, y: event.clientY - rect.top }
 }
-/** An embedded board shows its scene (a frame) or everything; a little margin either way. */
+/**
+ * An embedded board shows its scene (a frame), else the board's default scene (the cover frame),
+ * else everything; a little margin either way.
+ */
 function fitFocus() {
-  const target = props.focus ? byId.value.get(props.focus) : undefined
+  const target = props.focus ? byId.value.get(props.focus) : coverFrame(elements.value)
   if (target && isPlaced(target)) fit([target], 2)
   else fit()
 }
@@ -194,6 +199,15 @@ function stepScene(step: number) {
   goToScene(list[next]!.id)
 }
 const leaveScene = () => (scene.value = null)
+/** Make a frame the board's default scene, or stop it being one. */
+function toggleCover(id: Id) {
+  const frame = byId.value.get(id)
+  if (frame?.kind !== 'frame') return
+  setCover(props.doc, frame.cover ? null : id, LOCAL)
+  now()
+}
+const scenesOpen = ref(false)
+const scenesAnchor = ref<HTMLElement | null>(null)
 
 /** The middle of the view, in board coordinates (where new things go). */
 const viewCenter = () => toWorld(size.w / 2, size.h / 2)
@@ -1483,7 +1497,12 @@ onMounted(() => {
     const first = !size.w
     size.w = entry!.contentRect.width
     size.h = entry!.contentRect.height
-    if (first && (props.embedded || !loadCamera())) fitFocus()
+    // A board opened for the first time on this device starts on its default scene.
+    if (first && (props.embedded || !loadCamera())) {
+      fitFocus()
+      const cover = props.embedded ? undefined : coverFrame(elements.value)
+      if (cover) void nextTick(() => (scene.value = cover.id))
+    }
   })
   observer.observe(root.value!)
   // iPadOS Scribble and text selection take a Pencil's touches (breaking a line in the middle)
@@ -1909,16 +1928,44 @@ const cursor = computed(() => {
       <button class="grid h-8 w-7 shrink-0 place-items-center rounded-l-lg text-ink-soft hover:bg-hover hover:text-ink" title="Previous frame" aria-label="Previous frame" @click="stepScene(-1)">
         <AppIcon fallback="ph:caret-left" :size="14" />
       </button>
-      <label class="relative flex w-40 min-w-0 items-center gap-1.5 border-x border-line px-2 py-1.5 hover:bg-hover max-sm:w-32">
+      <button
+        ref="scenesAnchor"
+        class="flex w-40 min-w-0 items-center gap-1.5 border-x border-line px-2 py-1.5 text-left hover:bg-hover max-sm:w-32"
+        title="Scenes: the board's frames"
+        @click="scenesOpen = !scenesOpen"
+      >
         <AppIcon fallback="ph:frame-corners" :size="14" class="shrink-0 text-ink-soft" />
         <span class="truncate" :class="scene ? 'text-ink' : 'text-ink-soft'">{{ scene ? frameTitle(frames.find((f) => f.id === scene)) : 'Whole board' }}</span>
         <AppIcon fallback="ph:caret-down" :size="11" class="ml-auto shrink-0 text-ink-faint" />
-        <!-- The native list: on a touch screen it opens as the system picker. -->
-        <select class="absolute inset-0 cursor-pointer opacity-0" aria-label="Go to a frame" :value="scene ?? ''" @change="goToScene(($event.target as HTMLSelectElement).value || null)">
-          <option value="">Whole board</option>
-          <option v-for="f in frames" :key="f.id" :value="f.id">{{ frameTitle(f) }}</option>
-        </select>
-      </label>
+      </button>
+      <PopoverMenu v-model:open="scenesOpen" :anchor="scenesAnchor" placement="bottom-start" width="17rem">
+        <div data-ui @keydown.stop>
+          <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" :class="scene ? 'text-ink' : 'text-accent'" @click="(goToScene(null), (scenesOpen = false))">
+            <AppIcon fallback="ph:corners-out" :size="15" class="text-ink-soft" />Whole board
+          </button>
+          <p class="px-2.5 pb-0.5 pt-1.5 text-xs font-medium text-ink-faint">Scenes, top to bottom</p>
+          <div v-for="(f, i) in frames" :key="f.id" class="group flex items-center rounded-lg hover:bg-hover">
+            <button class="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left text-sm" :class="scene === f.id ? 'text-accent' : 'text-ink'" @click="(goToScene(f.id), (scenesOpen = false))">
+              <span class="w-4 shrink-0 text-right text-xs tabular-nums text-ink-faint">{{ i + 1 }}</span>
+              <span class="truncate">{{ frameTitle(f) }}</span>
+            </button>
+            <template v-if="!readonly">
+              <button class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-faint opacity-0 hover:text-ink group-hover:opacity-100 [@media(hover:none)]:opacity-100" title="Rename" aria-label="Rename the frame" @click="((scenesOpen = false), renameFrame(f.id))">
+                <AppIcon fallback="ph:pencil-simple" :size="14" />
+              </button>
+              <button
+                class="mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md hover:text-ink"
+                :class="f.kind === 'frame' && f.cover ? 'text-amber-500' : 'text-ink-faint opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100'"
+                :title="f.kind === 'frame' && f.cover ? 'The default scene: where the board opens, and what embeds show. Click to unset' : 'Make it the default scene: where the board opens, and what embeds show'"
+                :aria-pressed="f.kind === 'frame' && !!f.cover"
+                @click="toggleCover(f.id)"
+              >
+                <AppIcon :fallback="f.kind === 'frame' && f.cover ? 'ph:star-fill' : 'ph:star'" :size="14" />
+              </button>
+            </template>
+          </div>
+        </div>
+      </PopoverMenu>
       <button class="grid h-8 w-7 shrink-0 place-items-center rounded-r-lg text-ink-soft hover:bg-hover hover:text-ink" title="Next frame" aria-label="Next frame" @click="stepScene(1)">
         <AppIcon fallback="ph:caret-right" :size="14" />
       </button>

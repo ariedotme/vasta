@@ -23,8 +23,10 @@ const failed = ref(false)
 const frames = shallowRef<FrameElement[]>([])
 const readFrames = (doc: Yjs.Doc) => (frames.value = readBoard(doc).filter((e): e is FrameElement => e.kind === 'frame'))
 const onUpdate = () => session.value && readFrames(session.value.doc)
+/** The board's default scene, which an embed without a scene of its own shows. */
+const cover = computed(() => frames.value.find((f) => f.cover))
 const sceneName = computed(() => {
-  const frame = frames.value.find((f) => f.id === props.frameId)
+  const frame = props.frameId ? frames.value.find((f) => f.id === props.frameId) : cover.value
   return frame ? frame.title?.trim() || 'Frame' : null
 })
 
@@ -58,7 +60,7 @@ const open = () => openObject(props.boardId)
         title="Which part of the board this shows"
         @change="emit('scene', ($event.target as HTMLSelectElement).value || null)"
       >
-        <option value="">Whole board</option>
+        <option value="">{{ cover ? `Default scene (${cover.title?.trim() || 'Frame'})` : 'Whole board' }}</option>
         <option v-for="f in frames" :key="f.id" :value="f.id">{{ f.title?.trim() || 'Frame' }}</option>
       </select>
       <button class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-soft hover:bg-hover hover:text-ink" :class="editable && frames.length ? '' : 'ml-auto'" title="Open the board" @click="open">

@@ -102,9 +102,12 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   never jumps.
 - **Scenes**: when a board has frames, a menu stays at its top left: pick a frame to show it
   whole, or step through them with **‹ ›** (top to bottom, left to right), like slides. Moving
-  the view by hand leaves the scene.
+  the view by hand leaves the scene. In the list, the pencil renames a frame and the star makes it
+  the board's **default scene**: where the board opens on a device that has not opened it before,
+  and what an embed without a scene of its own shows. One frame at most has the star.
 - **In a note**: embed a whiteboard as any object (@ or `/`). The embed shows the board, live; when
-  the board has frames, a menu in its header picks one, a **scene**, and the embed shows just it.
+  the board has frames, a menu in its header picks one, a **scene**, and the embed shows just it
+  (without one, the board's default scene if it has one, else the whole board).
   What lies outside the scene's frame fades into the background. The scene is the embed's `blockId`, so Markdown keeps it: `![Board](vasta://o/<board>#b-<frame>)`.
   Double-click the embed to open the board.
 - On its own page the board fills the page under a thin bar with its title. **Details** (in the
