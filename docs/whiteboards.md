@@ -75,8 +75,10 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 - **Several selected** show their box and a corner handle that scales them together (what lies in
   a selected frame too), lining up with other elements as a resize does; Shift keeps the
   proportions, as strokes and turned elements always do.
-- The **selection bar** above the selection: color, shape, open a card, label an arrow, rename a
-  frame, bring to front (**]**), send to back (**[**), duplicate (**⌘D**), delete.
+- The **selection bar** above the selection: color, shape, a shape's fill (tint, none, white,
+  solid) and outline (thin, regular, thick; solid, dashed, dotted), a note's text size, open a
+  card, label an arrow, rename a frame, bring to front (**]**), send to back (**[**), duplicate
+  (**⌘D**), delete.
 - **Copy, cut and paste** (⌘C, ⌘X, ⌘V) work within a board and between boards, frames with what
   they hold and arrows between copied elements. Pasting a link to an object adds its card;
   pasting other text adds a text.

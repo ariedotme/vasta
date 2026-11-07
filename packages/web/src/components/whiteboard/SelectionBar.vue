@@ -2,7 +2,7 @@
 // The bar above a board's selection: what can be done to what is selected, by kind (color,
 // shape, label, title, open), and to any selection (front, back, duplicate, delete).
 import { computed, ref, watch } from 'vue'
-import { ARROW_TIPS, SHAPES, arrowDashPatch, arrowTips, arrowTipsPatch, lineDash, type ArrowElement, type ArrowPath, type ArrowTip, type BoardElement, type BoardPatch, type CardView, type ColorName, type Dash, type ShapeName, type Side, type TipSize } from '@vasta/core'
+import { ARROW_TIPS, SHAPES, arrowDashPatch, arrowTips, arrowTipsPatch, lineDash, type ArrowElement, type ArrowPath, type ArrowTip, type BoardElement, type BoardPatch, type CardView, type ColorName, type Dash, type Fill, type FontSize, type ShapeName, type Side, type TipSize } from '@vasta/core'
 import { BOARD_COLORS, PICKER_COLORS, SHAPE_ICONS, SHAPE_LABELS } from '../../lib/whiteboard.ts'
 import AppIcon from '../AppIcon.vue'
 
@@ -21,10 +21,12 @@ const emit = defineEmits<{
   drawOn: []
   view: [view: CardView]
   arrowStyle: [patch: BoardPatch]
+  /** A shape's fill and outline, a note's text size: for the selected elements of that kind. */
+  style: [patch: BoardPatch]
   link: [event: MouseEvent]
 }>()
 
-const open = ref<'color' | 'shape' | 'view' | 'arrow' | null>(null)
+const open = ref<'color' | 'shape' | 'view' | 'arrow' | 'style' | null>(null)
 const arrows = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'arrow'))
 const firstArrow = computed(() => (arrows.value ? (props.elements[0] as ArrowElement) : undefined))
 const tips = computed(() => arrowTips(firstArrow.value ?? {}))
@@ -72,6 +74,26 @@ const current = computed(() => {
   const colors = new Set(props.elements.filter((e) => e.kind !== 'card').map((e) => ('color' in e ? e.color : undefined)))
   return colors.size === 1 ? [...colors][0] : undefined
 })
+const stickies = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'sticky'))
+const firstShape = computed(() => (shapes.value ? (props.elements[0] as { fill?: Fill; border?: number; dash?: Dash }) : undefined))
+const firstSticky = computed(() => (stickies.value ? (props.elements[0] as { fontSize?: FontSize }) : undefined))
+const FILLS: { id: Fill | undefined; label: string }[] = [
+  { id: undefined, label: 'Tint' },
+  { id: 'none', label: 'None' },
+  { id: 'white', label: 'White' },
+  { id: 'solid', label: 'Solid' },
+]
+const BORDERS: { id: number | undefined; label: string }[] = [
+  { id: 1, label: 'Thin' },
+  { id: undefined, label: 'Regular' },
+  { id: 4, label: 'Thick' },
+]
+const FONT_SIZES: { id: FontSize | undefined; label: string }[] = [
+  { id: 'sm', label: 'S' },
+  { id: undefined, label: 'M' },
+  { id: 'lg', label: 'L' },
+  { id: 'xl', label: 'XL' },
+]
 const currentShape = computed(() => (shapes.value ? (props.elements[0] as { shape: ShapeName }).shape : 'rectangle'))
 
 // A menu left open closes when the selection changes.
@@ -79,7 +101,7 @@ watch(
   () => props.elements.map((e) => e.id).join(),
   () => (open.value = null)
 )
-const toggle = (menu: 'color' | 'shape' | 'view' | 'arrow') => (open.value = open.value === menu ? null : menu)
+const toggle = (menu: 'color' | 'shape' | 'view' | 'arrow' | 'style') => (open.value = open.value === menu ? null : menu)
 const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink'
 </script>
 
@@ -111,6 +133,27 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
         <button v-for="s in SHAPES" :key="s" :class="[button, s === currentShape ? 'bg-hover text-ink' : '']" :title="SHAPE_LABELS[s]" @click="(emit('shape', s), (open = null))">
           <AppIcon :fallback="SHAPE_ICONS[s]" :size="17" />
         </button>
+      </div>
+    </div>
+    <div v-if="shapes || stickies" class="relative">
+      <button :class="button" :title="shapes ? 'Fill and outline' : 'Text size'" :aria-label="shapes ? 'Fill and outline' : 'Text size'" @click="toggle('style')">
+        <AppIcon :fallback="shapes ? 'ph:paint-bucket' : 'ph:text-aa'" :size="17" />
+      </button>
+      <div v-if="open === 'style'" class="absolute left-0 top-full mt-1.5 w-60 space-y-2 rounded-xl border border-line bg-surface p-2 text-xs shadow-md">
+        <template v-if="shapes">
+          <div class="flex gap-1">
+            <button v-for="f in FILLS" :key="f.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.fill === f.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { fill: f.id })">{{ f.label }}</button>
+          </div>
+          <div class="flex gap-1">
+            <button v-for="b in BORDERS" :key="b.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.border === b.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { border: b.id })">{{ b.label }}</button>
+          </div>
+          <div class="flex gap-1">
+            <button v-for="d in DASHES" :key="d.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.dash === d.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { dash: d.id })">{{ d.label }}</button>
+          </div>
+        </template>
+        <div v-else class="flex gap-1">
+          <button v-for="f in FONT_SIZES" :key="f.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstSticky?.fontSize === f.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { fontSize: f.id })">{{ f.label }}</button>
+        </div>
       </div>
     </div>
     <button

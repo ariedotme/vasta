@@ -47,6 +47,10 @@ GitHub release page.
   middle segment. Each end can have an arrowhead, a dot or nothing, in three sizes; lines can be
   dotted, thin or thick, and leave from or arrive at a chosen side (let go on a side's dot while
   connecting).
+- **Shape and note styles on whiteboards.** Shapes can be filled (a tint, none, white or solid)
+  with a thin, regular or thick, solid, dashed or dotted outline; sticky notes have four text
+  sizes, and show their color while dragged out. Both from the selection bar or the tool's
+  settings.
 - **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
   properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
 

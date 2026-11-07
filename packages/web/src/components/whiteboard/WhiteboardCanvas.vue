@@ -73,6 +73,7 @@ import {
   simplifyPoints,
   snapMove,
   thinPoints,
+  stickyColor,
   strokeColor,
   strokeFromPoints,
   strokePath,
@@ -1298,6 +1299,15 @@ function setArrowStyle(patch: BoardPatch) {
   update(patches)
 }
 
+/** A shape's fill and outline, a note's text size, for the selected elements that have them. */
+function setStyle(patch: BoardPatch) {
+  const patches: Record<Id, BoardPatch> = {}
+  for (const element of selected.value) {
+    if (element.kind === 'shape' && !('fontSize' in patch)) patches[element.id] = patch
+    if (element.kind === 'sticky' && 'fontSize' in patch) patches[element.id] = patch
+  }
+  update(patches)
+}
 function setColor(color: ColorName | undefined) {
   const patches: Record<Id, BoardPatch> = {}
   for (const element of selected.value) if (element.kind !== 'card') patches[element.id] = { color }
@@ -1559,7 +1569,9 @@ const marquee = computed(() => {
   if (g?.kind !== 'marquee' && g?.kind !== 'create') return null
   const a = toScreen(g.start.x, g.start.y)
   const b = toScreen(g.end.x, g.end.y)
-  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y), dashed: g.kind === 'create' }
+  // A sticky note being dragged out shows as the note it will be.
+  const paper = g.kind === 'create' && g.what === 'sticky' ? stickyColor(toolSettings.sticky.color) : undefined
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y), dashed: g.kind === 'create' && !paper, paper }
 })
 const connecting = computed(() => {
   const g = gesture.value
@@ -1785,7 +1797,7 @@ const cursor = computed(() => {
         :y="marquee.y"
         :width="marquee.w"
         :height="marquee.h"
-        :fill="marquee.dashed ? 'none' : 'color-mix(in srgb, var(--color-accent) 8%, transparent)'"
+        :fill="marquee.paper ?? (marquee.dashed ? 'none' : 'color-mix(in srgb, var(--color-accent) 8%, transparent)')"
         stroke="var(--color-accent)"
         stroke-width="1"
         :stroke-dasharray="marquee.dashed ? '5 4' : undefined"
@@ -1809,6 +1821,7 @@ const cursor = computed(() => {
       @open="openSelected"
       @view="setView"
       @arrow-style="setArrowStyle"
+      @style="setStyle"
       @link="linkMenu"
       :linkable="!!linkable"
       @draw-on="selected[0] && drawOn(selected[0].id)"

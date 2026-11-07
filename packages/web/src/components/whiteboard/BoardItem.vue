@@ -30,9 +30,11 @@ const emit = defineEmits<{ input: [el: HTMLTextAreaElement]; commit: []; editor:
 
 const e = computed(() => props.element)
 const line = computed(() => Math.max(1.5, 1.5 / Math.max(props.zoom, 0.5)))
+/** A shape's outline: its own width (board units), else the usual one. */
+const outline = computed(() => (e.value.kind === 'shape' && e.value.border ? e.value.border : line.value))
 const path = computed(() => {
   const el = e.value
-  if (el.kind === 'shape') return shapePath(el.shape, props.box.w, props.box.h, line.value)
+  if (el.kind === 'shape') return shapePath(el.shape, props.box.w, props.box.h, outline.value)
   if (el.kind === 'stroke') return strokePath(el.points, el.size, { sx: props.box.w / el.sw, sy: props.box.h / el.sh, pen: hasPressure(el.points) })
   return ''
 })
@@ -42,12 +44,27 @@ const edge = computed(() => `${10 / props.zoom}px`)
 const textClass = computed(() => {
   const kind = e.value.kind
   if (kind === 'shape') return 'grid place-items-center text-center px-3'
-  if (kind === 'sticky') return 'p-3 text-[15px]'
+  if (kind === 'sticky') return 'p-3'
   return 'p-1'
+})
+/** A sticky note's text size. */
+const FONT_SIZES = { sm: 13, lg: 20, xl: 28 } as const
+const fontSize = computed(() => (e.value.kind === 'sticky' && e.value.fontSize ? `${FONT_SIZES[e.value.fontSize]}px` : undefined))
+/** A shape's inside: a tint of its color (the usual), none, white or the color itself. */
+const shapeFill = computed(() => {
+  const el = e.value
+  if (el.kind !== 'shape') return undefined
+  if (el.fill === 'none') return 'transparent'
+  if (el.fill === 'white') return '#ffffff'
+  if (el.fill === 'solid') return strokeColor(el.color)
+  return fillColor(el.color)
 })
 const textColor = computed(() => {
   const el = e.value
   if (el.kind === 'sticky') return STICKY_INK
+  // On a solid shape the text is the paper's color; on white, dark whatever the theme.
+  if (el.kind === 'shape' && el.fill === 'solid') return 'var(--color-surface)'
+  if (el.kind === 'shape' && el.fill === 'white') return el.color ? strokeColor(el.color) : STICKY_INK
   return (el.kind === 'text' || el.kind === 'shape') && el.color ? strokeColor(el.color) : undefined
 })
 const text = computed(() => ('text' in e.value ? e.value.text : ''))
@@ -146,7 +163,15 @@ function onInput(event: Event) {
     <!-- Text, shapes and sticky notes -->
     <template v-else>
       <svg v-if="element.kind === 'shape'" class="absolute inset-0 overflow-visible" :width="box.w" :height="box.h">
-        <path :d="path" :fill="fillColor(element.color)" :stroke="strokeColor(element.color)" :stroke-width="line" stroke-linejoin="round" />
+        <path
+          :d="path"
+          :fill="shapeFill"
+          :stroke="strokeColor(element.color)"
+          :stroke-width="outline"
+          :stroke-dasharray="dashArray(element.dash, outline)"
+          :stroke-linecap="element.dash === 'dotted' ? 'round' : undefined"
+          stroke-linejoin="round"
+        />
       </svg>
       <div
         v-else-if="element.kind === 'sticky'"
@@ -160,7 +185,7 @@ function onInput(event: Event) {
           rows="1"
           class="w-full resize-none overflow-hidden bg-transparent text-[15px] leading-snug text-ink outline-none"
           :class="element.kind === 'shape' ? 'text-center' : element.kind === 'sticky' ? 'h-full p-3' : 'h-full p-1'"
-          :style="{ color: textColor }"
+          :style="{ color: textColor, fontSize }"
           :placeholder="element.kind === 'text' ? 'Text' : ''"
           @input="onInput"
           @blur="emit('commit')"
@@ -170,7 +195,7 @@ function onInput(event: Event) {
         v-else
         class="relative h-full w-full overflow-hidden whitespace-pre-wrap break-words text-[15px] leading-snug text-ink"
         :class="textClass"
-        :style="{ color: textColor }"
+        :style="{ color: textColor, fontSize }"
       >
         <span>{{ text }}</span>
       </div>
