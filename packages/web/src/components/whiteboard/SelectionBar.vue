@@ -7,7 +7,8 @@ import { BOARD_COLORS, PICKER_COLORS, SHAPE_ICONS, SHAPE_LABELS } from '../../li
 import AppIcon from '../AppIcon.vue'
 
 /** `linkable`: the selection is one arrow between two cards (it can become a relation). */
-const props = defineProps<{ elements: BoardElement[]; x: number; y: number; below: boolean; linkable?: boolean }>()
+/** `fields`: one card's type's properties, to pick what a "properties" card lists. */
+const props = defineProps<{ elements: BoardElement[]; x: number; y: number; below: boolean; linkable?: boolean; fields?: { id: string; name: string; icon: string }[] }>()
 const emit = defineEmits<{
   color: [color: ColorName | undefined]
   shape: [shape: ShapeName]
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   open: []
   drawOn: []
   view: [view: CardView]
+  fields: [fields: string[]]
   arrowStyle: [patch: BoardPatch]
   /** A shape's fill and outline, a note's text size: for the selected elements of that kind. */
   style: [patch: BoardPatch]
@@ -66,7 +68,13 @@ const VIEWS: { id: CardView; label: string; icon: string }[] = [
   { id: 'card', label: 'Card', icon: 'ph:cards' },
   { id: 'compact', label: 'One line', icon: 'ph:rows' },
   { id: 'embed', label: 'Contents (a query’s results, the text)', icon: 'ph:article' },
+  { id: 'properties', label: 'Title and properties', icon: 'ph:list-bullets' },
 ]
+const chosenFields = computed(() => (single.value?.kind === 'card' ? (single.value.fields ?? []) : []))
+function toggleField(id: string) {
+  const list = chosenFields.value
+  emit('fields', list.includes(id) ? list.filter((f) => f !== id) : [...list, id])
+}
 const colorable = computed(() => props.elements.some((e) => e.kind !== 'card'))
 const shapes = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'shape'))
 const single = computed(() => (props.elements.length === 1 ? props.elements[0] : undefined))
@@ -179,6 +187,18 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
         >
           <AppIcon :fallback="v.icon" :size="16" />{{ v.label }}
         </button>
+        <template v-if="currentView === 'properties' && fields?.length">
+          <p class="mt-1 border-t border-line px-2.5 pb-0.5 pt-1.5 text-xs font-medium text-ink-soft">Properties shown</p>
+          <button
+            v-for="f in fields"
+            :key="f.id"
+            class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-ink hover:bg-hover"
+            @click="toggleField(f.id)"
+          >
+            <AppIcon :fallback="f.icon" :size="15" class="text-ink-faint" /><span class="truncate">{{ f.name }}</span>
+            <AppIcon v-if="chosenFields.includes(f.id)" fallback="ph:check" :size="14" class="ml-auto text-accent" />
+          </button>
+        </template>
       </div>
     </div>
     <div v-if="arrows" class="relative">

@@ -49,6 +49,7 @@ import { cachedSummary, lastError, primeSummaries, systemType, typesById, useSum
 import { openMenuAt, promptDialog, type MenuItem } from '../../lib/overlays.ts'
 import { openObject } from '../../lib/open.ts'
 import { displayTitle } from '../../lib/format.ts'
+import { kindIcon } from '../../lib/properties.ts'
 import { canvasElements, isMermaidFlowchart, mermaidElements } from '../../lib/board-actions.ts'
 import {
   BOARD_COLORS,
@@ -1202,6 +1203,17 @@ const drawModeItems = (): MenuItem[] => DRAW_MODES.map((m) => ({ label: m.label,
 // Card views ----------------------------------------------------------------------
 
 const VIEW_SIZES: Record<CardView, { w: number; h: number }> = { card: SIZES.card, compact: { w: 240, h: 44 }, embed: { w: 420, h: 320 }, properties: { w: 280, h: 200 } }
+/** The properties of a single selected card's type, for its "properties" view. */
+const cardFields = computed(() => {
+  const card = selected.value.length === 1 && selected.value[0]!.kind === 'card' ? selected.value[0] : undefined
+  if (card?.kind !== 'card') return undefined
+  const type = typesById.value.get(summaryById.value.get(card.objectId)?.typeId ?? '')
+  return type?.properties.map((p) => ({ id: p.id, name: p.name, icon: kindIcon(p.kind) }))
+})
+function setFields(fields: string[]) {
+  const card = selected.value[0]
+  if (card?.kind === 'card') update({ [card.id]: { fields: fields.length ? fields : undefined } })
+}
 function setView(view: CardView) {
   const patches: Record<Id, BoardPatch> = {}
   for (const element of selected.value) if (element.kind === 'card') patches[element.id] = { view: view === 'card' ? undefined : view, ...VIEW_SIZES[view] }
@@ -1820,6 +1832,8 @@ const cursor = computed(() => {
       @rename="selected[0] && renameFrame(selected[0].id)"
       @open="openSelected"
       @view="setView"
+      @fields="setFields"
+      :fields="cardFields"
       @arrow-style="setArrowStyle"
       @style="setStyle"
       @link="linkMenu"

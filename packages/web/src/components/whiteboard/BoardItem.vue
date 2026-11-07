@@ -8,6 +8,7 @@ import { STICKY_INK, centerlinePath, dashArray, fillColor, hasPressure, shapePat
 import ObjectCard from '../ObjectCard.vue'
 import AppIcon from '../AppIcon.vue'
 import BoardCardEmbed from './BoardCardEmbed.vue'
+import BoardCardProperties from './BoardCardProperties.vue'
 import { iconTextClasses } from '../../lib/colors.ts'
 import { displayTitle } from '../../lib/format.ts'
 
@@ -109,6 +110,7 @@ function onInput(event: Event) {
           <span class="truncate font-medium">{{ displayTitle(summary, type) }}</span>
         </div>
         <BoardCardEmbed v-else-if="element.view === 'embed'" :object="summary" :type="type" :board-id="boardId" class="pointer-events-none" />
+        <BoardCardProperties v-else-if="element.view === 'properties'" :object="summary" :type="type" :fields="element.fields" class="pointer-events-none" />
         <ObjectCard v-else :object="summary" :type="type" variant="grid" class="pointer-events-none h-full" />
       </template>
       <div v-if="!summary" class="grid h-full place-items-center rounded-xl border border-dashed border-line-strong bg-surface text-sm text-ink-faint">Loading…</div>

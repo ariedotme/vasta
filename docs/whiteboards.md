@@ -36,10 +36,11 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 - **Frames** (**F**): drag a box to make a named region; it sits under everything. Moving a frame
   (by its title or its edge) moves what lies wholly inside it. Double-click the title, or select
   it and press Enter, to rename it.
-- **Card views**: a card's view (in the selection bar) is its **card**, **one line**, or its
-  **contents**: a query's live results, a picture, or the text of anything else. The wheel scrolls
-  the contents (the board pans again once they reach an end); double-click the card to open the
-  object.
+- **Card views**: a card's view (in the selection bar) is its **card**, **one line**, its
+  **contents** (a query's live results, a picture, or the text of anything else), or its **title
+  and properties**: the properties ticked in the same menu, in that order (with none ticked, the
+  first few that have a value). The wheel scrolls the contents (the board pans again once they
+  reach an end); double-click the card to open the object.
 - **An arrow let go over empty space** offers what to put there, joined to where it started: a
   sticky note, a text, a shape (typed into right away) or an object (the object picker).
 - **Arrows**: select an element and drag the dot on its right edge to another element, or pick

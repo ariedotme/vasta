@@ -51,6 +51,8 @@ GitHub release page.
   with a thin, regular or thick, solid, dashed or dotted outline; sticky notes have four text
   sizes, and show their color while dragged out. Both from the selection bar or the tool's
   settings.
+- **Cards with properties on whiteboards.** A card's view can be its title and the properties
+  you pick (a task's status and due date, a book's author…), shown live.
 - **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
   properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
 
