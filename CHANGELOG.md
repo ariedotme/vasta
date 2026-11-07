@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.7.0 (2026-11-07)
+
 ### Added
 
 - **Side pane.** Type settings have **Open in side pane** (off unless turned on): a click on one of
