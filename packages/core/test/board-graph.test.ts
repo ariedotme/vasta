@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { Y } from '@vasta/editor-schema/yjs'
 import { addBoardElements, readBoard } from '../src/board.ts'
-import { MermaidError, boardToJsonCanvas, graphToElements, jsonCanvasToElements, layeredLayout, parseMermaidFlowchart, spotAfter } from '../src/board-graph.ts'
+import {
+  MermaidError,
+  boardToJsonCanvas,
+  boardToMermaid,
+  graphToElements,
+  jsonCanvasToElements,
+  layeredLayout,
+  layoutBoardElements,
+  parseMermaidFlowchart,
+  spotAfter,
+} from '../src/board-graph.ts'
 
 const counter = () => {
   let n = 0
@@ -58,7 +68,7 @@ describe('Mermaid flowcharts', () => {
     const graph = parseMermaidFlowchart('graph LR\n A[Plan] --> B[Groceries]')
     const elements = graphToElements(graph, { x: 100, y: 50 }, counter(), (label) => (label === 'Groceries' ? 'obj-1' : undefined))
     expect(elements.map((e) => e.kind)).toEqual(['shape', 'card', 'arrow'])
-    expect(elements[0]).toMatchObject({ x: 100, y: 50, text: 'Plan' })
+    expect(elements[0]).toMatchObject({ x: 100, y: 80, text: 'Plan' }) // centered on the taller card
     expect(elements[1]).toMatchObject({ objectId: 'obj-1' })
     expect(elements[2]).toMatchObject({ from: 'id1', to: 'id2' })
   })
@@ -118,5 +128,44 @@ describe('JSON Canvas', () => {
   it('puts new content to the right of the board', () => {
     expect(spotAfter([])).toEqual({ x: 0, y: 0 })
     expect(spotAfter(readBoard(board().doc))).toEqual({ x: 710, y: -50 })
+  })
+
+  it('minimizes crossings in layered layouts and reads Mermaid subgraphs and edge styles', () => {
+    // A1 -> B2 and A2 -> B1, B1 named first: the sweep puts B2 left of B1.
+    const pos = layeredLayout(['A1', 'A2', 'B1', 'B2'], [{ from: 'A1', to: 'B2' }, { from: 'A2', to: 'B1' }], 'down')
+    expect(pos.get('A1')!.x).toBeLessThan(pos.get('A2')!.x)
+    expect(pos.get('B2')!.x).toBeLessThan(pos.get('B1')!.x)
+
+    const graph = parseMermaidFlowchart(`flowchart TD
+      subgraph backend [Backend Services]
+        API[API Gateway] -.->|auth| DB[(Database)]
+      end
+      Client <--> API`)
+    expect(graph.subgraphs).toEqual([{ id: 'backend', title: 'Backend Services', nodeRefs: ['API', 'DB'] }])
+    expect(graph.edges).toEqual([
+      { from: 'API', to: 'DB', label: 'auth', dashed: true },
+      { from: 'Client', to: 'API', heads: 'both' },
+    ])
+    expect(graphToElements(graph, { x: 0, y: 0 }, counter()).find((e) => e.kind === 'frame')).toMatchObject({ title: 'Backend Services' })
+  })
+
+  it('writes a board as a Mermaid flowchart, frames as subgraphs', () => {
+    const elements = readBoard(board().doc)
+    const mermaid = boardToMermaid(elements, (id) => (id === 'o1' ? 'Plan' : undefined))
+    expect(mermaid).toContain('subgraph SG1 ["Week"]')
+    expect(mermaid).toContain('["Plan"]')
+    expect(mermaid).toContain('(["Hello"])')
+    expect(mermaid).toContain('-->|"then"|')
+  })
+
+  it('lays a board out in a direction, frames refitted around what they hold', () => {
+    const elements = readBoard(board().doc)
+    const card = elements.find((e) => e.kind === 'card')!
+    const note = elements.find((e) => e.kind === 'sticky')!
+    const frame = elements.find((e) => e.kind === 'frame')!
+    const laid = layoutBoardElements(elements, 'down')
+    expect(laid[card.id]!.y).toBeLessThan(laid[note.id]!.y)
+    expect(laid[frame.id]).toMatchObject({ w: expect.any(Number), h: expect.any(Number) })
+    expect(Object.keys(layoutBoardElements(elements, 'grid'))).toContain(note.id)
   })
 })

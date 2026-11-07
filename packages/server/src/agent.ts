@@ -85,6 +85,8 @@ import {
   NODE_SIZE,
   addBoardElements,
   arrowDashPatch,
+  boardToMermaid,
+  layoutBoardElements,
   arrowTips,
   arrowTipsPatch,
   boardToJsonCanvas,
@@ -104,6 +106,7 @@ import {
   updateBoardElements,
   type BoardElement,
   type BoardPatch,
+  type Direction,
   type CardView,
   type NewBoardElement,
 } from '@vasta/core'
@@ -547,9 +550,10 @@ export class AgentTools {
   }
 
   /** A board's elements and arrows; "canvas" gives it as a JSON Canvas (jsoncanvas.org) instead. */
-  getBoard(id: Id, format: 'elements' | 'canvas' = 'elements') {
+  getBoard(id: Id, format: 'elements' | 'canvas' | 'mermaid' = 'elements') {
     const object = this.whiteboard(id)
     const elements = readBoard(this.store.loadText(id) ?? new Y.Doc())
+    if (format === 'mermaid') return { id: object.id, title: object.title, mermaid: boardToMermaid(elements, this.titleOf) }
     if (format === 'canvas') return boardToJsonCanvas(elements, (objectId) => (this.titleOf(objectId) !== undefined ? { title: this.titleOf(objectId)!, url: this.url(objectId) } : undefined))
     const all = new Map(elements.map((e) => [e.id, e]))
     return {
@@ -574,6 +578,8 @@ export class AgentTools {
     remove?: Id[]
     mermaid?: string
     canvas?: unknown
+    /** Lay the whole board out afterwards: in layers along its arrows, or in a grid. */
+    layout?: Direction | 'grid'
   }) {
     const object = this.whiteboard(input.id)
     const doc = this.store.loadText(object.id) ?? new Y.Doc()
@@ -701,6 +707,10 @@ export class AgentTools {
       if (Object.keys(patches).length) updateBoardElements(doc, patches)
       if (input.remove?.length) removeBoardElements(doc, input.remove)
       if (cover !== undefined) setCover(doc, cover)
+      if (input.layout) {
+        if (!['down', 'right', 'up', 'left', 'grid'].includes(input.layout)) throw new AgentError(`unknown layout "${input.layout}" (down, right, up, left, grid)`)
+        updateBoardElements(doc, layoutBoardElements(readBoard(doc), input.layout))
+      }
       return ids
     })
     const saved = this.store.putObject({ ...object, updatedAt: this.options.now() }, undefined, doc)

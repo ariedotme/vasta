@@ -295,8 +295,8 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     {
       title: 'Get whiteboard',
       description:
-        'A whiteboard\'s elements (cards of objects, text, sticky notes, shapes, frames, pen strokes without their ink) with their boxes in board coordinates (x right, y down), and its arrows. format "canvas" gives the board as a JSON Canvas (jsoncanvas.org, Obsidian\'s format) instead.',
-      inputSchema: { id: z.string(), format: z.enum(['elements', 'canvas']).optional() },
+        'A whiteboard\'s elements (cards of objects, text, sticky notes, shapes, frames, pen strokes without their ink) with their boxes in board coordinates (x right, y down), and its arrows. format "canvas" gives the board as a JSON Canvas (jsoncanvas.org, Obsidian\'s format) instead, "mermaid" as a Mermaid flowchart (frames as subgraphs).',
+      inputSchema: { id: z.string(), format: z.enum(['elements', 'canvas', 'mermaid']).optional() },
       annotations: READ,
     },
     ({ id, format }) => run(() => tools.getBoard(id, format))
@@ -353,6 +353,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
         remove: z.array(z.string()).optional(),
         mermaid: z.string().optional(),
         canvas: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe('A JSON Canvas, as an object or its text'),
+        layout: z.enum(['down', 'right', 'up', 'left', 'grid']).optional().describe('Lay the whole board out after the edit: in layers along its arrows (with fewer crossings), or in a grid; frames are refitted around what they hold'),
       },
       annotations: WRITE,
     },

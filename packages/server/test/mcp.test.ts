@@ -316,6 +316,12 @@ describe('MCP endpoint', () => {
     expect(kinds.filter((k: string) => k === 'shape')).toHaveLength(2)
     expect(flow.elements.find((e: { kind: string }) => e.kind === 'card').object.id).toBe(page.id)
     expect(flow.arrows.map((a: { label?: string }) => a.label ?? '')).toEqual(['', 'yes'])
+    const mermaid = await call('get_board', { id: board.id, format: 'mermaid' })
+    expect(mermaid.mermaid).toMatch(/^flowchart (LR|TD)/)
+    expect(mermaid.mermaid).toContain('"Launch plan"')
+    const laid = await call('edit_board', { id: board.id, layout: 'down' })
+    const ys = ['Idea', 'Launch plan?'].map((t) => laid.elements.find((e: { text?: string }) => e.text === t).y)
+    expect(ys[0]).toBeLessThan(ys[1])
 
     const canvas = await call('get_board', { id: board.id, format: 'canvas' })
     expect(canvas.nodes.find((n: { type: string }) => n.type === 'group').label).toBe('Q1')

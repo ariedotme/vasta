@@ -20,6 +20,11 @@ GitHub release page.
   border and dashes, a sticky note's text size, an arrow's tips (arrow, dot or none at each end),
   sides, dashes and width, a card's properties view, and the board's default scene (a frame as the
   cover); `get_board` returns them.
+- **Better flowchart layouts.** Mermaid flowcharts turned into boards cross fewer arrows, size
+  each node to what it is (a card or a shape), and turn `subgraph` blocks into frames; dotted
+  (`-.->`) and two-way (`<-->`) links keep their look. Agents can lay a whole board out
+  (`edit_board` with `layout`: down, right, up, left or grid) and read a board as a Mermaid
+  flowchart (`get_board` with format `mermaid`).
 
 ## 0.6.2 (2026-11-06)
 
