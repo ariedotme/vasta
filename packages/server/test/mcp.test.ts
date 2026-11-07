@@ -290,6 +290,22 @@ describe('MCP endpoint', () => {
     const viewed = await call('edit_board', { id: board.id, update: [{ id: edited.refs.plan, view: 'compact' }] })
     expect(viewed.elements.find((e: { id: string }) => e.id === edited.refs.plan).view).toBe('compact')
     await expect(call('edit_board', { id: board.id, update: [{ id: edited.refs.note, view: 'compact' }] })).resolves.toBeTruthy()
+    // Styles: tips, sides and pattern on arrows; rotation, font size; a frame as the cover.
+    const tipped = await call('edit_board', {
+      id: board.id,
+      update: [
+        { id: edited.arrows[0].id, startTip: 'dot', fromSide: 'bottom', dash: 'dotted', width: 3 },
+        { id: edited.refs.note, rotation: -10, fontSize: 'lg' },
+        { id: edited.elements[0].id, cover: true },
+      ],
+    })
+    expect(tipped.arrows[0]).toMatchObject({ startTip: 'dot', endTip: 'arrow', fromSide: 'bottom', dash: 'dotted', dashed: true, width: 3 })
+    expect(tipped.elements.find((e: { id: string }) => e.id === edited.refs.note)).toMatchObject({ rotation: 350, fontSize: 'lg' })
+    expect(tipped.elements[0]).toMatchObject({ kind: 'frame', cover: true })
+    await expect(call('edit_board', { id: board.id, update: [{ id: edited.arrows[0].id, endTip: 'star' }] })).rejects.toThrow()
+    const shaped = await call('edit_board', { id: board.id, add: [{ ref: 's', kind: 'shape', shape: 'ellipse', fill: 'none', border: 3, dash: 'dashed', x: 0, y: 600 }] })
+    expect(shaped.elements.find((e: { id: string }) => e.id === shaped.refs.s)).toMatchObject({ fill: 'none', border: 3, dash: 'dashed' })
+    await call('edit_board', { id: board.id, remove: [shaped.refs.s] })
     const changed = await call('edit_board', { id: board.id, update: [{ id: edited.refs.note, text: 'Ask Ana on Monday', x: 500 }], remove: [edited.refs.plan] })
     expect(changed.elements.map((e: { kind: string; text?: string }) => e.text ?? e.kind)).toEqual(['frame', 'Ask Ana on Monday'])
     expect(changed.elements[1].x).toBe(500)

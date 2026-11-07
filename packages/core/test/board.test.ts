@@ -4,7 +4,13 @@ import { Y } from '@vasta/editor-schema/yjs'
 import {
   BOARD_FIELD,
   addBoardElements,
+  arrowDashPatch,
+  arrowTips,
+  arrowTipsPatch,
   boardContent,
+  coverFrame,
+  lineDash,
+  setCover,
   bringToFront,
   copyElements,
   insideFrame,
@@ -272,5 +278,60 @@ describe('boards in the store', () => {
     store.putObject({ ...stored, title: 'Renamed', content: {}, updatedAt: now })
     expect(readBoard(store.loadText('b')!).map((e) => e.id)).toEqual([id])
     expect(store.getObject('b')!.content[BOARD_FIELD]).toBeDefined()
+  })
+})
+
+describe('board styles', () => {
+  it('reads the new optional fields back, and drops values it does not know', () => {
+    const doc = new Y.Doc()
+    const [shape, sticky, frame, arrow] = addBoardElements(doc, [
+      { kind: 'shape', shape: 'rectangle', text: '', x: 0, y: 0, w: 100, h: 60, fill: 'solid', border: 4, dash: 'dotted', rotation: 30 },
+      { kind: 'sticky', text: 'hi', x: 200, y: 0, w: 180, h: 180, fontSize: 'xl' },
+      { kind: 'frame', x: -50, y: -50, w: 600, h: 400, cover: true },
+      { kind: 'arrow', from: 'x', to: 'y', startTip: 'dot', endTip: 'arrow', fromSide: 'left', toSide: 'top', bend: 12, width: 3, tipSize: 'lg', dash: 'dotted' },
+    ])
+    const byId = new Map(readBoard(doc).map((e) => [e.id, e]))
+    expect(byId.get(shape!)).toMatchObject({ fill: 'solid', border: 4, dash: 'dotted', rotation: 30 })
+    expect(byId.get(sticky!)).toMatchObject({ fontSize: 'xl' })
+    expect(byId.get(frame!)).toMatchObject({ cover: true })
+    expect(byId.has(arrow!)).toBe(false) // its ends are not on the board
+
+    // A newer device's value for a known field is dropped, the element kept.
+    updateBoardElements(doc, { [shape!]: { fill: 'gradient' as never } })
+    expect(readBoard(doc).find((e) => e.id === shape)).not.toHaveProperty('fill')
+  })
+
+  it('keeps an arrow between elements with its tips, sides and pattern', () => {
+    const doc = new Y.Doc()
+    const [a, b] = addBoardElements(doc, [card('o1'), card('o2', 400)])
+    const [arrow] = addBoardElements(doc, [{ kind: 'arrow', from: a!, to: b!, ...arrowTipsPatch('dot', 'arrow'), ...arrowDashPatch('dotted'), fromSide: 'bottom' } as never])
+    const read = readBoard(doc).find((e) => e.id === arrow)!
+    expect(read).toMatchObject({ startTip: 'dot', endTip: 'arrow', dash: 'dotted', dashed: true, fromSide: 'bottom' })
+    expect(arrowTips(read as never)).toEqual({ start: 'dot', end: 'arrow' })
+    expect(lineDash(read as never)).toBe('dotted')
+  })
+
+  it('falls back to heads for tips, and writes the nearest heads for older devices', () => {
+    expect(arrowTips({})).toEqual({ start: 'none', end: 'arrow' })
+    expect(arrowTips({ heads: 'both' })).toEqual({ start: 'arrow', end: 'arrow' })
+    expect(arrowTips({ heads: 'none' })).toEqual({ start: 'none', end: 'none' })
+    expect(arrowTipsPatch('arrow', 'arrow')).toEqual({ startTip: undefined, endTip: undefined, heads: 'both' })
+    expect(arrowTipsPatch('none', 'arrow')).toEqual({ startTip: undefined, endTip: undefined, heads: undefined })
+    expect(arrowTipsPatch('dot', 'none')).toEqual({ startTip: 'dot', endTip: 'none', heads: 'none' })
+    expect(lineDash({ dashed: true })).toBe('dashed')
+  })
+
+  it('keeps one cover frame', () => {
+    const doc = new Y.Doc()
+    const [f1, f2] = addBoardElements(doc, [
+      { kind: 'frame', x: 0, y: 0, w: 100, h: 100, cover: true },
+      { kind: 'frame', x: 200, y: 0, w: 100, h: 100 },
+    ])
+    setCover(doc, f2!)
+    expect(coverFrame(readBoard(doc))?.id).toBe(f2)
+    expect(readBoard(doc).filter((e) => e.kind === 'frame' && e.cover)).toHaveLength(1)
+    setCover(doc, null)
+    expect(coverFrame(readBoard(doc))).toBeUndefined()
+    expect(f1).toBeDefined()
   })
 })

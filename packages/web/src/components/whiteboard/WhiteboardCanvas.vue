@@ -976,7 +976,7 @@ function boardMenu(event: MouseEvent) {
 
 // Card views ----------------------------------------------------------------------
 
-const VIEW_SIZES: Record<CardView, { w: number; h: number }> = { card: SIZES.card, compact: { w: 240, h: 44 }, embed: { w: 420, h: 320 } }
+const VIEW_SIZES: Record<CardView, { w: number; h: number }> = { card: SIZES.card, compact: { w: 240, h: 44 }, embed: { w: 420, h: 320 }, properties: { w: 280, h: 200 } }
 function setView(view: CardView) {
   const patches: Record<Id, BoardPatch> = {}
   for (const element of selected.value) if (element.kind === 'card') patches[element.id] = { view: view === 'card' ? undefined : view, ...VIEW_SIZES[view] }

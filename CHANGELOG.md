@@ -16,6 +16,10 @@ GitHub release page.
   this device), and is part of the address, so back, forward, reload and copied links keep it.
   Comments and activity stay on the full page. Mentions in text still open the page, ⌘-click
   still opens a new tab, and phones open the page as before.
+- **Whiteboard styles for agents.** `edit_board` sets an element's rotation, a shape's fill,
+  border and dashes, a sticky note's text size, an arrow's tips (arrow, dot or none at each end),
+  sides, dashes and width, a card's properties view, and the board's default scene (a frame as the
+  cover); `get_board` returns them.
 
 ## 0.6.2 (2026-11-06)
 

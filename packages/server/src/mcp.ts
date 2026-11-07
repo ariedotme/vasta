@@ -275,7 +275,20 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
   const arrowLook = {
     path: z.enum(['straight', 'curved', 'elbow']).optional().describe("An arrow's course"),
     heads: z.enum(['end', 'both', 'none']).optional().describe('Which ends have a head (none: a plain line)'),
+    startTip: z.enum(['arrow', 'dot', 'none']).optional().describe('What the start has (wins over heads)'),
+    endTip: z.enum(['arrow', 'dot', 'none']).optional().describe('What the end has (wins over heads)'),
+    fromSide: z.enum(['auto', 'top', 'right', 'bottom', 'left']).optional().describe('The side the line leaves from (auto: the facing one)'),
+    toSide: z.enum(['auto', 'top', 'right', 'bottom', 'left']).optional().describe('The side the line arrives at'),
+    dash: z.enum(['solid', 'dashed', 'dotted']).optional(),
     dashed: z.boolean().optional(),
+    width: z.number().optional().describe('Line width in board units (0: the usual)'),
+  }
+  const elementLook = {
+    rotation: z.number().optional().describe('Degrees clockwise (0: upright); not frames'),
+    fill: z.enum(['tint', 'none', 'white', 'solid']).optional().describe("A shape's inside (tint: the usual)"),
+    border: z.number().optional().describe("A shape's outline width (0: the usual)"),
+    dash: z.enum(['solid', 'dashed', 'dotted']).optional().describe("A shape's outline or a stroke"),
+    fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional().describe("A sticky note's text size"),
   }
   server.registerTool(
     'get_board',
@@ -294,7 +307,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     {
       title: 'Edit whiteboard',
       description:
-        'Change a whiteboard in one step (make one with create_object, type "Whiteboard"). "add": elements; a card shows an object ("object": its id or exact title), text, sticky and shape hold "text", a frame has a "title"; give x and y to place one, else new elements are laid out in a grid to the right of the board; "ref" names a new element so "arrows" can use it. "arrows": from and to are refs or ids from get_board. "update": move, resize, recolor, retext, retitle, reshape elements or relabel arrows. "remove": ids (an element\'s arrows and the strokes drawn on it go too). "mermaid": a Mermaid flowchart ("graph LR; A[Idea] --> B{Choose}"), laid out as shapes and arrows, nodes named like an object of the space becoming its card. "canvas": a JSON Canvas to add. Returns the board as get_board does, with the ids given to refs.',
+        'Change a whiteboard in one step (make one with create_object, type "Whiteboard"). "add": elements; a card shows an object ("object": its id or exact title), text, sticky and shape hold "text", a frame has a "title"; give x and y to place one, else new elements are laid out in a grid to the right of the board; "ref" names a new element so "arrows" can use it. "arrows": from and to are refs or ids from get_board. "update": move, resize, recolor, retext, retitle, reshape or restyle elements (rotation, fill, border, dash, fontSize), set a card\'s view and fields, make a frame the cover (default scene), or relabel and restyle arrows (tips, sides, dash, width). "remove": ids (an element\'s arrows and the strokes drawn on it go too). "mermaid": a Mermaid flowchart ("graph LR; A[Idea] --> B{Choose}"), laid out as shapes and arrows, nodes named like an object of the space becoming its card. "canvas": a JSON Canvas to add. Returns the board as get_board does, with the ids given to refs.',
       inputSchema: {
         id: z.string(),
         add: z
@@ -311,6 +324,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
               y: z.number().optional(),
               w: z.number().optional(),
               h: z.number().optional(),
+              ...elementLook,
             })
           )
           .optional(),
@@ -329,7 +343,10 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
               label: z.string().optional(),
               color: z.enum(COLOR_NAMES).nullable().optional(),
               ...arrowLook,
-              view: z.enum(['card', 'compact', 'embed']).optional().describe("A card's look: its card, one line, or its contents (a query's live results, the text)"),
+              ...elementLook,
+              view: z.enum(['card', 'compact', 'embed', 'properties']).optional().describe("A card's look: its card, one line, its contents (a query's live results, the text), or its title with the properties in fields"),
+              fields: z.array(z.string()).optional().describe('A "properties" card: the property names to list, in order'),
+              cover: z.boolean().optional().describe("A frame: make it the board's default scene (where it opens, what previews show)"),
             })
           )
           .optional(),

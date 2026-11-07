@@ -74,11 +74,19 @@ import {
 import {
   ARROW_HEADS,
   ARROW_PATHS,
+  ARROW_TIPS,
   CARD_VIEWS,
+  DASHES,
+  FILLS,
+  FONT_SIZES,
+  SIDES,
   CanvasError,
   MermaidError,
   NODE_SIZE,
   addBoardElements,
+  arrowDashPatch,
+  arrowTips,
+  arrowTipsPatch,
   boardToJsonCanvas,
   graphToElements,
   gridBoxes,
@@ -88,13 +96,13 @@ import {
   jsonCanvasToElements,
   parseMermaidFlowchart,
   readBoard,
+  lineDash,
   removeBoardElements,
   sendToBack,
+  setCover,
   spotAfter,
   updateBoardElements,
   type BoardElement,
-  type ArrowHeads,
-  type ArrowPath,
   type BoardPatch,
   type CardView,
   type NewBoardElement,
@@ -112,7 +120,7 @@ import { listInbox } from './inbox.ts'
 export class AgentError extends Error {}
 
 /** An element an agent adds to a whiteboard; "ref" names it for arrows in the same edit. */
-export interface BoardAddInput {
+export interface BoardAddInput extends ElementStyleInput {
   ref?: string
   kind: 'card' | 'text' | 'sticky' | 'shape' | 'frame'
   object?: string
@@ -125,30 +133,72 @@ export interface BoardAddInput {
   w?: number
   h?: number
 }
+/** An element's look as agents give it (each field for the kinds that have it). */
+export interface ElementStyleInput {
+  rotation?: number
+  fill?: string
+  border?: number
+  dash?: string
+  fontSize?: string
+}
 /** An arrow's look as agents give it. */
 export interface ArrowStyleInput {
   path?: string
   heads?: string
   dashed?: boolean
+  dash?: string
+  startTip?: string
+  endTip?: string
+  fromSide?: string
+  toSide?: string
+  width?: number
 }
 
-/** An arrow's look checked; defaults ("straight", "end", not dashed) are left out (or cleared, for a change). */
-function arrowStyle(input: ArrowStyleInput, clearing = false): { path?: ArrowPath | undefined; heads?: ArrowHeads | undefined; dashed?: true | undefined } {
-  const out: { path?: ArrowPath | undefined; heads?: ArrowHeads | undefined; dashed?: true | undefined } = {}
+const oneOf = <T extends string>(what: string, list: readonly T[], value: string): T => {
+  if (!list.includes(value as T)) throw new AgentError(`unknown ${what} "${value}" (${list.join(', ')})`)
+  return value as T
+}
+
+/** An arrow's look checked; defaults ("straight", "end", solid) are left out (or cleared, for a change). */
+function arrowStyle(input: ArrowStyleInput, current: BoardElement | undefined, clearing = false): BoardPatch {
+  const out: BoardPatch = {}
   if (input.path !== undefined) {
-    if (!ARROW_PATHS.includes(input.path as ArrowPath)) throw new AgentError(`unknown arrow path "${input.path}" (${ARROW_PATHS.join(', ')})`)
-    if (input.path !== 'straight' || clearing) out.path = input.path === 'straight' ? undefined : (input.path as ArrowPath)
+    const path = oneOf('arrow path', ARROW_PATHS, input.path)
+    if (path !== 'straight' || clearing) out.path = path === 'straight' ? undefined : path
   }
   if (input.heads !== undefined) {
-    if (!ARROW_HEADS.includes(input.heads as ArrowHeads)) throw new AgentError(`unknown arrow heads "${input.heads}" (${ARROW_HEADS.join(', ')})`)
-    if (input.heads !== 'end' || clearing) out.heads = input.heads === 'end' ? undefined : (input.heads as ArrowHeads)
+    const heads = oneOf('arrow heads', ARROW_HEADS, input.heads)
+    if (heads !== 'end' || clearing) Object.assign(out, { heads: heads === 'end' ? undefined : heads }, clearing ? { startTip: undefined, endTip: undefined } : {})
   }
-  if (input.dashed !== undefined && (input.dashed || clearing)) out.dashed = input.dashed ? true : undefined
+  if (input.startTip !== undefined || input.endTip !== undefined) {
+    const now = arrowTips(current?.kind === 'arrow' ? current : {})
+    Object.assign(out, arrowTipsPatch(input.startTip !== undefined ? oneOf('tip', ARROW_TIPS, input.startTip) : now.start, input.endTip !== undefined ? oneOf('tip', ARROW_TIPS, input.endTip) : now.end))
+  }
+  if (input.dashed !== undefined && (input.dashed || clearing)) Object.assign(out, arrowDashPatch(input.dashed ? 'dashed' : undefined))
+  if (input.dash !== undefined) Object.assign(out, arrowDashPatch(input.dash === 'solid' ? undefined : oneOf('dash', DASHES, input.dash)))
+  for (const key of ['fromSide', 'toSide'] as const) if (input[key] !== undefined) out[key] = input[key] === 'auto' ? undefined : oneOf('side', SIDES, input[key])
+  if (input.width !== undefined) out.width = input.width > 0 ? input.width : undefined
+  return out
+}
+
+/** A placed element's look checked, for the fields its kind has; defaults are left out (or cleared). */
+function elementStyle(kind: BoardElement['kind'], input: ElementStyleInput): BoardPatch {
+  const out: BoardPatch = {}
+  if (input.rotation !== undefined && kind !== 'frame') {
+    const turn = ((input.rotation % 360) + 360) % 360
+    out.rotation = turn === 0 ? undefined : turn
+  }
+  if (kind === 'shape') {
+    if (input.fill !== undefined) out.fill = input.fill === 'tint' ? undefined : oneOf('fill', FILLS, input.fill)
+    if (input.border !== undefined) out.border = input.border > 0 ? input.border : undefined
+  }
+  if ((kind === 'shape' || kind === 'stroke') && input.dash !== undefined) out.dash = input.dash === 'solid' ? undefined : oneOf('dash', DASHES, input.dash)
+  if (kind === 'sticky' && input.fontSize !== undefined) out.fontSize = input.fontSize === 'md' ? undefined : oneOf('font size', FONT_SIZES, input.fontSize)
   return out
 }
 
 /** What an agent may change in an element. */
-export interface BoardPatchInput extends ArrowStyleInput {
+export interface BoardPatchInput extends ArrowStyleInput, ElementStyleInput {
   x?: number
   y?: number
   w?: number
@@ -159,6 +209,10 @@ export interface BoardPatchInput extends ArrowStyleInput {
   label?: string
   color?: string | null
   view?: string
+  /** A "properties" card's fields: property names (or ids) of its object's type. */
+  fields?: string[]
+  /** A frame: make it the board's default scene (false: no longer). */
+  cover?: boolean
 }
 
 export interface AgentOptions {
@@ -226,6 +280,20 @@ export class AgentTools {
   }
 
   private titleOf = (id: Id) => this.store.getObjectSummaries([id])[0]?.title
+
+  /** The properties of an object's type. */
+  private propertiesOf(objectId: Id) {
+    const object = this.store.getObject(objectId)
+    return (object && this.store.getType(object.typeId)?.properties) || []
+  }
+  private propertyName = (objectId: Id, propertyId: string) => this.propertiesOf(objectId).find((p) => p.id === propertyId)?.name
+  /** A property of an object's type by id or name (any case). */
+  private propertyId(objectId: Id, key: string) {
+    const properties = this.propertiesOf(objectId)
+    const found = properties.find((p) => p.id === key) ?? properties.find((p) => fold(p.name) === fold(key))
+    if (!found) throw new AgentError(`no property "${key}" on that card's type (${properties.map((p) => p.name).join(', ') || 'it has none'})`)
+    return found.id
+  }
 
   /** A person as agents see them: "Name (username)". */
   private personName = (id: Id) => {
@@ -442,8 +510,16 @@ export class AgentTools {
   /** What an agent sees of an element (a stroke's ink left out; boxes in board coordinates). */
   private boardElement(element: BoardElement, all: Map<Id, BoardElement>) {
     if (element.kind === 'arrow') {
-      const { id, from, to, label, color, relation, path, heads, dashed, mentioned } = element
-      return { id, kind: 'arrow', from, to, ...{ label, color, relation, path, heads, ...(dashed ? { dashed } : {}), ...(mentioned ? { mentioned } : {}) } }
+      const { id, from, to, label, color, relation, path, heads, fromSide, toSide, width, mentioned } = element
+      const tips = arrowTips(element)
+      const dash = lineDash(element)
+      return {
+        id, kind: 'arrow', from, to,
+        ...{ label, color, relation, path, heads, fromSide, toSide, width },
+        ...(tips.start !== 'none' || tips.end !== 'arrow' ? { startTip: tips.start, endTip: tips.end } : {}),
+        ...(dash ? { dash, dashed: true } : {}),
+        ...(mentioned ? { mentioned } : {}),
+      }
     }
     let box = { x: element.x, y: element.y, w: element.w, h: element.h }
     if (isAttached(element)) {
@@ -451,19 +527,22 @@ export class AgentTools {
       if (parent && isPlaced(parent)) box = { x: parent.x + element.x * parent.w, y: parent.y + element.y * parent.h, w: element.w * parent.w, h: element.h * parent.h }
     }
     const rounded = { x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.w), h: Math.round(box.h) }
-    const base = { id: element.id, kind: element.kind, ...rounded, ...(element.color ? { color: element.color } : {}) }
+    const base = { id: element.id, kind: element.kind, ...rounded, ...(element.color ? { color: element.color } : {}), ...(element.rotation ? { rotation: element.rotation } : {}) }
     switch (element.kind) {
-      case 'card':
-        return { ...base, object: { id: element.objectId, title: this.titleOf(element.objectId) ?? '(deleted)' }, ...(element.view ? { view: element.view } : {}) }
+      case 'card': {
+        const fields = element.fields?.length ? { fields: element.fields.map((f) => this.propertyName(element.objectId, f) ?? f) } : {}
+        return { ...base, object: { id: element.objectId, title: this.titleOf(element.objectId) ?? '(deleted)' }, ...(element.view ? { view: element.view } : {}), ...fields }
+      }
       case 'text':
-      case 'sticky':
         return { ...base, text: element.text }
+      case 'sticky':
+        return { ...base, text: element.text, ...(element.fontSize ? { fontSize: element.fontSize } : {}) }
       case 'shape':
-        return { ...base, shape: element.shape, text: element.text }
+        return { ...base, shape: element.shape, text: element.text, ...(element.fill ? { fill: element.fill } : {}), ...(element.border ? { border: element.border } : {}), ...(element.dash ? { dash: element.dash } : {}) }
       case 'frame':
-        return { ...base, ...(element.title ? { title: element.title } : {}) }
+        return { ...base, ...(element.title ? { title: element.title } : {}), ...(element.cover ? { cover: true } : {}) }
       case 'stroke':
-        return { ...base, ...(element.parent ? { drawnOn: element.parent } : {}), ...(element.highlight ? { highlight: true } : {}) }
+        return { ...base, ...(element.parent ? { drawnOn: element.parent } : {}), ...(element.highlight ? { highlight: true } : {}), ...(element.dash ? { dash: element.dash } : {}) }
     }
   }
 
@@ -530,6 +609,7 @@ export class AgentTools {
       } else if (item.kind === 'frame') element = { id, kind: 'frame', ...box, ...look, ...(item.title ? { title: item.title } : {}) }
       else if (item.kind === 'sticky' || item.kind === 'text') element = { id, kind: item.kind, text: item.text ?? '', ...box, ...look }
       else throw new AgentError(`unknown kind "${String((item as { kind: unknown }).kind)}" (card, text, sticky, shape, frame)`)
+      Object.assign(element, Object.fromEntries(Object.entries(elementStyle(element.kind, item)).filter(([, v]) => v !== undefined)))
       additions.push(element)
       if (item.x === undefined || item.y === undefined) unplaced.push({ element, size })
     }
@@ -545,7 +625,7 @@ export class AgentTools {
       const from = resolve(arrow.from)
       const to = resolve(arrow.to)
       if (from === to) throw new AgentError('an arrow needs two different elements')
-      additions.push({ id: randomUUID(), kind: 'arrow', from, to, ...(arrow.label ? { label: arrow.label } : {}), ...(color(arrow.color) ? { color: color(arrow.color)! } : {}), ...arrowStyle(arrow) })
+      additions.push({ id: randomUUID(), kind: 'arrow', from, to, ...(arrow.label ? { label: arrow.label } : {}), ...(color(arrow.color) ? { color: color(arrow.color)! } : {}), ...arrowStyle(arrow, undefined) })
     }
 
     // A flowchart or a canvas goes after everything else.
@@ -585,17 +665,21 @@ export class AgentTools {
     }
 
     const patches: Record<Id, BoardPatch> = {}
+    let cover: Id | null | undefined
     for (const change of input.update ?? []) {
       const element = known.get(change.id)
       if (!element) throw new AgentError(`no element "${change.id}" on the board`)
       const patch: BoardPatch = {}
       if (element.kind === 'arrow') {
         if (change.label !== undefined) patch.label = change.label || undefined
-        Object.assign(patch, arrowStyle(change, true))
+        Object.assign(patch, arrowStyle(change, element, true))
       } else {
+        Object.assign(patch, elementStyle(element.kind, change))
+        if (change.fields !== undefined && element.kind === 'card') patch.fields = change.fields.length ? change.fields.map((f) => this.propertyId(element.objectId, f)) : undefined
         for (const key of ['x', 'y', 'w', 'h'] as const) if (change[key] !== undefined && !isAttached(element)) patch[key] = Math.round(change[key])
         if (change.text !== undefined && 'text' in element) patch.text = change.text
         if (change.title !== undefined && element.kind === 'frame') patch.title = change.title || undefined
+        if (change.cover !== undefined && element.kind === 'frame') cover = change.cover ? element.id : cover === undefined && element.cover ? null : cover
         if (change.view !== undefined && element.kind === 'card') {
           if (!CARD_VIEWS.includes(change.view as CardView)) throw new AgentError(`unknown card view "${change.view}" (${CARD_VIEWS.join(', ')})`)
           patch.view = change.view === 'card' ? undefined : (change.view as CardView)
@@ -616,6 +700,7 @@ export class AgentTools {
       if (frames.length) sendToBack(doc, frames)
       if (Object.keys(patches).length) updateBoardElements(doc, patches)
       if (input.remove?.length) removeBoardElements(doc, input.remove)
+      if (cover !== undefined) setCover(doc, cover)
       return ids
     })
     const saved = this.store.putObject({ ...object, updatedAt: this.options.now() }, undefined, doc)
