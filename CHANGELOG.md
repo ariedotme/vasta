@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **A link to an object of another space** opens that space and shows the object's text and
+  properties; only its title showed before.
+
 ## 0.7.1 (2026-11-07)
 
 A hotfix for [0.7.0](https://github.com/ariedotme/vasta/releases/tag/v0.7.0).
