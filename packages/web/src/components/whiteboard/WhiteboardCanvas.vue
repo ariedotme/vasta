@@ -58,7 +58,9 @@ import {
   arrowTipMarks,
   dashArray,
   edgePoint,
+  nearestSide,
   pointsPath,
+  sidePoint,
   routePath,
   snapResize,
   boardClipboard,
@@ -261,6 +263,7 @@ const preview = reactive<{
   moving: Set<Id>
   resize: { id: Id; w: number; h: number; x?: number; y?: number } | null
   rotate: { id: Id; deg: number } | null
+  bend: { id: Id; value: number } | null
   scale: { ids: Set<Id>; from: Box; kx: number; ky: number } | null
   textH: Record<Id, number>
   erasing: Set<Id>
@@ -271,6 +274,7 @@ const preview = reactive<{
   moving: new Set(),
   resize: null,
   rotate: null,
+  bend: null,
   scale: null,
   textH: {},
   erasing: new Set(),
@@ -341,7 +345,8 @@ const arrowPaths = computed(() =>
     const a = box(from)
     const b = box(to)
     if (!inView(a) && !inView(b)) return []
-    const route = arrowRoute(a, b, arrow.path)
+    const bend = preview.bend?.id === arrow.id ? preview.bend.value : arrow.bend
+    const route = arrowRoute(a, b, arrow.path, { from: arrow.fromSide, to: arrow.toSide, bend })
     const width = lineWidth(arrow.width)
     const { points, marks } = arrowTipMarks(
       route.points.map((p) => toScreen(p.x, p.y)),
@@ -350,7 +355,7 @@ const arrowPaths = computed(() =>
       arrow.tipSize ?? 'md'
     )
     // The full course (for picking it), and the one drawn, stopping inside its heads.
-    return [{ arrow, d: routePath(route, (p) => toScreen(p.x, p.y)), line: pointsPath(route.kind, points), marks, width, dash: dashArray(lineDash(arrow), width), mid: route.mid }]
+    return [{ arrow, d: routePath(route, (p) => toScreen(p.x, p.y)), line: pointsPath(route.kind, points), marks, width, dash: dashArray(lineDash(arrow), width), mid: route.mid, bend: route.bend }]
   })
 )
 const stroke = computed(() => Math.max(1, 1.75 * camera.zoom))
@@ -423,7 +428,9 @@ type Gesture =
   | { kind: 'scale'; ids: Set<Id>; start: Point; from: Box; others: Box[]; uniform: boolean }
   | { kind: 'lasso'; points: Point[]; keep: Set<Id> }
   | { kind: 'marquee'; start: Point; end: Point; keep: Set<Id> }
-  | { kind: 'connect'; from: Id; end: Point }
+  /** `over`: the element under the pointer, whose sides are offered to drop the end on. */
+  | { kind: 'connect'; from: Id; end: Point; over?: Id }
+  | { kind: 'bend'; id: Id; axis: 'x' | 'y'; start: Point; from: number }
   | { kind: 'create'; what: 'shape' | 'sticky' | 'frame'; start: Point; end: Point }
   | { kind: 'draw'; points: number[]; pressure: boolean; smooth: number; continues?: Id }
   | { kind: 'erase' }
@@ -449,6 +456,7 @@ function cancelGesture() {
   preview.moving = new Set()
   preview.resize = null
   preview.rotate = null
+  preview.bend = null
   preview.scale = null
   preview.erasing = new Set()
   preview.guides = []
@@ -560,6 +568,13 @@ function onPointerDown(event: PointerEvent) {
   // The pen draws whatever the tool, unless it is on a handle or a tool that makes things.
   const penDraws = event.pointerType === 'pen' && pencilOnly.value && !handle && (tool.value === 'select' || tool.value === 'hand')
   if (handle === 'scale') return startScale(world)
+  if (handle === 'bend') {
+    const id = arrowAt(event.target)
+    const arrow = id ? byId.value.get(id) : undefined
+    const path = arrowPaths.value.find((p) => p.arrow.id === id)
+    if (arrow?.kind === 'arrow' && path?.bend) gesture.value = { kind: 'bend', id: arrow.id, axis: path.bend.axis, start: world, from: arrow.bend ?? 0 }
+    return
+  }
   if (handle && elementId) {
     const element = byId.value.get(elementId)
     if (handle === 'resize' && element && isPlaced(element)) {
@@ -740,7 +755,12 @@ function onPointerMove(event: PointerEvent) {
       })
       .map((e) => e.id)
     select([...g.keep, ...inside])
-  } else if (g.kind === 'connect' || g.kind === 'create') {
+  } else if (g.kind === 'connect') {
+    const over = elementAt(document.elementFromPoint(event.clientX, event.clientY))
+    gesture.value = { ...g, end: world, over: over && over !== g.from && byId.value.has(over) ? over : undefined }
+  } else if (g.kind === 'bend') {
+    preview.bend = { id: g.id, value: Math.round(g.from + (g.axis === 'x' ? world.x - g.start.x : world.y - g.start.y)) }
+  } else if (g.kind === 'create') {
     gesture.value = { ...g, end: world }
   } else if (g.kind === 'draw') {
     // Coalesced events carry the points a pen sent between two frames.
@@ -803,6 +823,8 @@ function onPointerUp(event: PointerEvent) {
   } else if (g.kind === 'resize' && preview.resize) {
     const { w, h, x, y } = preview.resize
     update({ [g.id]: { w, h, ...(x !== undefined && y !== undefined ? { x, y } : {}) } })
+  } else if (g.kind === 'bend' && preview.bend) {
+    update({ [g.id]: { bend: preview.bend.value || undefined } })
   } else if (g.kind === 'rotate' && preview.rotate) {
     update({ [g.id]: { rotation: preview.rotate.deg || undefined } })
   } else if (g.kind === 'scale' && preview.scale) {
@@ -817,7 +839,15 @@ function onPointerUp(event: PointerEvent) {
   } else if (g.kind === 'connect') {
     const target = elementAt(document.elementFromPoint(event.clientX, event.clientY))
     const exists = arrows.value.some((a) => a.kind === 'arrow' && ((a.from === g.from && a.to === target) || (a.from === target && a.to === g.from)))
-    if (target && target !== g.from && !exists && byId.value.has(target)) select(add([newArrow(g.from, target)]))
+    if (target && target !== g.from && !exists && byId.value.has(target)) {
+      // Let go on one of the sides offered: the end stays on that side.
+      const element = byId.value.get(target)
+      const at = toWorld(local(event).x, local(event).y)
+      const b = element && isPlaced(element) ? box(element) : undefined
+      const side = b ? nearestSide(b, at) : undefined
+      const onSide = b && side && Math.hypot(sidePoint(b, side).x - at.x, sidePoint(b, side).y - at.y) * camera.zoom < 18
+      select(add([{ ...newArrow(g.from, target), ...(onSide ? { toSide: side } : {}) } as NewBoardElement]))
+    }
     else if (!target && !props.readonly) connectMenu(g.from, event)
     if (!stays(tool.value)) tool.value = 'select'
   } else if (g.kind === 'create') {
@@ -1479,6 +1509,14 @@ const selectionBox = computed(() => {
   if (list.length < 2) return null
   return bounds(list.map((e) => turnedBounds(box(e))))
 })
+/** The handle that moves a selected right-angled arrow's middle, on screen. */
+const bendHandle = computed(() => {
+  if (props.readonly || selection.value.size !== 1 || (quiet.value && gesture.value?.kind !== 'bend')) return null
+  const path = arrowPaths.value.find((p) => selection.value.has(p.arrow.id))
+  if (!path?.bend) return null
+  const at = toScreen(path.bend.at.x, path.bend.at.y)
+  return { id: path.arrow.id, axis: path.bend.axis, ...at }
+})
 /** The lasso's loop, on screen. */
 const lassoPath = computed(() => {
   const g = gesture.value
@@ -1530,7 +1568,9 @@ const connecting = computed(() => {
   if (!from || !isPlaced(from)) return null
   const start = edgePoint(box(from), g.end)
   const { points, marks } = arrowTipMarks([toScreen(start.x, start.y), toScreen(g.end.x, g.end.y)], { start: 'none', end: 'arrow' }, stroke.value)
-  return { s: points[0]!, e: points[1]!, marks }
+  const over = g.over ? byId.value.get(g.over) : undefined
+  const sides = over && isPlaced(over) ? (['top', 'right', 'bottom', 'left'] as const).map((side) => sidePoint(box(over), side)).map((p) => toScreen(p.x, p.y)) : []
+  return { s: points[0]!, e: points[1]!, marks, sides }
 })
 /** The line being drawn, in board coordinates (inside the camera's layer). */
 const ink = computed(() => {
@@ -1721,7 +1761,23 @@ const cursor = computed(() => {
       <template v-if="connecting">
         <line :x1="connecting.s.x" :y1="connecting.s.y" :x2="connecting.e.x" :y2="connecting.e.y" stroke="var(--color-accent)" :stroke-width="stroke" stroke-dasharray="6 4" />
         <path v-for="(mark, i) in connecting.marks" :key="i" :d="mark.d" fill="var(--color-accent)" />
+        <circle v-for="(p, i) in connecting.sides" :key="`side-${i}`" :cx="p.x" :cy="p.y" r="5" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="2" />
       </template>
+      <!-- A selected right-angled line's movable segment: drag it (above the labels) -->
+      <g v-if="bendHandle" :data-arrow="bendHandle.id">
+        <rect
+          data-handle="bend"
+          :x="bendHandle.x - (bendHandle.axis === 'x' ? 4 : 9)"
+          :y="bendHandle.y - (bendHandle.axis === 'x' ? 9 : 4)"
+          :width="bendHandle.axis === 'x' ? 8 : 18"
+          :height="bendHandle.axis === 'x' ? 18 : 8"
+          rx="4"
+          fill="var(--color-surface)"
+          stroke="var(--color-accent)"
+          stroke-width="2"
+          :style="{ pointerEvents: 'all', cursor: bendHandle.axis === 'x' ? 'ew-resize' : 'ns-resize' }"
+        />
+      </g>
       <path v-if="lassoPath" :d="lassoPath" fill="color-mix(in srgb, var(--color-accent) 8%, transparent)" stroke="var(--color-accent)" stroke-width="1.5" stroke-dasharray="5 4" stroke-linejoin="round" />
       <rect
         v-if="marquee"

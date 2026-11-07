@@ -43,11 +43,16 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 - **An arrow let go over empty space** offers what to put there, joined to where it started: a
   sticky note, a text, a shape (typed into right away) or an object (the object picker).
 - **Arrows**: select an element and drag the dot on its right edge to another element, or pick
-  the arrow tool (**L**) and drag from one element to another. Double-click an arrow (or select
-  it and press Enter) to give it a label.
-- **Arrow styles** (the line button in the selection bar): straight, curved or at right angles
-  (leaving from the sides that face each other), an arrowhead at the end, at both ends or none,
-  and dashed.
+  the arrow tool (**L**) and drag from one element to another. While you drag, the element under
+  the pointer shows a dot on each side: let go on one and the arrow keeps arriving at that side.
+  New arrows take the arrow tool's settings (course, ends, line, width, color). Double-click an
+  arrow (or select it and press Enter) to give it a label.
+- **Arrow styles** (the line button in the selection bar): straight, curved or at right angles;
+  what each end has (an arrowhead, a dot or nothing) and the tips' size; solid, dashed or dotted;
+  thin, regular or thick; and the side it leaves from and arrives at (Auto: the sides that face
+  each other). At right angles the line takes a Z between facing sides, a U when both sides look
+  the same way, and goes around the elements when they look away from each other; drag the
+  handle on its middle segment to move that segment.
 - **Arrows that link objects**: select an arrow between two cards and pick the link in the
   selection bar: it lists the relation properties of the first card's type that take the second's
   type ("Add to “Source”"). The second object is written into that property, so the link shows in

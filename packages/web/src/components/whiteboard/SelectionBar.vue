@@ -2,7 +2,7 @@
 // The bar above a board's selection: what can be done to what is selected, by kind (color,
 // shape, label, title, open), and to any selection (front, back, duplicate, delete).
 import { computed, ref, watch } from 'vue'
-import { SHAPES, type ArrowHeads, type ArrowPath, type BoardElement, type CardView, type ColorName, type ShapeName } from '@vasta/core'
+import { ARROW_TIPS, SHAPES, arrowDashPatch, arrowTips, arrowTipsPatch, lineDash, type ArrowElement, type ArrowPath, type ArrowTip, type BoardElement, type BoardPatch, type CardView, type ColorName, type Dash, type ShapeName, type Side, type TipSize } from '@vasta/core'
 import { BOARD_COLORS, PICKER_COLORS, SHAPE_ICONS, SHAPE_LABELS } from '../../lib/whiteboard.ts'
 import AppIcon from '../AppIcon.vue'
 
@@ -20,22 +20,43 @@ const emit = defineEmits<{
   open: []
   drawOn: []
   view: [view: CardView]
-  arrowStyle: [patch: { path?: ArrowPath | undefined; heads?: ArrowHeads | undefined; dashed?: boolean | undefined }]
+  arrowStyle: [patch: BoardPatch]
   link: [event: MouseEvent]
 }>()
 
 const open = ref<'color' | 'shape' | 'view' | 'arrow' | null>(null)
 const arrows = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'arrow'))
-const firstArrow = computed(() => (arrows.value ? (props.elements[0] as { path?: ArrowPath; heads?: ArrowHeads; dashed?: boolean }) : undefined))
+const firstArrow = computed(() => (arrows.value ? (props.elements[0] as ArrowElement) : undefined))
+const tips = computed(() => arrowTips(firstArrow.value ?? {}))
+const TIP_ICONS: Record<ArrowTip, string> = { arrow: 'ph:caret-right-fill', dot: 'ph:circle-fill', none: 'ph:minus' }
+const TIP_LABELS: Record<ArrowTip, string> = { arrow: 'Arrow', dot: 'Dot', none: 'Nothing' }
+const DASHES: { id: Dash | undefined; label: string }[] = [
+  { id: undefined, label: 'Solid' },
+  { id: 'dashed', label: 'Dashed' },
+  { id: 'dotted', label: 'Dotted' },
+]
+const WIDTHS: { id: number | undefined; label: string }[] = [
+  { id: 1, label: 'Thin' },
+  { id: undefined, label: 'Regular' },
+  { id: 4, label: 'Thick' },
+]
+const TIP_SIZES: { id: TipSize | undefined; label: string }[] = [
+  { id: 'sm', label: 'S' },
+  { id: undefined, label: 'M' },
+  { id: 'lg', label: 'L' },
+]
+const SIDES: { id: Side | undefined; label: string }[] = [
+  { id: undefined, label: 'Auto' },
+  { id: 'top', label: 'Top' },
+  { id: 'right', label: 'Right' },
+  { id: 'bottom', label: 'Bottom' },
+  { id: 'left', label: 'Left' },
+]
+const setTip = (end: 'start' | 'end', tip: ArrowTip) => emit('arrowStyle', arrowTipsPatch(end === 'start' ? tip : tips.value.start, end === 'end' ? tip : tips.value.end))
 const PATHS: { id: ArrowPath; label: string; icon: string }[] = [
   { id: 'straight', label: 'Straight', icon: 'ph:line-segment' },
   { id: 'curved', label: 'Curved', icon: 'ph:bezier-curve' },
   { id: 'elbow', label: 'Right angles', icon: 'ph:arrow-elbow-right' },
-]
-const HEADS: { id: ArrowHeads; label: string; icon: string }[] = [
-  { id: 'end', label: 'Arrow at the end', icon: 'ph:arrow-right' },
-  { id: 'both', label: 'Arrows at both ends', icon: 'ph:arrows-left-right' },
-  { id: 'none', label: 'Plain line', icon: 'ph:minus' },
 ]
 const cards = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'card'))
 const currentView = computed<CardView>(() => (cards.value ? ((props.elements[0] as { view?: CardView }).view ?? 'card') : 'card'))
@@ -121,36 +142,49 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
       <button :class="button" title="Line: course, ends, dashes" aria-label="Line style" @click="toggle('arrow')">
         <AppIcon :fallback="PATHS.find((p) => p.id === (firstArrow?.path ?? 'straight'))!.icon" :size="17" />
       </button>
-      <div v-if="open === 'arrow'" class="absolute left-0 top-full mt-1.5 w-max rounded-xl border border-line bg-surface p-1 shadow-md">
+      <div v-if="open === 'arrow'" class="absolute left-0 top-full mt-1.5 w-64 space-y-2 rounded-xl border border-line bg-surface p-2 text-xs shadow-md">
         <div class="flex gap-0.5">
           <button
             v-for="p in PATHS"
             :key="p.id"
             :class="[button, (firstArrow?.path ?? 'straight') === p.id ? 'bg-hover text-ink' : '']"
             :title="p.label"
-            @click="emit('arrowStyle', { path: p.id === 'straight' ? undefined : p.id })"
+            @click="emit('arrowStyle', { path: p.id === 'straight' ? undefined : p.id, bend: undefined })"
           >
             <AppIcon :fallback="p.icon" :size="17" />
           </button>
         </div>
-        <div class="mt-0.5 flex gap-0.5 border-t border-line pt-0.5">
+        <div v-for="end in ['start', 'end'] as const" :key="end" class="flex items-center gap-1">
+          <span class="w-12 text-ink-soft">{{ end === 'start' ? 'Start' : 'End' }}</span>
           <button
-            v-for="h in HEADS"
-            :key="h.id"
-            :class="[button, (firstArrow?.heads ?? 'end') === h.id ? 'bg-hover text-ink' : '']"
-            :title="h.label"
-            @click="emit('arrowStyle', { heads: h.id === 'end' ? undefined : h.id })"
+            v-for="t in ARROW_TIPS"
+            :key="t"
+            :class="[button, tips[end] === t ? 'bg-hover text-ink' : '']"
+            :title="TIP_LABELS[t]"
+            @click="setTip(end, t)"
           >
-            <AppIcon :fallback="h.icon" :size="17" />
+            <AppIcon :fallback="TIP_ICONS[t]" :size="t === 'dot' ? 10 : 14" :class="end === 'start' && t === 'arrow' ? 'rotate-180' : ''" />
           </button>
+          <span class="ml-auto flex gap-0.5">
+            <button v-for="z in TIP_SIZES" v-show="end === 'end'" :key="z.label" class="h-7 w-6 rounded-md hover:bg-hover" :class="firstArrow?.tipSize === z.id ? 'bg-hover text-ink' : 'text-ink-soft'" :title="`Tip size ${z.label}`" @click="emit('arrowStyle', { tipSize: z.id })">{{ z.label }}</button>
+          </span>
         </div>
-        <button
-          class="mt-0.5 flex w-full items-center gap-2 rounded-lg border-t border-line px-2 py-1.5 text-left text-sm hover:bg-hover"
-          :class="firstArrow?.dashed ? 'text-accent' : 'text-ink'"
-          @click="emit('arrowStyle', { dashed: firstArrow?.dashed ? undefined : true })"
-        >
-          <AppIcon fallback="ph:dots-three-outline" :size="16" />Dashed
-        </button>
+        <div class="flex gap-1">
+          <button v-for="d in DASHES" :key="d.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstArrow && lineDash(firstArrow) === d.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('arrowStyle', arrowDashPatch(d.id))">{{ d.label }}</button>
+        </div>
+        <div class="flex gap-1">
+          <button v-for="w in WIDTHS" :key="w.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstArrow?.width === w.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('arrowStyle', { width: w.id })">{{ w.label }}</button>
+        </div>
+        <div v-for="end in ['fromSide', 'toSide'] as const" :key="end" class="flex items-center gap-1">
+          <span class="w-12 shrink-0 text-ink-soft">{{ end === 'fromSide' ? 'Leaves' : 'Arrives' }}</span>
+          <select
+            class="h-7 min-w-0 flex-1 rounded-md bg-hover px-1.5 text-ink outline-none"
+            :value="firstArrow?.[end] ?? ''"
+            @change="emit('arrowStyle', { [end]: (($event.target as HTMLSelectElement).value || undefined) as Side | undefined, bend: undefined })"
+          >
+            <option v-for="side in SIDES" :key="side.label" :value="side.id ?? ''">{{ side.label }}</option>
+          </select>
+        </div>
       </div>
     </div>
     <button v-if="linkable" :class="button" title="Link the objects (a relation)" aria-label="Link the objects" @click="((open = null), emit('link', $event))"><AppIcon fallback="ph:link-simple" :size="17" /></button>

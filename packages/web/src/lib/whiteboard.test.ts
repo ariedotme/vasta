@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrowRoute, routePath, snapResize, boardClipboard, parseBoardClipboard, shapePath, simplifyPoints, snapMove, strokeFromPoints, strokePath, thinPoints } from './whiteboard.ts'
+import { arrowRoute, arrowTipMarks, edgePoint, lassoTakes, nearestSide, routePath, snapAngle, snapResize, boardClipboard, parseBoardClipboard, shapePath, simplifyPoints, snapMove, strokeFromPoints, strokePath, thinPoints, turnedBounds } from './whiteboard.ts'
 
 describe('pen strokes', () => {
   it('drops the points of a straight run and keeps the corners', () => {
@@ -88,6 +88,68 @@ describe('arrows', () => {
     expect(route.points[1]!.y).toBeLessThan(25)
     expect(route.mid.y).toBeLessThan(25)
     expect(routePath(route, (p) => ({ x: p.x * 2, y: p.y * 2 }))).toMatch(/^M\S+ Q\S+ \S+$/)
+  })
+  it('moves the middle of a Z with a bend', () => {
+    const route = arrowRoute(a, b, 'elbow', { bend: 40 })
+    expect(route.points[1]).toEqual({ x: 240, y: 25 })
+    expect(route.bend).toEqual({ at: { x: 240, y: 125 }, axis: 'x' })
+  })
+
+  it('goes round in a U when both ends leave the same way', () => {
+    const route = arrowRoute(a, b, 'elbow', { from: 'right', to: 'right' })
+    // Out past the farther right edge, then back in.
+    expect(route.points).toEqual([{ x: 100, y: 25 }, { x: 424, y: 25 }, { x: 424, y: 225 }, { x: 400, y: 225 }])
+  })
+
+  it('runs out of each side and across between the boxes when they look away from each other', () => {
+    const route = arrowRoute(a, b, 'elbow', { from: 'left', to: 'right' })
+    expect(route.points.length).toBe(6)
+    // Across in the gap between them, halfway down it.
+    expect(route.points[2]!.y).toBe(125)
+    expect(route.bend?.axis).toBe('y')
+  })
+
+  it('makes an L between a side across and one down', () => {
+    const route = arrowRoute(a, b, 'elbow', { from: 'right', to: 'top' })
+    expect(route.points).toEqual([{ x: 100, y: 25 }, { x: 350, y: 25 }, { x: 350, y: 200 }])
+  })
+
+  it('puts a straight line on the sides asked', () => {
+    expect(arrowRoute(a, b, 'straight', { from: 'bottom', to: 'top' }).points).toEqual([{ x: 50, y: 50 }, { x: 350, y: 200 }])
+    expect(nearestSide(b, { x: 351, y: 190 })).toBe('top')
+  })
+})
+
+describe('arrow tips', () => {
+  it('draws a head and stops the line inside it, or a dot at the end', () => {
+    const { points, marks } = arrowTipMarks([{ x: 0, y: 0 }, { x: 100, y: 0 }], { start: 'dot', end: 'arrow' }, 2)
+    expect(marks.map((m) => m.kind)).toEqual(['arrow', 'dot'])
+    expect(points[1]!.x).toBeLessThan(100)
+    expect(points[0]).toEqual({ x: 0, y: 0 })
+  })
+})
+
+describe('turning and the lasso', () => {
+  it('meets a turned box at its turned edge, and bounds it', () => {
+    const square = { x: 0, y: 0, w: 100, h: 100, r: 45 }
+    const p = edgePoint(square, { x: 500, y: 50 })
+    expect(p.x).toBeCloseTo(50 + 50 * Math.SQRT2, 5)
+    expect(turnedBounds(square).w).toBeCloseTo(100 * Math.SQRT2, 5)
+  })
+
+  it('snaps an angle upright and to 45s when near, or in 15s', () => {
+    expect(snapAngle(92)).toBe(90)
+    expect(snapAngle(100)).toBe(100)
+    expect(snapAngle(-3)).toBe(0)
+    expect(snapAngle(52, true)).toBe(45)
+  })
+
+  it('takes what a loop holds the middle of, and strokes mostly inside it', () => {
+    const loop = [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 200 }, { x: 0, y: 200 }]
+    expect(lassoTakes(loop, { x: 50, y: 50, w: 400, h: 50 })).toBe(false)
+    expect(lassoTakes(loop, { x: 50, y: 50, w: 100, h: 50 })).toBe(true)
+    const stroke = Array.from({ length: 10 }, (_, i) => ({ x: 10 + i * 10, y: 100 }))
+    expect(lassoTakes(loop, { x: 0, y: 0, w: 900, h: 900 }, stroke)).toBe(true)
   })
 })
 

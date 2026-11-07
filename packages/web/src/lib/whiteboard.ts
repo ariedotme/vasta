@@ -363,29 +363,144 @@ export function edgePoint(b: Box, p: Point): Point {
   return { x: c.x + dx * t, y: c.y + dy * t }
 }
 
-export type ArrowRoute = { kind: 'line' | 'curve' | 'elbow'; points: Point[]; mid: Point }
+/**
+ * An arrow's course: its points, where its label sits (`mid`), and for right angles the segment a
+ * bend moves (`bend`: its middle, and the axis it moves along).
+ */
+export type ArrowRoute = { kind: 'line' | 'curve' | 'elbow'; points: Point[]; mid: Point; bend?: { at: Point; axis: 'x' | 'y' } }
+
+export type Side = 'top' | 'right' | 'bottom' | 'left'
+const OUT: Record<Side, Point> = { top: { x: 0, y: -1 }, right: { x: 1, y: 0 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 } }
+/** How far a right-angled line goes straight out of a side before it turns. */
+const STUB = 24
+
+/** The middle of one side of a box (turned with it). */
+export function sidePoint(b: Box, side: Side): Point {
+  const c = middle(b)
+  const o = OUT[side]
+  return rotateAround({ x: c.x + (o.x * b.w) / 2, y: c.y + (o.y * b.h) / 2 }, c, b.r ?? 0)
+}
+
+/** The sides of two boxes that face each other. */
+export function facingSides(a: Box, b: Box): [Side, Side] {
+  const ca = middle(a)
+  const cb = middle(b)
+  const dx = cb.x - ca.x
+  const dy = cb.y - ca.y
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? ['right', 'left'] : ['left', 'right']
+  return dy >= 0 ? ['bottom', 'top'] : ['top', 'bottom']
+}
+
+/** The side of a box nearest a point (for dropping an arrow's end on one). */
+export function nearestSide(b: Box, p: Point): Side {
+  let best: Side = 'top'
+  let distance = Infinity
+  for (const side of Object.keys(OUT) as Side[]) {
+    const s = sidePoint(b, side)
+    const d = Math.hypot(s.x - p.x, s.y - p.y)
+    if (d < distance) (best = side), (distance = d)
+  }
+  return best
+}
+
+/** Points without repeats and without the ones in the middle of a straight run. */
+function tidy(points: Point[]): Point[] {
+  const out: Point[] = []
+  for (const p of points) {
+    const last = out[out.length - 1]
+    if (last && Math.abs(last.x - p.x) < 0.5 && Math.abs(last.y - p.y) < 0.5) continue
+    const before = out[out.length - 2]
+    if (last && before && ((Math.abs(before.x - last.x) < 0.5 && Math.abs(last.x - p.x) < 0.5) || (Math.abs(before.y - last.y) < 0.5 && Math.abs(last.y - p.y) < 0.5))) out.pop()
+    out.push(p)
+  }
+  return out
+}
+
+/**
+ * Right angles between two sides: a Z when they face each other, a U when they look the same way,
+ * around the boxes (an S) when they look away from each other, an L between a side across and one
+ * up or down. `bend` moves the segment that can move (the middle of the Z, the far side of the U,
+ * the crossing of the S).
+ */
+function elbowRoute(a: Box, b: Box, sa: Side, sb: Side, bend: number): ArrowRoute {
+  const A = turnedBounds(a)
+  const B = turnedBounds(b)
+  const S = sidePoint({ ...A, r: 0 }, sa)
+  const E = sidePoint({ ...B, r: 0 }, sb)
+  const da = OUT[sa]
+  const db = OUT[sb]
+  const across = (d: Point) => d.x !== 0
+  let points: Point[]
+  let moving: { from: number; axis: 'x' | 'y' } | undefined
+  if (across(da) === across(db)) {
+    // Both sides across (left, right), or both up or down: the same routes with x and y swapped.
+    const h = across(da)
+    const X = (p: Point) => (h ? p.x : p.y)
+    const Y = (p: Point) => (h ? p.y : p.x)
+    const P = (x: number, y: number): Point => (h ? { x, y } : { x: y, y: x })
+    const dir = (d: Point) => (h ? d.x : d.y)
+    const lo = (box: Box) => (h ? box.y : box.x)
+    const hi = (box: Box) => (h ? box.y + box.h : box.x + box.w)
+    const near = (box: Box) => (h ? box.x : box.y)
+    const far = (box: Box) => (h ? box.x + box.w : box.y + box.h)
+    if (dir(da) !== dir(db) && (X(E) - X(S)) * dir(da) >= STUB) {
+      const m = (X(S) + X(E)) / 2 + bend
+      points = [S, P(m, Y(S)), P(m, Y(E)), E]
+      moving = { from: 1, axis: h ? 'x' : 'y' }
+    } else if (dir(da) === dir(db)) {
+      const m = (dir(da) > 0 ? Math.max(far(A), far(B)) + STUB : Math.min(near(A), near(B)) - STUB) + bend
+      points = [S, P(m, Y(S)), P(m, Y(E)), E]
+      moving = { from: 1, axis: h ? 'x' : 'y' }
+    } else {
+      // Looking away from each other: out of each side, then across between (or around) the boxes.
+      const gap = lo(B) > hi(A) ? (hi(A) + lo(B)) / 2 : lo(A) > hi(B) ? (hi(B) + lo(A)) / 2 : Math.max(hi(A), hi(B)) + STUB
+      const m = gap + bend
+      const s1 = P(X(S) + dir(da) * STUB, Y(S))
+      const e1 = P(X(E) + dir(db) * STUB, Y(E))
+      points = [S, s1, P(X(s1), m), P(X(e1), m), e1, E]
+      moving = { from: 2, axis: h ? 'y' : 'x' }
+    }
+  } else {
+    // One across, one up or down: an L when its corner lies ahead of both sides, else out and around.
+    const corner = across(da) ? { x: E.x, y: S.y } : { x: S.x, y: E.y }
+    const ahead = (from: Point, d: Point) => (corner.x - from.x) * d.x + (corner.y - from.y) * d.y > 0
+    if (ahead(S, da) && ahead(E, db)) points = [S, corner, E]
+    else {
+      const s1 = { x: S.x + da.x * STUB, y: S.y + da.y * STUB }
+      const e1 = { x: E.x + db.x * STUB, y: E.y + db.y * STUB }
+      points = [S, s1, across(da) ? { x: s1.x, y: e1.y } : { x: e1.x, y: s1.y }, e1, E]
+    }
+  }
+  const tidied = tidy(points)
+  // The moving segment after tidying: found again by its axis, as the one nearest the middle.
+  let bendInfo: ArrowRoute['bend']
+  if (moving) {
+    const a0 = points[moving.from]!
+    const a1 = points[moving.from + 1]!
+    bendInfo = { at: { x: (a0.x + a1.x) / 2, y: (a0.y + a1.y) / 2 }, axis: moving.axis }
+  }
+  let longest = { at: middle(a), length: -1 }
+  for (let i = 0; i + 1 < tidied.length; i++) {
+    const p = tidied[i]!
+    const q = tidied[i + 1]!
+    const length = Math.hypot(q.x - p.x, q.y - p.y)
+    if (length > longest.length) longest = { at: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, length }
+  }
+  return { kind: 'elbow', points: tidied, mid: bendInfo?.at ?? longest.at, ...(bendInfo ? { bend: bendInfo } : {}) }
+}
 
 /**
  * The course of an arrow between two boxes: a straight line edge to edge, a curve bowing to the
- * left of the way it goes, or right angles from the sides facing each other. `mid` is where its
- * label sits.
+ * left of the way it goes, or right angles (elbowRoute). `sides` puts its ends on given sides
+ * (else: edge to edge for lines and curves, the facing sides for right angles); `bend` moves a
+ * right-angled line's middle.
  */
-export function arrowRoute(a: Box, b: Box, path: 'straight' | 'curved' | 'elbow' = 'straight'): ArrowRoute {
+export function arrowRoute(a: Box, b: Box, path: 'straight' | 'curved' | 'elbow' = 'straight', options: { from?: Side; to?: Side; bend?: number } = {}): ArrowRoute {
   const ca = middle(a)
   const cb = middle(b)
   if (path === 'elbow') {
-    const dx = cb.x - ca.x
-    const dy = cb.y - ca.y
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      const s = { x: dx > 0 ? a.x + a.w : a.x, y: ca.y }
-      const e = { x: dx > 0 ? b.x : b.x + b.w, y: cb.y }
-      const mx = (s.x + e.x) / 2
-      return { kind: 'elbow', points: [s, { x: mx, y: s.y }, { x: mx, y: e.y }, e], mid: { x: mx, y: (s.y + e.y) / 2 } }
-    }
-    const s = { x: ca.x, y: dy > 0 ? a.y + a.h : a.y }
-    const e = { x: cb.x, y: dy > 0 ? b.y : b.y + b.h }
-    const my = (s.y + e.y) / 2
-    return { kind: 'elbow', points: [s, { x: s.x, y: my }, { x: e.x, y: my }, e], mid: { x: (s.x + e.x) / 2, y: my } }
+    const [fa, fb] = facingSides(turnedBounds(a), turnedBounds(b))
+    return elbowRoute(a, b, options.from ?? fa, options.to ?? fb, options.bend ?? 0)
   }
   if (path === 'curved') {
     const length = Math.hypot(cb.x - ca.x, cb.y - ca.y) || 1
@@ -393,12 +508,12 @@ export function arrowRoute(a: Box, b: Box, path: 'straight' | 'curved' | 'elbow'
     const normal = { x: (cb.y - ca.y) / length, y: (ca.x - cb.x) / length }
     const bend = length * 0.25
     const c = { x: (ca.x + cb.x) / 2 + normal.x * bend, y: (ca.y + cb.y) / 2 + normal.y * bend }
-    const s = edgePoint(a, c)
-    const e = edgePoint(b, c)
+    const s = options.from ? sidePoint(a, options.from) : edgePoint(a, c)
+    const e = options.to ? sidePoint(b, options.to) : edgePoint(b, c)
     return { kind: 'curve', points: [s, c, e], mid: { x: 0.25 * s.x + 0.5 * c.x + 0.25 * e.x, y: 0.25 * s.y + 0.5 * c.y + 0.25 * e.y } }
   }
-  const s = edgePoint(a, cb)
-  const e = edgePoint(b, ca)
+  const s = options.from ? sidePoint(a, options.from) : edgePoint(a, options.to ? sidePoint(b, options.to) : cb)
+  const e = options.to ? sidePoint(b, options.to) : edgePoint(b, options.from ? s : ca)
   return { kind: 'line', points: [s, e], mid: { x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 } }
 }
 

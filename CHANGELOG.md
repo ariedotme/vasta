@@ -42,6 +42,11 @@ GitHub release page.
 - **Lasso, turning and scaling on whiteboards.** The lasso tool (**Q**) selects what a loop
   encloses; a knob above a selected element turns it (snapping upright and to 45°, Shift in steps
   of 15°); several selected elements scale together by the corner of their box.
+- **Better connectors on whiteboards.** Arrows at right angles route around elements (a U when
+  both ends leave the same way, around the boxes when they face away), and a handle moves their
+  middle segment. Each end can have an arrowhead, a dot or nothing, in three sizes; lines can be
+  dotted, thin or thick, and leave from or arrive at a chosen side (let go on a side's dot while
+  connecting).
 - **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
   properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
 
