@@ -15,6 +15,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import {
   BOARD_FIELD,
   addBoardElements,
+  lineBetween,
+  lineEnds,
+  type LineElement,
   boardToMermaid,
   layoutBoardElements,
   type Direction,
@@ -284,6 +287,8 @@ const preview = reactive<{
   resize: { id: Id; w: number; h: number; x?: number; y?: number } | null
   rotate: { id: Id; deg: number } | null
   bend: { id: Id; value: number } | null
+  /** A loose arrow whose end is being dragged: its ends now. */
+  line: { id: Id; start: Point; end: Point } | null
   scale: { ids: Set<Id>; from: Box; kx: number; ky: number } | null
   textH: Record<Id, number>
   erasing: Set<Id>
@@ -295,6 +300,7 @@ const preview = reactive<{
   resize: null,
   rotate: null,
   bend: null,
+  line: null,
   scale: null,
   textH: {},
   erasing: new Set(),
@@ -313,6 +319,10 @@ function box(element: PlacedElement): Box {
       // Turned with the element it is drawn on, around that one's middle.
       return p.r ? { ...b, r: p.r, o: { x: p.x + p.w / 2 - b.x, y: p.y + p.h / 2 - b.y } } : b
     }
+  }
+  if (element.kind === 'line' && preview.line?.id === element.id) {
+    const { x, y, w, h } = lineBetween(preview.line.start, preview.line.end)
+    return { x, y, w, h }
   }
   const moving = preview.moving.has(element.id)
   const resized = preview.resize?.id === element.id ? preview.resize : null
@@ -344,7 +354,8 @@ const shown = computed(() => {
   for (const e of placed.value) if (isAttached(e)) children.set(e.parent, [...(children.get(e.parent) ?? []), e])
   const ordered: PlacedElement[] = []
   for (const e of placed.value) if (!isAttached(e)) ordered.push(e, ...(children.get(e.id) ?? []))
-  return ordered.map((element, index) => ({ element, index, box: box(element) })).filter(({ element, box }) => selection.value.has(element.id) || inView(box))
+  const reshaped = (e: PlacedElement): PlacedElement => (e.kind === 'line' && preview.line?.id === e.id ? { ...e, ...lineBetween(preview.line.start, preview.line.end) } : e)
+  return ordered.map((element, index) => ({ element: reshaped(element), index, box: box(element) })).filter(({ element, box }) => selection.value.has(element.id) || inView(box))
 })
 /** The box of the element a stroke is drawn on, relative to the stroke's own box (to clip to it). */
 function clipOf(element: PlacedElement, b: Box) {
@@ -451,6 +462,10 @@ type Gesture =
   /** `over`: the element under the pointer, whose sides are offered to drop the end on. */
   | { kind: 'connect'; from: Id; end: Point; over?: Id }
   | { kind: 'bend'; id: Id; axis: 'x' | 'y'; start: Point; from: number }
+  /** Drawing a loose arrow from a point of the board. */
+  | { kind: 'line'; start: Point; end: Point }
+  /** Dragging one end of a loose arrow. */
+  | { kind: 'lineEnd'; id: Id; which: 'start' | 'end'; fixed: Point }
   | { kind: 'create'; what: 'shape' | 'sticky' | 'frame'; start: Point; end: Point }
   | { kind: 'draw'; points: number[]; pressure: boolean; smooth: number; continues?: Id }
   | { kind: 'erase' }
@@ -477,6 +492,7 @@ function cancelGesture() {
   preview.resize = null
   preview.rotate = null
   preview.bend = null
+  preview.line = null
   preview.scale = null
   preview.erasing = new Set()
   preview.guides = []
@@ -579,7 +595,8 @@ function onPointerDown(event: PointerEvent) {
   }
   // With a pen drawing, fingers navigate: they pan, a tap selects, and they move only what is
   // already selected (so a finger meant to move the view never drags a card along).
-  if (isTouch && pencilOnly.value && !handle) {
+  // Tools that make something (text, notes, shapes, frames, arrows, the lasso) still work with a finger.
+  if (isTouch && pencilOnly.value && !handle && (tool.value === 'select' || tool.value === 'hand' || drawing.value)) {
     const select_ = tool.value === 'select' || tool.value === 'hand'
     if (elementId && select_ && selection.value.has(elementId)) return startMove(world, p)
     gesture.value = { ...pan(p), ...(elementId && select_ ? { tap: elementId } : {}) }
@@ -588,6 +605,14 @@ function onPointerDown(event: PointerEvent) {
   // The pen draws whatever the tool, unless it is on a handle or a tool that makes things.
   const penDraws = event.pointerType === 'pen' && pencilOnly.value && !handle && (tool.value === 'select' || tool.value === 'hand')
   if (handle === 'scale') return startScale(world)
+  if ((handle === 'line-start' || handle === 'line-end') && elementId) {
+    const line = byId.value.get(elementId)
+    if (line?.kind !== 'line') return
+    const ends = lineEnds(line)
+    gesture.value = { kind: 'lineEnd', id: line.id, which: handle === 'line-start' ? 'start' : 'end', fixed: handle === 'line-start' ? ends.end : ends.start }
+    preview.line = { id: line.id, ...ends }
+    return
+  }
   if (handle === 'bend') {
     const id = arrowAt(event.target)
     const arrow = id ? byId.value.get(id) : undefined
@@ -629,11 +654,20 @@ function onPointerDown(event: PointerEvent) {
     return
   }
   if (tool.value === 'eraser') return startErase(event)
-  if (tool.value === 'arrow' && elementId) {
+  if (tool.value === 'arrow' && elementId && byId.value.get(elementId)?.kind !== 'line') {
     gesture.value = { kind: 'connect', from: elementId, end: world }
     return
   }
+  // From empty space the arrow tool draws a loose arrow, between two points.
+  if (tool.value === 'arrow') {
+    select([])
+    gesture.value = { kind: 'line', start: world, end: world }
+    return
+  }
   if (tool.value === 'text' && !elementId) {
+    // Without this the click's own focus (the board's) lands after the new text's editor got it,
+    // and the empty text is closed and removed at once.
+    event.preventDefault()
     addText(world)
     tool.value = 'select'
     return
@@ -778,6 +812,10 @@ function onPointerMove(event: PointerEvent) {
   } else if (g.kind === 'connect') {
     const over = elementAt(document.elementFromPoint(event.clientX, event.clientY))
     gesture.value = { ...g, end: world, over: over && over !== g.from && byId.value.has(over) ? over : undefined }
+  } else if (g.kind === 'line') {
+    gesture.value = { ...g, end: world }
+  } else if (g.kind === 'lineEnd') {
+    preview.line = g.which === 'start' ? { id: g.id, start: world, end: g.fixed } : { id: g.id, start: g.fixed, end: world }
   } else if (g.kind === 'bend') {
     preview.bend = { id: g.id, value: Math.round(g.from + (g.axis === 'x' ? world.x - g.start.x : world.y - g.start.y)) }
   } else if (g.kind === 'create') {
@@ -843,6 +881,12 @@ function onPointerUp(event: PointerEvent) {
   } else if (g.kind === 'resize' && preview.resize) {
     const { w, h, x, y } = preview.resize
     update({ [g.id]: { w, h, ...(x !== undefined && y !== undefined ? { x, y } : {}) } })
+  } else if (g.kind === 'line') {
+    // A click without a drag makes nothing.
+    if (Math.hypot(g.end.x - g.start.x, g.end.y - g.start.y) * camera.zoom > 8) select(add([newLine(g.start, g.end)]))
+    if (!stays(tool.value)) tool.value = 'select'
+  } else if (g.kind === 'lineEnd' && preview.line) {
+    update({ [g.id]: lineBetween(preview.line.start, preview.line.end) })
   } else if (g.kind === 'bend' && preview.bend) {
     update({ [g.id]: { bend: preview.bend.value || undefined } })
   } else if (g.kind === 'rotate' && preview.rotate) {
@@ -968,6 +1012,14 @@ const newShape = () => {
   return { shape: kind, ...defined(look) }
 }
 const newSticky = () => defined({ ...toolSettings.sticky })
+/** A loose arrow between two points, with the arrow tool's look. */
+function newLine(start: Point, end: Point): NewBoardElement {
+  const { start: startTip, end: endTip, path, dash, width, color } = toolSettings.arrow
+  return {
+    kind: 'line',
+    ...defined({ ...lineBetween(start, end), path, dash, width, color, startTip: startTip === 'none' ? undefined : startTip, endTip: endTip === 'arrow' ? undefined : endTip }),
+  } as NewBoardElement
+}
 function newArrow(from: Id, to: Id): NewBoardElement {
   const { start, end, path, dash, width, color } = toolSettings.arrow
   return { kind: 'arrow', from, to, ...defined({ path, width, color, ...arrowTipsPatch(start, end), ...arrowDashPatch(dash) }) } as NewBoardElement
@@ -1382,7 +1434,20 @@ function linkMenu(event: MouseEvent) {
 
 function setArrowStyle(patch: BoardPatch) {
   const patches: Record<Id, BoardPatch> = {}
-  for (const element of selected.value) if (element.kind === 'arrow') patches[element.id] = patch
+  for (const element of selected.value) {
+    if (element.kind === 'arrow') patches[element.id] = patch
+    // A loose arrow has its tips but no heads (an older field), sides or bend.
+    else if (element.kind === 'line') {
+      const { heads: _heads, dashed: _dashed, fromSide: _from, toSide: _to, bend: _bend, ...own } = patch
+      if ('startTip' in patch || 'endTip' in patch) {
+        const tips = arrowTips({ ...element, ...own })
+        Object.assign(own, { startTip: tips.start === 'none' ? undefined : tips.start, endTip: tips.end === 'arrow' ? undefined : tips.end })
+      }
+      // Its pattern is `dash` alone (no older `dashed` to keep up).
+      if ('dash' in patch || 'dashed' in patch) own.dash = patch.dash ?? (patch.dashed ? 'dashed' : undefined)
+      if (Object.keys(own).length) patches[element.id] = own
+    }
+  }
   update(patches)
 }
 
@@ -1604,6 +1669,13 @@ const selectedOne = computed(() => {
   return element && isPlaced(element) ? element : undefined
 })
 
+/** A selected loose arrow's ends (as being dragged), for its handles. */
+const lineHandles = computed(() => {
+  const line = selectedOne.value
+  if (line?.kind !== 'line') return null
+  const shownLine = shown.value.find((s) => s.element.id === line.id)?.element
+  return { id: line.id, ends: lineEnds((shownLine?.kind === 'line' ? shownLine : line) as LineElement) }
+})
 /** Several placed elements selected: the box around them (where the scale handle goes). */
 const selectionBox = computed(() => {
   if (quiet.value && gesture.value?.kind !== 'scale') return null
@@ -1667,6 +1739,10 @@ const marquee = computed(() => {
 })
 const connecting = computed(() => {
   const g = gesture.value
+  if (g?.kind === 'line') {
+    const { points, marks } = arrowTipMarks([toScreen(g.start.x, g.start.y), toScreen(g.end.x, g.end.y)], { start: toolSettings.arrow.start, end: toolSettings.arrow.end }, stroke.value)
+    return { s: points[0]!, e: points[1]!, marks, sides: [] as Point[] }
+  }
   if (g?.kind !== 'connect') return null
   const from = byId.value.get(g.from)
   if (!from || !isPlaced(from)) return null
@@ -1799,7 +1875,7 @@ const cursor = computed(() => {
       <!-- Handles of the one selected element: drag the dot to draw an arrow, the corner to resize,
            the knob above to turn it. They turn with the element. -->
       <div
-        v-if="selectedOne && !readonly && editing !== selectedOne.id && !isAttached(selectedOne)"
+        v-if="selectedOne && !readonly && editing !== selectedOne.id && !isAttached(selectedOne) && selectedOne.kind !== 'line'"
         class="pointer-events-none absolute"
         :style="{
           left: `${box(selectedOne).x}px`,
@@ -1834,6 +1910,18 @@ const cursor = computed(() => {
           />
         </template>
       </div>
+
+      <!-- A loose arrow: a handle on each end -->
+      <template v-if="lineHandles && !readonly">
+        <div
+          v-for="(p, which) in lineHandles.ends"
+          :key="which"
+          :data-element="lineHandles.id"
+          :data-handle="`line-${which}`"
+          class="absolute rounded-full border-accent bg-surface"
+          :style="{ left: `${p.x}px`, top: `${p.y}px`, width: `${12 / camera.zoom}px`, height: `${12 / camera.zoom}px`, borderWidth: `${2 / camera.zoom}px`, transform: 'translate(-50%, -50%)', zIndex: placed.length + 2, cursor: 'move' }"
+        />
+      </template>
 
       <!-- Several selected: their box, and its corner to scale them together -->
       <template v-if="selectionBox && !readonly">

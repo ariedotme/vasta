@@ -2,7 +2,7 @@
 // arrows and their tips), in the light theme's colors so it reads anywhere; a PNG is that SVG
 // rasterized. Cards show their object's title and type, text wraps by an estimate of its width
 // (an SVG has no text layout, and a foreignObject would keep a PNG from being made in Safari).
-import { arrowTips, attachedTo, isAttached, isPlaced, lineDash, type BoardElement, type PlacedElement } from '@vasta/core'
+import { arrowTips, attachedTo, isAttached, isPlaced, lineDash, lineEnds, type BoardElement, type PlacedElement } from '@vasta/core'
 import {
   BOARD_COLORS,
   STICKY_INK,
@@ -11,6 +11,7 @@ import {
   centerlinePath,
   dashArray,
   hasPressure,
+  lineRoute,
   pointsPath,
   shapePath,
   stickyColor,
@@ -115,6 +116,19 @@ export function boardSvg(elements: BoardElement[], options: ExportOptions): { sv
         return at(
           `<path d="${shapePath(e.shape, b.w, b.h, outline)}" fill="${fill}" stroke="${color(e.color)}" stroke-width="${outline}" stroke-linejoin="round"${e.dash ? ` stroke-dasharray="${dashArray(e.dash, outline)}"` : ''} />` +
             textBlock(lines, b.w / 2, b.h / 2 - ((lines.length - 1) * 15 * 1.3) / 2 + 5, 15, ink, 'middle')
+        )
+      }
+      case 'line': {
+        // A loose arrow: from its start to its end, drawn on the board (not in its box).
+        const ends = lineEnds({ ...e, x: b.x, y: b.y, w: b.w, h: b.h })
+        const route = lineRoute(ends.start, ends.end, e.path)
+        const width = e.width ?? 1.75
+        const { points, marks } = arrowTipMarks(route.points, arrowTips(e), width, e.tipSize ?? 'md')
+        const ink = color(e.color, INK_SOFT)
+        const dash = dashArray(e.dash, width)
+        return (
+          `<path d="${pointsPath(route.kind, points)}" fill="none" stroke="${ink}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"${dash ? ` stroke-dasharray="${dash}"` : ''} />` +
+          marks.map((m) => `<path d="${m.d}" fill="${ink}" stroke="${ink}" stroke-width="${m.kind === 'arrow' ? width * 0.6 : 0}" stroke-linejoin="round" />`).join('')
         )
       }
       case 'stroke': {

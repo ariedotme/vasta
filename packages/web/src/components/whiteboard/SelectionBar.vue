@@ -29,8 +29,10 @@ const emit = defineEmits<{
 }>()
 
 const open = ref<'color' | 'shape' | 'view' | 'arrow' | 'style' | null>(null)
-const arrows = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'arrow'))
-const firstArrow = computed(() => (arrows.value ? (props.elements[0] as ArrowElement) : undefined))
+/** Arrows, and loose arrows (lines between points: their look, no sides). */
+const arrows = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'arrow' || e.kind === 'line'))
+const joined = computed(() => props.elements.some((e) => e.kind === 'arrow'))
+const firstArrow = computed(() => (arrows.value ? (props.elements[0] as Partial<ArrowElement>) : undefined))
 const tips = computed(() => arrowTips(firstArrow.value ?? {}))
 const TIP_ICONS: Record<ArrowTip, string> = { arrow: 'ph:caret-right-fill', dot: 'ph:circle-fill', none: 'ph:minus' }
 const TIP_LABELS: Record<ArrowTip, string> = { arrow: 'Arrow', dot: 'Dot', none: 'Nothing' }
@@ -165,7 +167,7 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
       </div>
     </div>
     <button
-      v-if="single && single.kind !== 'arrow' && single.kind !== 'stroke' && single.kind !== 'text'"
+      v-if="single && single.kind !== 'arrow' && single.kind !== 'stroke' && single.kind !== 'text' && single.kind !== 'line'"
       :class="button"
       title="Draw on it: the strokes move and resize with it"
       aria-label="Draw on it"
@@ -238,7 +240,7 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
         <div class="flex gap-1">
           <button v-for="w in WIDTHS" :key="w.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstArrow?.width === w.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('arrowStyle', { width: w.id })">{{ w.label }}</button>
         </div>
-        <div v-for="end in ['fromSide', 'toSide'] as const" :key="end" class="flex items-center gap-1">
+        <div v-for="end in joined ? (['fromSide', 'toSide'] as const) : []" :key="end" class="flex items-center gap-1">
           <span class="w-12 shrink-0 text-ink-soft">{{ end === 'fromSide' ? 'Leaves' : 'Arrives' }}</span>
           <select
             class="h-7 min-w-0 flex-1 rounded-md bg-hover px-1.5 text-ink outline-none"

@@ -517,6 +517,26 @@ export function arrowRoute(a: Box, b: Box, path: 'straight' | 'curved' | 'elbow'
   return { kind: 'line', points: [s, e], mid: { x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 } }
 }
 
+/**
+ * A loose arrow's course between two points: straight, a curve bowing to the left of the way it
+ * goes, or right angles (across first when it is wider than tall, else down first, turning halfway).
+ */
+export function lineRoute(s: Point, e: Point, path: 'straight' | 'curved' | 'elbow' = 'straight'): ArrowRoute {
+  if (path === 'curved') {
+    const length = Math.hypot(e.x - s.x, e.y - s.y) || 1
+    const normal = { x: (e.y - s.y) / length, y: (s.x - e.x) / length }
+    const c = { x: (s.x + e.x) / 2 + normal.x * length * 0.25, y: (s.y + e.y) / 2 + normal.y * length * 0.25 }
+    return { kind: 'curve', points: [s, c, e], mid: { x: 0.25 * s.x + 0.5 * c.x + 0.25 * e.x, y: 0.25 * s.y + 0.5 * c.y + 0.25 * e.y } }
+  }
+  if (path === 'elbow') {
+    const across = Math.abs(e.x - s.x) >= Math.abs(e.y - s.y)
+    const m = across ? (s.x + e.x) / 2 : (s.y + e.y) / 2
+    const points = tidy(across ? [s, { x: m, y: s.y }, { x: m, y: e.y }, e] : [s, { x: s.x, y: m }, { x: e.x, y: m }, e])
+    return { kind: 'elbow', points, mid: { x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 } }
+  }
+  return { kind: 'line', points: [s, e], mid: { x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 } }
+}
+
 /** An arrow's course as SVG path data, its points mapped (to the screen) first. */
 export function routePath(route: ArrowRoute, map: (p: Point) => Point = (p) => p): string {
   return pointsPath(route.kind, route.points.map(map))

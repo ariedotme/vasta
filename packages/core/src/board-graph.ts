@@ -302,7 +302,7 @@ export function layoutBoardElements(
   direction: Direction | 'grid' = 'down',
   at?: { x: number; y: number }
 ): Record<Id, { x: number; y: number; w?: number; h?: number }> {
-  const nodes = elements.filter((e): e is PlacedElement => isPlaced(e) && !isAttached(e) && e.kind !== 'frame' && e.kind !== 'stroke')
+  const nodes = elements.filter((e): e is PlacedElement => isPlaced(e) && !isAttached(e) && e.kind !== 'frame' && e.kind !== 'stroke' && e.kind !== 'line')
   if (!nodes.length) return {}
 
   const frames = elements.filter((e): e is FrameElement => e.kind === 'frame')
@@ -614,7 +614,7 @@ export function boardToMermaid(
   objectTitle: (id: Id) => string | undefined = () => undefined,
   direction?: Direction
 ): string {
-  const nodes = elements.filter((e): e is PlacedElement => isPlaced(e) && !isAttached(e) && e.kind !== 'frame' && e.kind !== 'stroke')
+  const nodes = elements.filter((e): e is PlacedElement => isPlaced(e) && !isAttached(e) && e.kind !== 'frame' && e.kind !== 'stroke' && e.kind !== 'line')
   const frames = elements.filter((e): e is FrameElement => e.kind === 'frame')
   const arrows = elements.filter((e): e is Extract<BoardElement, { kind: 'arrow' }> => e.kind === 'arrow')
 
@@ -743,14 +743,15 @@ const round = (n: number) => Math.round(n)
 
 /**
  * A board as a JSON Canvas: cards as text nodes with a link to the object, texts, shapes and notes
- * as text nodes, frames as groups, arrows as edges. Pen strokes have no place in the format and
- * are left out.
+ * as text nodes, frames as groups, arrows as edges. Pen strokes and loose arrows have no place in
+ * the format and are left out.
  */
 export function boardToJsonCanvas(elements: BoardElement[], object: (id: Id) => { title: string; url: string } | undefined): JsonCanvas {
   const nodes: JsonCanvasNode[] = []
   const kept = new Set<Id>()
   for (const e of elements) {
-    if (!isPlaced(e) || e.kind === 'stroke') continue
+    // Pen strokes and loose arrows (lines between points) have no node in the format.
+    if (!isPlaced(e) || e.kind === 'stroke' || e.kind === 'line') continue
     const base = { id: e.id, x: round(e.x), y: round(e.y), width: round(e.w), height: round(e.h), ...(e.color && PRESET_OF[e.color] ? { color: PRESET_OF[e.color] } : {}) }
     if (e.kind === 'frame') nodes.push({ ...base, type: 'group', ...(e.title ? { label: e.title } : {}) })
     else if (e.kind === 'card') {

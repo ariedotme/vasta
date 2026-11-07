@@ -44,7 +44,10 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 - **An arrow let go over empty space** offers what to put there, joined to where it started: a
   sticky note, a text, a shape (typed into right away) or an object (the object picker).
 - **Arrows**: select an element and drag the dot on its right edge to another element, or pick
-  the arrow tool (**L**) and drag from one element to another. While you drag, the element under
+  the arrow tool (**L**) and drag from one element to another. Dragged from empty space, the
+  arrow tool draws a **loose arrow** between two points instead: it has an arrow's look (course,
+  ends, line, width, color; no label or sides), a handle on each end to move it, and moves, scales
+  and copies like any element (stored as a `line` element: a box from end to end). While you drag, the element under
   the pointer shows a dot on each side: let go on one and the arrow keeps arriving at that side.
   New arrows take the arrow tool's settings (course, ends, line, width, color). Double-click an
   arrow (or select it and press Enter) to give it a label.
@@ -161,6 +164,7 @@ writes it.
 | `shape`  | `shape` (rectangle, ellipse, diamond, triangle, parallelogram, star, heart; anything else reads as a rectangle), `text`, `fill` (optional: `none`, `white`, `solid`; a tint when left out), `border` (optional: the outline's width), `dash` (optional: `dashed`, `dotted`) |
 | `sticky` | `text`, `fontSize` (optional: `sm`, `lg`, `xl`; medium when left out) |
 | `stroke` | `points` (x, y, pressure in turn, relative to the box's corner, simplified), `size`, `sw`, `sh` (the box the points were drawn in, so a resized stroke scales them), `highlight` (optional), `dash` (optional: a pen line drawn `dashed` or `dotted`), `parent` (optional: the element it is drawn on; then `x`, `y`, `w`, `h` are fractions of that element's box) |
+| `line`   | a loose arrow: its box runs from its start (top left) to its end (bottom right) unless `flipX` / `flipY` (optional) swap them; `path`, `startTip`, `endTip`, `width`, `tipSize`, `dash` as for arrows (all optional) |
 | `frame`  | `title` (optional), `cover` (optional: the board's default scene; one frame at most) |
 | `arrow`  | `from`, `to` (element ids), `label` (optional), `color` (optional), `relation` (optional: the relation property of the "from" card's object it wrote the "to" object into), `mentioned` (optional: the "to" object was mentioned in the "from" object's text), `path` (`curved`, `elbow`; straight when left out), `heads` (`both`, `none`; the end when left out), `dashed`, `rank`; and, all optional: `startTip`, `endTip` (`arrow`, `dot`, `none`; they win over `heads`), `fromSide`, `toSide` (`top`, `right`, `bottom`, `left`; the facing sides when left out), `bend` (how far a right-angled line's middle segment moved), `width`, `tipSize` (`sm`, `lg`), `dash` (`dotted`, `dashed`; wins over `dashed`) |
 

@@ -9,7 +9,9 @@ import {
   arrowTipsPatch,
   boardContent,
   coverFrame,
+  lineBetween,
   lineDash,
+  lineEnds,
   setCover,
   bringToFront,
   copyElements,
@@ -333,5 +335,16 @@ describe('board styles', () => {
     setCover(doc, null)
     expect(coverFrame(readBoard(doc))).toBeUndefined()
     expect(f1).toBeDefined()
+  })
+})
+
+describe('loose arrows', () => {
+  it('keeps its ends through its box and flips, and has no text in the derived content', () => {
+    const doc = new Y.Doc()
+    const [id] = addBoardElements(doc, [{ kind: 'line', ...lineBetween({ x: 300, y: 50 }, { x: 100, y: 250 }), startTip: 'dot', dash: 'dashed' }])
+    const line = readBoard(doc).find((e) => e.id === id)!
+    expect(line).toMatchObject({ kind: 'line', x: 100, y: 50, w: 200, h: 200, flipX: true, startTip: 'dot', dash: 'dashed' })
+    expect(lineEnds(line as never)).toEqual({ start: { x: 300, y: 50 }, end: { x: 100, y: 250 } })
+    expect(boardContent(readBoard(doc))).toBeUndefined()
   })
 })

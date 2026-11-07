@@ -114,6 +114,43 @@ export interface FrameElement extends Placed {
   cover?: boolean
 }
 
+/**
+ * A loose arrow: a line between two points of the board, not joined to elements. Its box runs from
+ * one end to the other: the start is the box's top left corner and the end its bottom right,
+ * unless `flipX` / `flipY` swap them. Being placed, it moves, scales, copies and goes with a frame
+ * like any element. It takes an arrow's look (tips, pattern, width, course) but no label.
+ */
+export interface LineElement extends Placed {
+  kind: 'line'
+  flipX?: boolean
+  flipY?: boolean
+  path?: ArrowPath
+  startTip?: ArrowTip
+  endTip?: ArrowTip
+  width?: number
+  tipSize?: TipSize
+  dash?: Dash
+}
+
+/** A loose arrow's ends on the board. */
+export function lineEnds(line: Pick<LineElement, 'x' | 'y' | 'w' | 'h' | 'flipX' | 'flipY'>): { start: { x: number; y: number }; end: { x: number; y: number } } {
+  const [x1, x2] = line.flipX ? [line.x + line.w, line.x] : [line.x, line.x + line.w]
+  const [y1, y2] = line.flipY ? [line.y + line.h, line.y] : [line.y, line.y + line.h]
+  return { start: { x: x1, y: y1 }, end: { x: x2, y: y2 } }
+}
+
+/** The box and flips of a loose arrow between two points. */
+export function lineBetween(start: { x: number; y: number }, end: { x: number; y: number }) {
+  return {
+    x: Math.round(Math.min(start.x, end.x)),
+    y: Math.round(Math.min(start.y, end.y)),
+    w: Math.round(Math.abs(end.x - start.x)),
+    h: Math.round(Math.abs(end.y - start.y)),
+    flipX: end.x < start.x ? true : undefined,
+    flipY: end.y < start.y ? true : undefined,
+  }
+}
+
 /** A line from one element to another, drawn from edge to edge; the label is optional. */
 export interface ArrowElement {
   id: Id
@@ -184,7 +221,7 @@ export const lineDash = (element: { dash?: Dash; dashed?: boolean }): Dash | und
 /** The fields that give an arrow this pattern (a dotted one is dashed on older devices). */
 export const arrowDashPatch = (dash: Dash | undefined): BoardPatch => ({ dash: dash === 'dotted' ? 'dotted' : undefined, dashed: dash ? true : undefined })
 
-export type PlacedElement = CardElement | TextElement | ShapeElement | StickyElement | StrokeElement | FrameElement
+export type PlacedElement = CardElement | TextElement | ShapeElement | StickyElement | StrokeElement | FrameElement | LineElement
 export type BoardElement = PlacedElement | ArrowElement
 
 type Distribute<T> = T extends unknown ? Omit<T, 'id' | 'rank'> & { id?: Id } : never
@@ -205,6 +242,7 @@ const FIELDS: Record<BoardElement['kind'], Record<string, Shape>> = {
   sticky: { ...PLACED, text: 'string', fontSize: 'optional-string' },
   stroke: { ...PLACED, points: 'numbers', size: 'number', sw: 'number', sh: 'number', highlight: 'optional-boolean', parent: 'optional-string', dash: 'optional-string' },
   frame: { ...PLACED, title: 'optional-string', cover: 'optional-boolean' },
+  line: { ...PLACED, flipX: 'optional-boolean', flipY: 'optional-boolean', path: 'optional-string', startTip: 'optional-string', endTip: 'optional-string', width: 'optional-number', tipSize: 'optional-string', dash: 'optional-string' },
   arrow: {
     rank: 'string', from: 'string', to: 'string', label: 'optional-string', color: 'optional-string', relation: 'optional-string', path: 'optional-string', heads: 'optional-string', dashed: 'optional-boolean', mentioned: 'optional-boolean',
     startTip: 'optional-string', endTip: 'optional-string', fromSide: 'optional-string', toSide: 'optional-string', bend: 'optional-number', width: 'optional-number', tipSize: 'optional-string', dash: 'optional-string',
@@ -419,7 +457,7 @@ export function boardContent(elements: BoardElement[]): Doc | undefined {
   const listed = new Set<Id>()
   const blocks = (list: PlacedElement[]) => {
     for (const element of readingOrder(list)) {
-      if (listed.has(element.id) || element.kind === 'frame' || element.kind === 'stroke') continue
+      if (listed.has(element.id) || element.kind === 'frame' || element.kind === 'stroke' || element.kind === 'line') continue
       listed.add(element.id)
       if (element.kind === 'card') content.push({ type: 'objectEmbed', attrs: { objectId: element.objectId, display: 'card', blockId: null } })
       else content.push(...textToBlocks(element.text))

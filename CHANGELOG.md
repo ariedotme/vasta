@@ -6,6 +6,24 @@ GitHub release page.
 
 ## Unreleased
 
+A hotfix for [0.7.0](https://github.com/ariedotme/vasta/releases/tag/v0.7.0).
+
+### Added
+
+- **Loose arrows on whiteboards.** The arrow tool dragged from empty space draws an arrow
+  between two points, not joined to elements (from an element it still connects two elements).
+  It takes the arrow tool's look, changes like any arrow in the selection bar (course, ends,
+  line, width, color), moves, scales and copies like other elements, and each end has a handle
+  to drag it.
+
+### Fixed
+
+- The text tool did nothing: a click on the board opened a text that closed (and went away)
+  at once.
+- On an iPad once the Pencil had been used, a finger with the text, sticky note, shape, frame,
+  arrow or lasso tool only moved the view; those tools work with a finger again (with select,
+  hand, pen and eraser a finger still moves the view).
+
 ## 0.7.0 (2026-11-07)
 
 ### Added

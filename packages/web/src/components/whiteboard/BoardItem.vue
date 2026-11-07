@@ -3,8 +3,8 @@
 // Text of text, shapes and notes is edited in place: the canvas says which one is being edited
 // and holds the draft.
 import { computed } from 'vue'
-import type { ObjectSummary, ObjectType, PlacedElement } from '@vasta/core'
-import { STICKY_INK, centerlinePath, dashArray, fillColor, hasPressure, shapePath, stickyColor, strokeColor, strokePath } from '../../lib/whiteboard.ts'
+import { arrowTips, type ObjectSummary, type ObjectType, type PlacedElement } from '@vasta/core'
+import { BOARD_COLORS, STICKY_INK, arrowTipMarks, lineRoute, pointsPath, centerlinePath, dashArray, fillColor, hasPressure, shapePath, stickyColor, strokeColor, strokePath } from '../../lib/whiteboard.ts'
 import ObjectCard from '../ObjectCard.vue'
 import AppIcon from '../AppIcon.vue'
 import BoardCardEmbed from './BoardCardEmbed.vue'
@@ -40,7 +40,22 @@ const path = computed(() => {
   return ''
 })
 /** A stroke is hit only on its ink, not on the empty part of its box. */
-const passThrough = computed(() => e.value.kind === 'stroke' || e.value.kind === 'frame')
+const passThrough = computed(() => e.value.kind === 'stroke' || e.value.kind === 'frame' || e.value.kind === 'line')
+/** A loose arrow drawn in its box, from one corner to the other (as its flips say). */
+const loose = computed(() => {
+  const el = e.value
+  if (el.kind !== 'line') return null
+  const start = { x: el.flipX ? props.box.w : 0, y: el.flipY ? props.box.h : 0 }
+  const end = { x: el.flipX ? 0 : props.box.w, y: el.flipY ? 0 : props.box.h }
+  const route = lineRoute(start, end, el.path)
+  const width = el.width ?? 1.75
+  const { points, marks } = arrowTipMarks(route.points, arrowTips(el), width, el.tipSize ?? 'md')
+  const color = props.selected ? 'var(--color-accent)' : el.color ? BOARD_COLORS[el.color] : 'var(--color-ink-soft)'
+  // Room around the box: a curve bows out of it, and a flat line has none; the pointer only
+  // reaches what lies inside the svg.
+  const margin = Math.max(props.box.w, props.box.h) * 0.3 + 24 / props.zoom
+  return { hit: pointsPath(route.kind, route.points), d: pointsPath(route.kind, points), marks, width, color, dash: dashArray(el.dash, width), margin }
+})
 const edge = computed(() => `${10 / props.zoom}px`)
 const textClass = computed(() => {
   const kind = e.value.kind
@@ -115,6 +130,21 @@ function onInput(event: Event) {
       </template>
       <div v-if="!summary" class="grid h-full place-items-center rounded-xl border border-dashed border-line-strong bg-surface text-sm text-ink-faint">Loading…</div>
     </template>
+
+    <!-- Loose arrow: only its line takes the pointer -->
+    <svg
+      v-else-if="element.kind === 'line' && loose"
+      class="absolute overflow-visible"
+      :style="{ left: `${-loose.margin}px`, top: `${-loose.margin}px` }"
+      :width="box.w + loose.margin * 2"
+      :height="box.h + loose.margin * 2"
+    >
+      <g :transform="`translate(${loose.margin} ${loose.margin})`">
+      <path :d="loose.hit" :data-element="element.id" fill="none" stroke="transparent" :stroke-width="14 / zoom" style="pointer-events: stroke" />
+      <path :d="loose.d" fill="none" :stroke="loose.color" :stroke-width="loose.width" :stroke-dasharray="loose.dash" stroke-linecap="round" stroke-linejoin="round" />
+      <path v-for="(mark, i) in loose.marks" :key="i" :d="mark.d" :fill="loose.color" :stroke="loose.color" :stroke-width="mark.kind === 'arrow' ? loose.width * 0.6 : 0" stroke-linejoin="round" />
+      </g>
+    </svg>
 
     <!-- Pen stroke: only its ink takes the pointer -->
     <svg
@@ -204,7 +234,7 @@ function onInput(event: Event) {
     </template>
 
     <div
-      v-if="selected"
+      v-if="selected && element.kind !== 'line'"
       class="pointer-events-none absolute border-accent"
       :class="element.kind === 'card' ? 'rounded-[14px]' : 'rounded-md'"
       :style="{ inset: `${-4 / zoom}px`, borderWidth: `${2 / zoom}px` }"

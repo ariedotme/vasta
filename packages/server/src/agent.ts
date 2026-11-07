@@ -99,6 +99,7 @@ import {
   parseMermaidFlowchart,
   readBoard,
   lineDash,
+  lineEnds,
   removeBoardElements,
   sendToBack,
   setCover,
@@ -544,6 +545,19 @@ export class AgentTools {
         return { ...base, shape: element.shape, text: element.text, ...(element.fill ? { fill: element.fill } : {}), ...(element.border ? { border: element.border } : {}), ...(element.dash ? { dash: element.dash } : {}) }
       case 'frame':
         return { ...base, ...(element.title ? { title: element.title } : {}), ...(element.cover ? { cover: true } : {}) }
+      case 'line': {
+        // A loose arrow: its ends rather than its box.
+        const { start, end } = lineEnds(element)
+        const tips = arrowTips(element)
+        return {
+          id: element.id, kind: 'line', start, end,
+          ...(element.color ? { color: element.color } : {}),
+          ...(element.path ? { path: element.path } : {}),
+          ...(tips.start !== 'none' || tips.end !== 'arrow' ? { startTip: tips.start, endTip: tips.end } : {}),
+          ...(element.dash ? { dash: element.dash } : {}),
+          ...(element.width ? { width: element.width } : {}),
+        }
+      }
       case 'stroke':
         return { ...base, ...(element.parent ? { drawnOn: element.parent } : {}), ...(element.highlight ? { highlight: true } : {}), ...(element.dash ? { dash: element.dash } : {}) }
     }
