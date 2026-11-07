@@ -63,9 +63,13 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   nothing is in view, "Back to content" brings it back.
 - **Undo and redo**: ⌘Z and ⇧⌘Z (or ⌘Y), or tap with two fingers to undo and three to redo;
   they cover this device's changes on the board, not other people's.
-- **With a pen** (Apple Pencil and the like): once a pen has touched the board, fingers only move
-  and zoom the view, and touches are ignored while the pen is down, so a resting hand draws
-  nothing. The board cancels the Pencil's touches so iPadOS Scribble and text selection do
+- **With a pen** (Apple Pencil and the like): once a pen has touched the board, the pen draws
+  whatever the tool (with Select or Hand it draws with the pen's settings; on a handle it resizes or
+  connects), and fingers move and zoom the view: a tap selects, and a finger drags only what is
+  already selected. Touches are ignored while the pen is down, for a moment after it lifts, and
+  when as wide as a palm, so a resting hand does nothing. **Pen and fingers** in the board menu
+  changes this on each device: Auto (as above, from the first touch of a pen), Pen draws (the
+  same from the start) or Fingers draw (fingers draw with the pen tool, as before). The board cancels the Pencil's touches so iPadOS Scribble and text selection do
   not take them mid-line; if the system still breaks a line (a cancelled pointer, the pen lifted
   and put back within 180 ms where it left off), the line goes on as one stroke. Pressure readings
   are smoothed as they arrive, and a pen's points are only thinned by distance, so the width

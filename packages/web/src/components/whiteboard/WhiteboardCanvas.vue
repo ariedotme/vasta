@@ -6,8 +6,11 @@
 // arrows, guides, the marquee and the line being drawn are SVG in screen space, so that layer stays
 // the size of the view at any zoom.
 //
-// Pens: once a pen has touched the board, fingers only move the view (palm rejection) and a pen
-// down makes the board ignore touches; two fingers tapped undo, three redo.
+// Pens (the draw mode, kept on each device): in Auto, once a pen has touched the board it draws
+// whatever the tool (select and hand included), and fingers move the view, select with a tap and
+// move only what is already selected; in Pencil that holds from the start, in Touch fingers draw
+// too. A pen down, a touch the size of a palm, or one just after the pen lifted is ignored. Two
+// fingers tapped undo, three redo.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import {
   BOARD_FIELD,
@@ -350,8 +353,33 @@ const stopDrawingOn = () => {
   attach.value = null
   if (drawing.value) tool.value = 'select'
 }
-/** A pen touched the board: fingers now only move the view. */
+/** How fingers and a pen share the work (see the top of this file), kept on this device. */
+type DrawMode = 'auto' | 'pencil' | 'touch'
+const DRAW_MODE_KEY = 'vasta.board-draw-mode'
+const DRAW_MODES: { id: DrawMode; label: string; hint: string }[] = [
+  { id: 'auto', label: 'Auto', hint: 'Once a pen touches the board, the pen draws and fingers move the view' },
+  { id: 'pencil', label: 'Pen draws', hint: 'The pen draws with any tool; fingers move the view, select with a tap' },
+  { id: 'touch', label: 'Fingers draw', hint: 'Fingers draw with the pen tool, as a pen or mouse does' },
+]
+const drawMode = ref<DrawMode>(readDrawMode())
+function readDrawMode(): DrawMode {
+  try {
+    const saved = localStorage.getItem(DRAW_MODE_KEY)
+    return saved === 'pencil' || saved === 'touch' ? saved : 'auto'
+  } catch {
+    return 'auto'
+  }
+}
+watch(drawMode, (mode) => {
+  try {
+    localStorage.setItem(DRAW_MODE_KEY, mode)
+  } catch {}
+})
+/** A pen touched the board (in Auto, it then draws and fingers navigate). */
 const penSeen = ref(false)
+const pencilOnly = computed(() => drawMode.value === 'pencil' || (drawMode.value === 'auto' && penSeen.value))
+/** When the pen last lifted: a touch right after it is the hand landing, not a gesture. */
+let penUpAt = -Infinity
 const drawing = computed(() => tool.value === 'pen' || tool.value === 'highlighter' || tool.value === 'eraser')
 const stays = (t: Tool) => t === 'pen' || t === 'highlighter' || t === 'eraser' || t === 'hand'
 
@@ -359,7 +387,8 @@ const stays = (t: Tool) => t === 'pen' || t === 'highlighter' || t === 'eraser' 
 
 type Point = { x: number; y: number }
 type Gesture =
-  | { kind: 'pan'; sx: number; sy: number; x: number; y: number }
+  /** `tap`: a finger on an element not selected pans, and selects it if it does not move. */
+  | { kind: 'pan'; sx: number; sy: number; x: number; y: number; tap?: Id }
   | { kind: 'scroll'; el: HTMLElement; top: number; sy: number }
   | { kind: 'move'; start: Point; moved: boolean; sx: number; sy: number; from: Box | undefined; others: Box[] }
   | { kind: 'resize'; id: Id; start: Point; w: number; h: number; from: Box; others: Box[] }
@@ -415,8 +444,9 @@ function onPointerDown(event: PointerEvent) {
   if ((event.target as HTMLElement).closest('[data-ui]')) return
   if (editing.value && (event.target as HTMLElement).closest('textarea')) return
   const isTouch = event.pointerType === 'touch'
-  // Palm rejection: a hand resting on the screen while the pen writes.
-  if (isTouch && penDown) return
+  // Palm rejection: a hand resting on the screen while the pen writes, landing as it lifts, or a
+  // touch as wide as a palm.
+  if (isTouch && (penDown || event.timeStamp - penUpAt < 400 || event.width > 75 || event.height > 75)) return
   if (event.pointerType === 'pen') (penSeen.value = true), (penDown = true)
   root.value?.focus({ preventScroll: true })
   const p = local(event)
@@ -440,7 +470,7 @@ function onPointerDown(event: PointerEvent) {
   const world = toWorld(p.x, p.y)
   const elementId = elementAt(event.target)
   const handle = handleAt(event.target)
-  if (event.button === 1 || spaceHeld.value || tool.value === 'hand') return void (gesture.value = pan(p))
+  if (event.button === 1 || spaceHeld.value || (tool.value === 'hand' && event.pointerType !== 'pen')) return void (gesture.value = pan(p))
   // A pen's eraser end (or its eraser button).
   if (event.pointerType === 'pen' && (event.button === 5 || event.buttons & 32) && !props.readonly) return startErase(event)
   if ((event.button !== 0 && event.pointerType === 'mouse') || props.readonly) {
@@ -453,11 +483,16 @@ function onPointerDown(event: PointerEvent) {
     gesture.value = { kind: 'scroll', el: scroller, top: scroller.scrollTop, sy: p.y }
     return
   }
-  // With a pen around, fingers navigate.
-  if (isTouch && penSeen.value && !handle) {
-    gesture.value = pan(p)
+  // With a pen drawing, fingers navigate: they pan, a tap selects, and they move only what is
+  // already selected (so a finger meant to move the view never drags a card along).
+  if (isTouch && pencilOnly.value && !handle) {
+    const select_ = tool.value === 'select' || tool.value === 'hand'
+    if (elementId && select_ && selection.value.has(elementId)) return startMove(world, p)
+    gesture.value = { ...pan(p), ...(elementId && select_ ? { tap: elementId } : {}) }
     return
   }
+  // The pen draws whatever the tool, unless it is on a handle or a tool that makes things.
+  const penDraws = event.pointerType === 'pen' && pencilOnly.value && !handle && (tool.value === 'select' || tool.value === 'hand')
   if (handle && elementId) {
     const element = byId.value.get(elementId)
     if (handle === 'resize' && element && isPlaced(element)) {
@@ -467,7 +502,7 @@ function onPointerDown(event: PointerEvent) {
     else if (handle === 'connect') gesture.value = { kind: 'connect', from: elementId, end: world }
     return
   }
-  if (tool.value === 'pen' || tool.value === 'highlighter') {
+  if (tool.value === 'pen' || tool.value === 'highlighter' || penDraws) {
     // A pen lifted for an instant and put back where it left off goes on with the same line
     // (iPadOS can break a line in two mid-stroke).
     const last = lastLine
@@ -617,7 +652,7 @@ function onPointerMove(event: PointerEvent) {
 }
 
 function onPointerUp(event: PointerEvent) {
-  if (event.pointerType === 'pen') penDown = false
+  if (event.pointerType === 'pen') (penDown = false), (penUpAt = event.timeStamp)
   if (!pointers.delete(event.pointerId)) return
   // Fingers that touched and lifted together without moving: two undo, three redo.
   if (event.pointerType === 'touch' && tap && touches() === 0) {
@@ -640,6 +675,10 @@ function onPointerUp(event: PointerEvent) {
     return cancelGesture()
   }
   if (event.type === 'pointercancel' && g.kind !== 'pan') return cancelGesture()
+  if (g.kind === 'pan' && g.tap && event.type !== 'pointercancel') {
+    const p = local(event)
+    if (Math.hypot(p.x - g.sx, p.y - g.sy) < 10) select(event.shiftKey ? [...selection.value, g.tap] : [g.tap])
+  }
   if (g.kind === 'move' && g.moved && (preview.dx || preview.dy)) {
     const patches: Record<Id, BoardPatch> = {}
     for (const id of preview.moving) {
@@ -993,8 +1032,10 @@ function boardMenu(event: MouseEvent) {
           { label: 'Import a JSON Canvas…', icon: 'ph:upload-simple', run: () => fileInput.value?.click() },
           { label: 'Add a Mermaid flowchart…', icon: 'ph:flow-arrow', hint: 'or paste one', run: askFlowchart },
         ]),
+    { kind: 'submenu', label: 'Pen and fingers', icon: 'ph:pencil-simple', items: drawModeItems() },
   ])
 }
+const drawModeItems = (): MenuItem[] => DRAW_MODES.map((m) => ({ label: m.label, hint: m.hint, checked: drawMode.value === m.id, run: () => (drawMode.value = m.id) }))
 
 // Card views ----------------------------------------------------------------------
 

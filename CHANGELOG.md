@@ -30,6 +30,10 @@ GitHub release page.
 
 ### Changed
 
+- **Apple Pencil on whiteboards.** Once a pen touches a board it draws whatever tool is picked,
+  and fingers move the view: a tap selects, and a finger drags only what is already selected, so
+  panning never drags a card along. A palm, or a touch just as the pen lifts, is ignored. **Pen and
+  fingers** in the board menu sets this per device (Auto, Pen draws, Fingers draw).
 - **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
   properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
 
