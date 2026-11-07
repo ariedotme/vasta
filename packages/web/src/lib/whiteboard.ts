@@ -210,6 +210,74 @@ export interface Box {
   y: number
   w: number
   h: number
+  /** Turned this many degrees clockwise around its middle (or around `o`, from its corner). */
+  r?: number
+  o?: { x: number; y: number }
+}
+
+// Turning ----------------------------------------------------------------------------------------
+
+/** `p` turned `deg` degrees clockwise (y pointing down) around `c`. */
+export function rotateAround(p: Point, c: Point, deg: number): Point {
+  if (!deg) return p
+  const a = (deg * Math.PI) / 180
+  const cos = Math.cos(a)
+  const sin = Math.sin(a)
+  const dx = p.x - c.x
+  const dy = p.y - c.y
+  return { x: c.x + dx * cos - dy * sin, y: c.y + dx * sin + dy * cos }
+}
+
+/** The box around a turned box (for what is in view, fitting, the selection's bounds). */
+export function turnedBounds(b: Box): Box {
+  if (!b.r) return b
+  const c = { x: b.x + b.w / 2, y: b.y + b.h / 2 }
+  const corners = [
+    { x: b.x, y: b.y },
+    { x: b.x + b.w, y: b.y },
+    { x: b.x, y: b.y + b.h },
+    { x: b.x + b.w, y: b.y + b.h },
+  ].map((p) => rotateAround(p, c, b.r!))
+  const xs = corners.map((p) => p.x)
+  const ys = corners.map((p) => p.y)
+  return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }
+}
+
+/** An angle to turn to: whole degrees, held at a multiple of 45 within 4 degrees of it (of 15 with `step`). */
+export function snapAngle(deg: number, step = false): number {
+  const turn = ((deg % 360) + 360) % 360
+  if (step) return (Math.round(turn / 15) * 15) % 360
+  const near = Math.round(turn / 45) * 45
+  return Math.abs(turn - near) <= 4 ? near % 360 : Math.round(turn)
+}
+
+// Lasso ------------------------------------------------------------------------------------------
+
+/** Whether a point lies inside a closed loop of points (even-odd rule). */
+export function pointInLoop(p: Point, loop: Point[]): boolean {
+  let inside = false
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const a = loop[i]!
+    const b = loop[j]!
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y || 1e-9) + a.x) inside = !inside
+  }
+  return inside
+}
+
+/**
+ * Whether a lasso takes an element: its middle is inside the loop, or, for a stroke (whose box can
+ * reach well past its ink), most of its points are.
+ */
+export function lassoTakes(loop: Point[], b: Box, points?: Point[]): boolean {
+  if (loop.length < 3) return false
+  if (points?.length) {
+    const step = Math.max(1, Math.floor(points.length / 24))
+    let inside = 0
+    let total = 0
+    for (let i = 0; i < points.length; i += step) (total++, pointInLoop(points[i]!, loop) && inside++)
+    return inside / total >= 0.6
+  }
+  return pointInLoop({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, loop)
 }
 
 /** A line to draw while snapped: vertical at x, or horizontal at y, between two points. */
@@ -284,9 +352,10 @@ export function parseBoardClipboard(text: string): BoardElement[] | undefined {
 type Point = { x: number; y: number }
 const middle = (b: Box): Point => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 })
 
-/** Where a line from the middle of `b` towards `p` leaves it. */
+/** Where a line from the middle of `b` towards `p` leaves it (its turned edges, when turned). */
 export function edgePoint(b: Box, p: Point): Point {
   const c = middle(b)
+  if (b.r) return rotateAround(edgePoint({ ...b, r: 0 }, rotateAround(p, c, -b.r)), c, b.r)
   const dx = p.x - c.x
   const dy = p.y - c.y
   if (!dx && !dy) return c

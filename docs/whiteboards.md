@@ -61,6 +61,15 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
   (Shift keeps the proportions; strokes always do; the right and bottom edges line up with other
   elements the same way), arrow keys nudge (Shift for 10). Delete or
   Backspace deletes; an element's arrows go with it.
+- **Lasso** (**Q**): draw a loop to select what it encloses (an element whose middle is inside it;
+  a stroke when most of it is), Shift to add to the selection. Handy with a pen around scattered
+  strokes.
+- **Turn** an element (not a frame) by the knob above it; it snaps upright and to every 45° when
+  near, Shift turns in steps of 15°. A turned element resizes along its own sides, from its top
+  left corner, and arrows meet its turned edges; strokes drawn on it turn with it.
+- **Several selected** show their box and a corner handle that scales them together (what lies in
+  a selected frame too), lining up with other elements as a resize does; Shift keeps the
+  proportions, as strokes and turned elements always do.
 - The **selection bar** above the selection: color, shape, open a card, label an arrow, rename a
   frame, bring to front (**]**), send to back (**[**), duplicate (**⌘D**), delete.
 - **Copy, cut and paste** (⌘C, ⌘X, ⌘V) work within a board and between boards, frames with what

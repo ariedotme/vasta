@@ -14,7 +14,8 @@ import { displayTitle } from '../../lib/format.ts'
 const props = defineProps<{
   element: PlacedElement
   boardId: string
-  box: { x: number; y: number; w: number; h: number }
+  /** `r`: turned this many degrees, around the middle or `o` (from the corner). */
+  box: { x: number; y: number; w: number; h: number; r?: number; o?: { x: number; y: number } }
   zoom: number
   selected: boolean
   editing: boolean
@@ -73,7 +74,13 @@ function onInput(event: Event) {
     :data-element="passThrough ? undefined : element.id"
     class="absolute"
     :class="[passThrough ? 'pointer-events-none' : '', faded ? 'opacity-25' : '']"
-    :style="{ left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` }"
+    :style="{
+      left: `${box.x}px`,
+      top: `${box.y}px`,
+      width: `${box.w}px`,
+      height: `${box.h}px`,
+      ...(box.r ? { transform: `rotate(${box.r}deg)`, transformOrigin: box.o ? `${box.o.x}px ${box.o.y}px` : 'center' } : {}),
+    }"
     @click.capture.prevent
     @dragstart.prevent
   >

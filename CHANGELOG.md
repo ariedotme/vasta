@@ -39,6 +39,9 @@ GitHub release page.
   dashed or dotted line), the shapes, the notes' colors, the arrows' courses, and settings for
   the rest (a shape's fill and outline, a note's text size, an arrow's ends, line and color). The
   highlighter now has colors and widths too. The settings are kept on each device.
+- **Lasso, turning and scaling on whiteboards.** The lasso tool (**Q**) selects what a loop
+  encloses; a knob above a selected element turns it (snapping upright and to 45°, Shift in steps
+  of 15°); several selected elements scale together by the corner of their box.
 - **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
   properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
 

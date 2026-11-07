@@ -63,7 +63,11 @@ import {
   snapResize,
   boardClipboard,
   bounds,
+  lassoTakes,
   parseBoardClipboard,
+  rotateAround,
+  snapAngle,
+  turnedBounds,
   simplifyPoints,
   snapMove,
   thinPoints,
@@ -226,7 +230,7 @@ function zoomAt(sx: number, sy: number, zoom: number) {
 
 /** Show these elements whole, centered (everything when none are given). */
 function fit(list: PlacedElement[] = placed.value, maxZoom = 1) {
-  const all = bounds(list.map(box))
+  const all = bounds(list.map((e) => turnedBounds(box(e))))
   if (!all || !size.w) {
     Object.assign(camera, { x: size.w / 2, y: size.h / 2, zoom: 1 })
     return
@@ -248,13 +252,26 @@ const editing = ref<Id | null>(null)
 const draft = ref('')
 /**
  * While dragging: how far the moved elements went (the selection, and what lies in a moved
- * frame), the size being given to one element, a text's height while typed, strokes being erased.
+ * frame), the size being given to one element (and its corner, when turned), the angle one is
+ * turned to, how much several are scaled, a text's height while typed, strokes being erased.
  */
-const preview = reactive<{ dx: number; dy: number; moving: Set<Id>; resize: { id: Id; w: number; h: number } | null; textH: Record<Id, number>; erasing: Set<Id>; guides: Guide[] }>({
+const preview = reactive<{
+  dx: number
+  dy: number
+  moving: Set<Id>
+  resize: { id: Id; w: number; h: number; x?: number; y?: number } | null
+  rotate: { id: Id; deg: number } | null
+  scale: { ids: Set<Id>; from: Box; kx: number; ky: number } | null
+  textH: Record<Id, number>
+  erasing: Set<Id>
+  guides: Guide[]
+}>({
   dx: 0,
   dy: 0,
   moving: new Set(),
   resize: null,
+  rotate: null,
+  scale: null,
   textH: {},
   erasing: new Set(),
   guides: [],
@@ -268,17 +285,25 @@ function box(element: PlacedElement): Box {
       const p = box(parent)
       // Moved on its own (not with the element it is drawn on).
       const own = preview.moving.has(element.id) && !preview.moving.has(parent.id)
-      return { x: p.x + element.x * p.w + (own ? preview.dx : 0), y: p.y + element.y * p.h + (own ? preview.dy : 0), w: element.w * p.w, h: element.h * p.h }
+      const b = { x: p.x + element.x * p.w + (own ? preview.dx : 0), y: p.y + element.y * p.h + (own ? preview.dy : 0), w: element.w * p.w, h: element.h * p.h }
+      // Turned with the element it is drawn on, around that one's middle.
+      return p.r ? { ...b, r: p.r, o: { x: p.x + p.w / 2 - b.x, y: p.y + p.h / 2 - b.y } } : b
     }
   }
   const moving = preview.moving.has(element.id)
   const resized = preview.resize?.id === element.id ? preview.resize : null
-  return {
-    x: element.x + (moving ? preview.dx : 0),
-    y: element.y + (moving ? preview.dy : 0),
-    w: resized?.w ?? element.w,
-    h: resized?.h ?? preview.textH[element.id] ?? element.h,
+  const scaled = preview.scale?.ids.has(element.id) ? preview.scale : null
+  let { x, y, w } = element
+  let h = preview.textH[element.id] ?? element.h
+  if (scaled) {
+    x = scaled.from.x + (x - scaled.from.x) * scaled.kx
+    y = scaled.from.y + (y - scaled.from.y) * scaled.ky
+    w *= scaled.kx
+    h *= scaled.ky
   }
+  if (resized) (w = resized.w), (h = resized.h), (x = resized.x ?? x), (y = resized.y ?? y)
+  const r = preview.rotate?.id === element.id ? preview.rotate.deg : element.kind === 'frame' ? 0 : element.rotation
+  return { x: x + (moving ? preview.dx : 0), y: y + (moving ? preview.dy : 0), w, h, ...(r ? { r } : {}) }
 }
 
 const view = computed(() => {
@@ -392,7 +417,11 @@ type Gesture =
   | { kind: 'pan'; sx: number; sy: number; x: number; y: number; tap?: Id }
   | { kind: 'scroll'; el: HTMLElement; top: number; sy: number }
   | { kind: 'move'; start: Point; moved: boolean; sx: number; sy: number; from: Box | undefined; others: Box[] }
-  | { kind: 'resize'; id: Id; start: Point; w: number; h: number; from: Box; others: Box[] }
+  /** `tl`: a turned element's top left corner, which stays put while its size changes. */
+  | { kind: 'resize'; id: Id; start: Point; w: number; h: number; from: Box; others: Box[]; r: number; tl: Point }
+  | { kind: 'rotate'; id: Id; center: Point; start: number; from: number }
+  | { kind: 'scale'; ids: Set<Id>; start: Point; from: Box; others: Box[]; uniform: boolean }
+  | { kind: 'lasso'; points: Point[]; keep: Set<Id> }
   | { kind: 'marquee'; start: Point; end: Point; keep: Set<Id> }
   | { kind: 'connect'; from: Id; end: Point }
   | { kind: 'create'; what: 'shape' | 'sticky' | 'frame'; start: Point; end: Point }
@@ -419,6 +448,8 @@ function cancelGesture() {
   preview.dx = preview.dy = 0
   preview.moving = new Set()
   preview.resize = null
+  preview.rotate = null
+  preview.scale = null
   preview.erasing = new Set()
   preview.guides = []
   gesture.value = null
@@ -439,6 +470,40 @@ function startMove(world: Point, p: Point) {
   const movingBoxes = placed.value.filter((e) => moving.has(e.id)).map(box)
   const others = shown.value.filter(({ element }) => !moving.has(element.id) && element.kind !== 'stroke').map(({ box }) => box)
   gesture.value = { kind: 'move', start: world, moved: false, sx: p.x, sy: p.y, from: bounds(movingBoxes), others }
+}
+
+/** A stroke's points on the board (a sample is enough for the lasso). */
+function strokePoints(e: PlacedElement): Point[] {
+  if (e.kind !== 'stroke') return []
+  const b = box(e)
+  const sx = b.w / e.sw
+  const sy = b.h / e.sh
+  const out: Point[] = []
+  for (let i = 0; i + 1 < e.points.length; i += 3) out.push({ x: b.x + e.points[i]! * sx, y: b.y + e.points[i + 1]! * sy })
+  return out
+}
+
+/** The angle of the line from `c` to `p`, in degrees clockwise from pointing right. */
+const angleOf = (c: Point, p: Point) => (Math.atan2(p.y - c.y, p.x - c.x) * 180) / Math.PI
+
+/** What a multi-selection's corner handle scales: the selection, and what lies in its frames. */
+function scaling() {
+  const ids = new Set<Id>()
+  for (const element of selected.value) {
+    if (!isPlaced(element) || isAttached(element)) continue
+    ids.add(element.id)
+    if (element.kind === 'frame') for (const inside of insideFrame(element, elements.value)) ids.add(inside.id)
+  }
+  return ids
+}
+function startScale(world: Point) {
+  const ids = scaling()
+  const from = bounds(placed.value.filter((e) => ids.has(e.id)).map((e) => turnedBounds(box(e))))
+  if (!from) return
+  const others = shown.value.filter(({ element }) => !ids.has(element.id) && element.kind !== 'stroke').map(({ box }) => box)
+  // Strokes and turned elements keep their proportions.
+  const uniform = placed.value.some((e) => ids.has(e.id) && (e.kind === 'stroke' || !!box(e).r))
+  gesture.value = { kind: 'scale', ids, start: world, from, others, uniform }
 }
 
 function onPointerDown(event: PointerEvent) {
@@ -494,13 +559,26 @@ function onPointerDown(event: PointerEvent) {
   }
   // The pen draws whatever the tool, unless it is on a handle or a tool that makes things.
   const penDraws = event.pointerType === 'pen' && pencilOnly.value && !handle && (tool.value === 'select' || tool.value === 'hand')
+  if (handle === 'scale') return startScale(world)
   if (handle && elementId) {
     const element = byId.value.get(elementId)
     if (handle === 'resize' && element && isPlaced(element)) {
       const others = shown.value.filter(({ element: e }) => e.id !== elementId && e.kind !== 'stroke').map(({ box }) => box)
-      gesture.value = { kind: 'resize', id: elementId, start: world, w: element.w, h: element.h, from: box(element), others }
-    }
-    else if (handle === 'connect') gesture.value = { kind: 'connect', from: elementId, end: world }
+      const from = box(element)
+      const r = from.r ?? 0
+      const tl = rotateAround({ x: from.x, y: from.y }, { x: from.x + from.w / 2, y: from.y + from.h / 2 }, r)
+      gesture.value = { kind: 'resize', id: elementId, start: world, w: element.w, h: element.h, from, others, r, tl }
+    } else if (handle === 'rotate' && element && isPlaced(element)) {
+      const b = box(element)
+      const center = { x: b.x + b.w / 2, y: b.y + b.h / 2 }
+      gesture.value = { kind: 'rotate', id: elementId, center, start: angleOf(center, world), from: b.r ?? 0 }
+    } else if (handle === 'connect') gesture.value = { kind: 'connect', from: elementId, end: world }
+    return
+  }
+  if (tool.value === 'lasso') {
+    const keep = event.shiftKey ? new Set(selection.value) : new Set<Id>()
+    select(keep)
+    gesture.value = { kind: 'lasso', points: [world], keep }
     return
   }
   if (tool.value === 'pen' || penDraws) {
@@ -604,8 +682,10 @@ function onPointerMove(event: PointerEvent) {
     preview.dy = Math.round(snapped.dy)
     preview.guides = snapped.guides
   } else if (g.kind === 'resize') {
-    let w = Math.max(MIN.w, Math.round(g.w + world.x - g.start.x))
-    let h = Math.max(MIN.h, Math.round(g.h + world.y - g.start.y))
+    // A turned element grows along its own sides (the pointer's move turned back by its angle).
+    const d = rotateAround({ x: world.x - g.start.x, y: world.y - g.start.y }, { x: 0, y: 0 }, -g.r)
+    let w = Math.max(MIN.w, Math.round(g.w + d.x))
+    let h = Math.max(MIN.h, Math.round(g.h + d.y))
     const element = byId.value.get(g.id)
     // Strokes and Shift keep their proportions.
     if (event.shiftKey || element?.kind === 'stroke') {
@@ -613,14 +693,41 @@ function onPointerMove(event: PointerEvent) {
       w = Math.max(MIN.w, Math.round(g.w * k))
       h = Math.max(MIN.h, Math.round(g.h * k))
       preview.guides = []
-    } else if (!event.altKey && !event.ctrlKey && !event.metaKey) {
+    } else if (!event.altKey && !event.ctrlKey && !event.metaKey && !g.r) {
       // The right and bottom edges line up with other elements, as a move does.
       const snapped = snapResize(g.from, w, h, g.others, SNAP_PX / camera.zoom)
       w = Math.max(MIN.w, Math.round(snapped.w))
       h = Math.max(MIN.h, Math.round(snapped.h))
       preview.guides = snapped.guides
     } else preview.guides = []
-    preview.resize = { id: g.id, w, h }
+    if (g.r) {
+      // The top left corner stays where it was: the middle moves half the growth, turned.
+      const c = { x: g.tl.x + w / 2, y: g.tl.y + h / 2 }
+      const middle = rotateAround(c, g.tl, g.r)
+      preview.resize = { id: g.id, w, h, x: Math.round(middle.x - w / 2), y: Math.round(middle.y - h / 2) }
+    } else preview.resize = { id: g.id, w, h }
+  } else if (g.kind === 'rotate') {
+    preview.rotate = { id: g.id, deg: snapAngle(g.from + angleOf(g.center, world) - g.start, event.shiftKey) }
+  } else if (g.kind === 'scale') {
+    let w = Math.max(MIN.w, g.from.w + world.x - g.start.x)
+    let h = Math.max(MIN.h, g.from.h + world.y - g.start.y)
+    if (g.uniform || event.shiftKey) {
+      const k = Math.max(w / g.from.w, h / g.from.h)
+      ;(w = g.from.w * k), (h = g.from.h * k)
+      preview.guides = []
+    } else if (!event.altKey && !event.ctrlKey && !event.metaKey) {
+      const snapped = snapResize(g.from, w, h, g.others, SNAP_PX / camera.zoom)
+      ;(w = Math.max(MIN.w, snapped.w)), (h = Math.max(MIN.h, snapped.h))
+      preview.guides = snapped.guides
+    } else preview.guides = []
+    preview.scale = { ids: g.ids, from: g.from, kx: w / g.from.w, ky: h / g.from.h }
+  } else if (g.kind === 'lasso') {
+    gesture.value = { ...g, points: [...g.points, world] }
+    const loop = gesture.value.points
+    const taken = placed.value
+      .filter((e) => !isAttached(e) && lassoTakes(loop, box(e), e.kind === 'stroke' ? strokePoints(e) : undefined))
+      .map((e) => e.id)
+    select([...g.keep, ...taken])
   } else if (g.kind === 'marquee') {
     gesture.value = { ...g, end: world }
     const [left, right] = [Math.min(g.start.x, world.x), Math.max(g.start.x, world.x)]
@@ -694,11 +801,23 @@ function onPointerUp(event: PointerEvent) {
     }
     update(patches)
   } else if (g.kind === 'resize' && preview.resize) {
-    update({ [g.id]: { w: preview.resize.w, h: preview.resize.h } })
+    const { w, h, x, y } = preview.resize
+    update({ [g.id]: { w, h, ...(x !== undefined && y !== undefined ? { x, y } : {}) } })
+  } else if (g.kind === 'rotate' && preview.rotate) {
+    update({ [g.id]: { rotation: preview.rotate.deg || undefined } })
+  } else if (g.kind === 'scale' && preview.scale) {
+    const patches: Record<Id, BoardPatch> = {}
+    for (const id of preview.scale.ids) {
+      const element = byId.value.get(id)
+      if (!element || !isPlaced(element)) continue
+      const b = box(element)
+      patches[id] = { x: Math.round(b.x), y: Math.round(b.y), w: Math.max(MIN.w, Math.round(b.w)), h: Math.max(MIN.h, Math.round(b.h)) }
+    }
+    update(patches)
   } else if (g.kind === 'connect') {
     const target = elementAt(document.elementFromPoint(event.clientX, event.clientY))
     const exists = arrows.value.some((a) => a.kind === 'arrow' && ((a.from === g.from && a.to === target) || (a.from === target && a.to === g.from)))
-    if (target && target !== g.from && !exists) select(add([newArrow(g.from, target)]))
+    if (target && target !== g.from && !exists && byId.value.has(target)) select(add([newArrow(g.from, target)]))
     else if (!target && !props.readonly) connectMenu(g.from, event)
     if (!stays(tool.value)) tool.value = 'select'
   } else if (g.kind === 'create') {
@@ -1353,11 +1472,25 @@ const selectedOne = computed(() => {
   return element && isPlaced(element) ? element : undefined
 })
 
+/** Several placed elements selected: the box around them (where the scale handle goes). */
+const selectionBox = computed(() => {
+  if (quiet.value && gesture.value?.kind !== 'scale') return null
+  const list = selected.value.filter((e): e is PlacedElement => isPlaced(e) && !isAttached(e))
+  if (list.length < 2) return null
+  return bounds(list.map((e) => turnedBounds(box(e))))
+})
+/** The lasso's loop, on screen. */
+const lassoPath = computed(() => {
+  const g = gesture.value
+  if (g?.kind !== 'lasso' || g.points.length < 2) return null
+  return g.points.map((p, i) => `${i ? 'L' : 'M'}${toScreen(p.x, p.y).x},${toScreen(p.x, p.y).y}`).join(' ') + ' Z'
+})
+
 /** The bar sits above the selection (below it near the top of the view). */
 const bar = computed(() => {
   if (!selection.value.size || quiet.value || editing.value || props.readonly) return null
   const boxes = selected.value.flatMap((e) => {
-    if (isPlaced(e)) return [box(e)]
+    if (isPlaced(e)) return [turnedBounds(box(e))]
     const path = arrowPaths.value.find((p) => p.arrow.id === e.id)
     return path ? [{ x: path.mid.x, y: path.mid.y, w: 0, h: 0 }] : []
   })
@@ -1519,33 +1652,59 @@ const cursor = computed(() => {
         <path :d="ink.d" :fill="ink.fill" :fill-opacity="ink.opacity" />
       </svg>
 
-      <!-- Handles of the one selected element: drag the dot to draw an arrow, the corner to resize. -->
-      <template v-if="selectedOne && !readonly && editing !== selectedOne.id">
+      <!-- Handles of the one selected element: drag the dot to draw an arrow, the corner to resize,
+           the knob above to turn it. They turn with the element. -->
+      <div
+        v-if="selectedOne && !readonly && editing !== selectedOne.id && !isAttached(selectedOne)"
+        class="pointer-events-none absolute"
+        :style="{
+          left: `${box(selectedOne).x}px`,
+          top: `${box(selectedOne).y}px`,
+          width: `${box(selectedOne).w}px`,
+          height: `${box(selectedOne).h}px`,
+          transform: box(selectedOne).r ? `rotate(${box(selectedOne).r}deg)` : undefined,
+          zIndex: placed.length + 2,
+        }"
+      >
         <div
-          v-if="!isAttached(selectedOne)"
           :data-element="selectedOne.id"
           data-handle="connect"
           title="Drag to another element to draw an arrow"
-          class="absolute grid place-items-center rounded-full border-2 border-accent bg-surface"
-          :style="{
-            left: `${box(selectedOne).x + box(selectedOne).w + 16 / camera.zoom}px`,
-            top: `${box(selectedOne).y + box(selectedOne).h / 2}px`,
-            width: `${14 / camera.zoom}px`,
-            height: `${14 / camera.zoom}px`,
-            borderWidth: `${2 / camera.zoom}px`,
-            transform: 'translate(-50%, -50%)',
-            zIndex: placed.length + 2,
-            cursor: 'crosshair',
-          }"
+          class="pointer-events-auto absolute rounded-full border-accent bg-surface"
+          :style="{ left: `calc(100% + ${16 / camera.zoom}px)`, top: '50%', width: `${14 / camera.zoom}px`, height: `${14 / camera.zoom}px`, borderWidth: `${2 / camera.zoom}px`, transform: 'translate(-50%, -50%)', cursor: 'crosshair' }"
         />
         <div
-          v-if="!isAttached(selectedOne)"
           :data-element="selectedOne.id"
           data-handle="resize"
+          class="pointer-events-auto absolute rounded-sm border-accent bg-surface"
+          :style="{ left: `calc(100% + ${4 / camera.zoom}px)`, top: `calc(100% + ${4 / camera.zoom}px)`, width: `${12 / camera.zoom}px`, height: `${12 / camera.zoom}px`, borderWidth: `${2 / camera.zoom}px`, transform: 'translate(-50%, -50%)', cursor: 'nwse-resize' }"
+        />
+        <template v-if="selectedOne.kind !== 'frame'">
+          <div class="absolute left-1/2 bg-accent" :style="{ top: `${-22 / camera.zoom}px`, width: `${1.5 / camera.zoom}px`, height: `${18 / camera.zoom}px`, transform: 'translateX(-50%)' }" />
+          <div
+            :data-element="selectedOne.id"
+            data-handle="rotate"
+            title="Drag to turn (Shift: in steps of 15°)"
+            class="pointer-events-auto absolute left-1/2 rounded-full border-accent bg-surface"
+            :style="{ top: `${-26 / camera.zoom}px`, width: `${12 / camera.zoom}px`, height: `${12 / camera.zoom}px`, borderWidth: `${2 / camera.zoom}px`, transform: 'translate(-50%, -50%)', cursor: 'grab' }"
+          />
+        </template>
+      </div>
+
+      <!-- Several selected: their box, and its corner to scale them together -->
+      <template v-if="selectionBox && !readonly">
+        <div
+          class="pointer-events-none absolute rounded-md border border-dashed border-accent/70"
+          :style="{ left: `${selectionBox.x - 6 / camera.zoom}px`, top: `${selectionBox.y - 6 / camera.zoom}px`, width: `${selectionBox.w + 12 / camera.zoom}px`, height: `${selectionBox.h + 12 / camera.zoom}px`, borderWidth: `${1 / camera.zoom}px`, zIndex: placed.length + 2 }"
+        />
+        <div
+          data-element="__selection"
+          data-handle="scale"
+          title="Drag to scale the selection (Shift keeps its proportions)"
           class="absolute rounded-sm border-accent bg-surface"
           :style="{
-            left: `${box(selectedOne).x + box(selectedOne).w + 4 / camera.zoom}px`,
-            top: `${box(selectedOne).y + box(selectedOne).h + 4 / camera.zoom}px`,
+            left: `${selectionBox.x + selectionBox.w + 6 / camera.zoom}px`,
+            top: `${selectionBox.y + selectionBox.h + 6 / camera.zoom}px`,
             width: `${12 / camera.zoom}px`,
             height: `${12 / camera.zoom}px`,
             borderWidth: `${2 / camera.zoom}px`,
@@ -1563,6 +1722,7 @@ const cursor = computed(() => {
         <line :x1="connecting.s.x" :y1="connecting.s.y" :x2="connecting.e.x" :y2="connecting.e.y" stroke="var(--color-accent)" :stroke-width="stroke" stroke-dasharray="6 4" />
         <path v-for="(mark, i) in connecting.marks" :key="i" :d="mark.d" fill="var(--color-accent)" />
       </template>
+      <path v-if="lassoPath" :d="lassoPath" fill="color-mix(in srgb, var(--color-accent) 8%, transparent)" stroke="var(--color-accent)" stroke-width="1.5" stroke-dasharray="5 4" stroke-linejoin="round" />
       <rect
         v-if="marquee"
         :x="marquee.x"
