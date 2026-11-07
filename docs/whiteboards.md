@@ -12,11 +12,20 @@ text: object cards, text, shapes, sticky notes, pen and highlighter strokes, fra
 - **Write**: double-click empty space, or pick the text tool (**T**) and click. Esc or a click
   elsewhere finishes; text left empty is removed.
 - **Shapes**: **R** rectangle, **O** ellipse, **D** diamond, or the shape tool; click for the
-  usual size or drag a box. The selection bar switches between rectangle, ellipse, diamond,
+  usual size or drag a box. The shape tool's settings give new shapes a color, a fill (a tint,
+  none, white or solid), an outline width and a dashed or dotted outline. The selection bar switches between rectangle, ellipse, diamond,
   triangle, parallelogram, star and heart. Double-click to write inside.
-- **Sticky notes** (**S**): click or drag; you type straight away.
-- **Pen** (**P**) and **highlighter** (**M**): draw freehand; the pen has colors and three widths,
-  measured on screen (a zoomed-out board still gets a line as wide as the one chosen). A pen's
+- **Sticky notes** (**S**): click or drag; you type straight away. The tool's row picks the
+  color of new notes, its settings the text size.
+- **The toolbar**: the tools at the bottom (select, lasso, hand; pen, eraser; text, sticky note,
+  shape, frame, arrow; an object). The pen, shapes, sticky notes and arrows get a row above it:
+  the pen's presets, the shapes, the notes' colors, the arrows' courses, and a settings button
+  (or a second click on the tool) for the rest. What they make is kept on each device; to change
+  what is already on the board, select it.
+- **Pen** (**P**) and **highlighter** (**M**): draw freehand. The pen tool has four presets, each a
+  pen or a highlighter with its own color, width (measured on screen, so a zoomed-out board still
+  gets the line chosen) and, for a pen, a solid, dashed or dotted line. **M** picks the first
+  highlighter preset, **P** the first pen. A pen's
   pressure shapes the line, eased so a light touch never breaks it; a mouse or finger uses speed
   instead.
 - **Draw on an element**: select a card, note, shape or frame and pick the pen in the selection

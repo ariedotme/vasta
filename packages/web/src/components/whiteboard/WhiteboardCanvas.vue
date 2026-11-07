@@ -15,7 +15,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 import {
   BOARD_FIELD,
   addBoardElements,
+  arrowDashPatch,
   arrowTips,
+  arrowTipsPatch,
   bringToFront,
   lineDash,
   attachedTo,
@@ -50,7 +52,6 @@ import { displayTitle } from '../../lib/format.ts'
 import { canvasElements, isMermaidFlowchart, mermaidElements } from '../../lib/board-actions.ts'
 import {
   BOARD_COLORS,
-  PICKER_COLORS,
   SHAPE_ICONS,
   SHAPE_LABELS,
   arrowRoute,
@@ -76,6 +77,8 @@ import AppIcon from '../AppIcon.vue'
 import ObjectPicker from '../ObjectPicker.vue'
 import PopoverMenu from '../PopoverMenu.vue'
 import BoardItem from './BoardItem.vue'
+import BoardToolbar, { type DrawMode, type Tool } from './BoardToolbar.vue'
+import { activePen, pickHighlighter, pickPen, toolSettings } from '../../lib/board-tools.ts'
 import SelectionBar from './SelectionBar.vue'
 
 /**
@@ -97,7 +100,6 @@ const MIN = { w: 24, h: 24 }
 const MIN_ZOOM = 0.1
 const MAX_ZOOM = 4
 const SNAP_PX = 6
-const PEN_SIZES = [2, 4, 8]
 
 // Elements ------------------------------------------------------------------------
 
@@ -333,10 +335,10 @@ const arrowColor = (arrow: { id: Id; color?: ColorName }) => (selection.value.ha
 
 // Tools ---------------------------------------------------------------------------
 
-type Tool = 'select' | 'hand' | 'text' | 'shape' | 'sticky' | 'pen' | 'highlighter' | 'eraser' | 'frame' | 'arrow'
 const tool = ref<Tool>('select')
-const shapeKind = ref<ShapeName>('rectangle')
-const pen = reactive<{ color: ColorName | undefined; size: number }>({ color: undefined, size: 4 })
+/** The pen preset in use (a pen or a highlighter), and whether it highlights. */
+const pen = computed(() => activePen())
+const highlighting = computed(() => pen.value.highlight)
 const spaceHeld = ref(false)
 /** The element the pen draws on (strokes then move and scale with it), from the selection bar. */
 const attach = ref<Id | null>(null)
@@ -354,7 +356,6 @@ const stopDrawingOn = () => {
   if (drawing.value) tool.value = 'select'
 }
 /** How fingers and a pen share the work (see the top of this file), kept on this device. */
-type DrawMode = 'auto' | 'pencil' | 'touch'
 const DRAW_MODE_KEY = 'vasta.board-draw-mode'
 const DRAW_MODES: { id: DrawMode; label: string; hint: string }[] = [
   { id: 'auto', label: 'Auto', hint: 'Once a pen touches the board, the pen draws and fingers move the view' },
@@ -380,8 +381,8 @@ const penSeen = ref(false)
 const pencilOnly = computed(() => drawMode.value === 'pencil' || (drawMode.value === 'auto' && penSeen.value))
 /** When the pen last lifted: a touch right after it is the hand landing, not a gesture. */
 let penUpAt = -Infinity
-const drawing = computed(() => tool.value === 'pen' || tool.value === 'highlighter' || tool.value === 'eraser')
-const stays = (t: Tool) => t === 'pen' || t === 'highlighter' || t === 'eraser' || t === 'hand'
+const drawing = computed(() => tool.value === 'pen' || tool.value === 'eraser')
+const stays = (t: Tool) => t === 'pen' || t === 'eraser' || t === 'hand' || t === 'lasso'
 
 // Gestures ------------------------------------------------------------------------
 
@@ -426,7 +427,7 @@ function cancelGesture() {
 /** A pen's pressure; some report 0 on the first event of a line. */
 const pressureOf = (e: PointerEvent) => (e.pointerType === 'pen' ? Math.max(e.pressure || 0.5, 0.05) : 0.5)
 /** The pen's width is what it looks like on screen at the zoom it draws at, so a zoomed-out board still gets a visible line. */
-const penWidth = () => (tool.value === 'highlighter' ? 18 : pen.size) / camera.zoom
+const penWidth = () => pen.value.size / camera.zoom
 
 const pan = (p: Point): Gesture => ({ kind: 'pan', sx: p.x, sy: p.y, x: camera.x, y: camera.y })
 
@@ -502,7 +503,7 @@ function onPointerDown(event: PointerEvent) {
     else if (handle === 'connect') gesture.value = { kind: 'connect', from: elementId, end: world }
     return
   }
-  if (tool.value === 'pen' || tool.value === 'highlighter' || penDraws) {
+  if (tool.value === 'pen' || penDraws) {
     // A pen lifted for an instant and put back where it left off goes on with the same line
     // (iPadOS can break a line in two mid-stroke).
     const last = lastLine
@@ -697,7 +698,7 @@ function onPointerUp(event: PointerEvent) {
   } else if (g.kind === 'connect') {
     const target = elementAt(document.elementFromPoint(event.clientX, event.clientY))
     const exists = arrows.value.some((a) => a.kind === 'arrow' && ((a.from === g.from && a.to === target) || (a.from === target && a.to === g.from)))
-    if (target && target !== g.from && !exists) select(add([{ kind: 'arrow', from: g.from, to: target }]))
+    if (target && target !== g.from && !exists) select(add([newArrow(g.from, target)]))
     else if (!target && !props.readonly) connectMenu(g.from, event)
     if (!stays(tool.value)) tool.value = 'select'
   } else if (g.kind === 'create') {
@@ -791,6 +792,17 @@ function addText(at: Point, text = '') {
 }
 
 /** A shape, note or frame: the box dragged, or its usual size around the point clicked. */
+/** What the tools make, from their settings (lib/board-tools.ts); defaults are left out. */
+const defined = <T extends object>(o: T) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
+const newShape = () => {
+  const { kind, ...look } = toolSettings.shape
+  return { shape: kind, ...defined(look) }
+}
+const newSticky = () => defined({ ...toolSettings.sticky })
+function newArrow(from: Id, to: Id): NewBoardElement {
+  const { start, end, path, dash, width, color } = toolSettings.arrow
+  return { kind: 'arrow', from, to, ...defined({ path, width, color, ...arrowTipsPatch(start, end), ...arrowDashPatch(dash) }) } as NewBoardElement
+}
 function createAt(g: Extract<Gesture, { kind: 'create' }>) {
   const dragged = Math.abs(g.end.x - g.start.x) * camera.zoom > 8 || Math.abs(g.end.y - g.start.y) * camera.zoom > 8
   const usual = SIZES[g.what]
@@ -799,7 +811,7 @@ function createAt(g: Extract<Gesture, { kind: 'create' }>) {
     : { x: g.start.x - usual.w / 2, y: g.start.y - usual.h / 2, ...usual }
   const at = { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.max(MIN.w, Math.round(rect.w)), h: Math.max(MIN.h, Math.round(rect.h)) }
   const element: NewBoardElement =
-    g.what === 'shape' ? { kind: 'shape', shape: shapeKind.value, text: '', ...at } : g.what === 'sticky' ? { kind: 'sticky', text: '', ...at } : { kind: 'frame', ...at }
+    g.what === 'shape' ? { kind: 'shape', text: '', ...newShape(), ...at } : g.what === 'sticky' ? { kind: 'sticky', text: '', ...newSticky(), ...at } : { kind: 'frame', ...at }
   const [id] = add([element])
   // A frame goes under what is already there.
   if (g.what === 'frame') sendToBack(props.doc, [id!], LOCAL), now()
@@ -812,7 +824,7 @@ function createAt(g: Extract<Gesture, { kind: 'create' }>) {
 let lastLine: { id: Id; at: number; end: Point; points: number[]; attach: Id | null } | null = null
 
 function finishStroke(g: Extract<Gesture, { kind: 'draw' }>, event: PointerEvent) {
-  const highlight = tool.value === 'highlighter'
+  const highlight = highlighting.value
   const size = Math.round(penWidth() * 100) / 100
   // A pen's points only thin out by distance (each keeps its pressure); a mouse's or finger's,
   // at an even width, simplify to the corners. A quarter of a screen pixel either way.
@@ -828,7 +840,7 @@ function finishStroke(g: Extract<Gesture, { kind: 'draw' }>, event: PointerEvent
         return { x: (placedStroke.x - p.x) / p.w, y: (placedStroke.y - p.y) / p.h, w: placedStroke.w / p.w, h: placedStroke.h / p.h, parent: target.id }
       })()
     : {}
-  const stroke = { kind: 'stroke' as const, size, ...placedStroke, ...where, ...(pen.color && !highlight ? { color: pen.color } : {}), ...(highlight ? { highlight: true } : {}) }
+  const stroke = { kind: 'stroke' as const, size, ...placedStroke, ...where, ...(pen.value.color ? { color: pen.value.color } : {}), ...(highlight ? { highlight: true } : {}), ...(pen.value.dash && !highlight ? { dash: pen.value.dash } : {}) }
   let id = g.continues
   if (id && byId.value.has(id)) {
     const { kind: _kind, ...fields } = stroke
@@ -845,7 +857,7 @@ function connectMenu(from: Id, event: PointerEvent) {
   const at = toWorld(p.x, p.y)
   const make = (element: NewBoardElement, edit: boolean) => () => {
     const [id] = add([element])
-    add([{ kind: 'arrow', from, to: id! }])
+    add([newArrow(from, id!)])
     select([id!])
     if (edit) startEditing(id!)
   }
@@ -854,7 +866,7 @@ function connectMenu(from: Id, event: PointerEvent) {
     { kind: 'heading', label: 'Connect to a new' },
     { label: 'Sticky note', icon: 'ph:note-blank', run: make({ kind: 'sticky', text: '', ...centered(SIZES.sticky.w, SIZES.sticky.h) }, true) },
     { label: 'Text', icon: 'ph:text-t', run: make({ kind: 'text', text: '', ...centered(SIZES.text.w, SIZES.text.h) }, true) },
-    { label: SHAPE_LABELS[shapeKind.value], icon: SHAPE_ICONS[shapeKind.value], run: make({ kind: 'shape', shape: shapeKind.value, text: '', ...centered(SIZES.shape.w, SIZES.shape.h) }, true) },
+    { label: SHAPE_LABELS[toolSettings.shape.kind], icon: SHAPE_ICONS[toolSettings.shape.kind], run: make({ kind: 'shape', text: '', ...newShape(), ...centered(SIZES.shape.w, SIZES.shape.h) }, true) },
     { label: 'Object…', icon: 'ph:cards', hint: '@', run: () => void nextTick(() => ((connectPick.value = { from, at, x: p.x, y: p.y }), (pickerOpen.value = true))) },
   ])
 }
@@ -1143,7 +1155,7 @@ function setColor(color: ColorName | undefined) {
   update(patches)
 }
 function setShape(shape: ShapeName) {
-  shapeKind.value = shape
+  toolSettings.shape.kind = shape
   const patches: Record<Id, BoardPatch> = {}
   for (const element of selected.value) if (element.kind === 'shape') patches[element.id] = { shape }
   update(patches)
@@ -1210,7 +1222,7 @@ async function renameFrame(id: Id) {
 
 // Keyboard ------------------------------------------------------------------------
 
-const TOOL_KEYS: Record<string, Tool> = { v: 'select', h: 'hand', t: 'text', s: 'sticky', p: 'pen', m: 'highlighter', e: 'eraser', f: 'frame', l: 'arrow', a: 'arrow' }
+const TOOL_KEYS: Record<string, Tool> = { v: 'select', q: 'lasso', h: 'hand', t: 'text', s: 'sticky', p: 'pen', m: 'pen', e: 'eraser', f: 'frame', l: 'arrow', a: 'arrow' }
 const SHAPE_KEYS: Record<string, ShapeName> = { r: 'rectangle', o: 'ellipse', d: 'diamond' }
 
 function onKeyDown(event: KeyboardEvent) {
@@ -1279,8 +1291,12 @@ function onKeyDown(event: KeyboardEvent) {
     update(patches)
   } else if (key === ']') toFront()
   else if (key === '[') toBack()
-  else if (SHAPE_KEYS[key]) (shapeKind.value = SHAPE_KEYS[key]!), (tool.value = 'shape')
-  else if (TOOL_KEYS[key]) tool.value = TOOL_KEYS[key]!
+  else if (SHAPE_KEYS[key]) (toolSettings.shape.kind = SHAPE_KEYS[key]!), (tool.value = 'shape')
+  else if (TOOL_KEYS[key]) {
+    if (key === 'm') pickHighlighter()
+    else if (key === 'p') pickPen()
+    tool.value = TOOL_KEYS[key]!
+  }
 }
 function onKeyUp(event: KeyboardEvent) {
   if (event.key === ' ') spaceHeld.value = false
@@ -1320,9 +1336,9 @@ watch(elements, (list) => {
   if (editing.value && !ids.has(editing.value)) editing.value = null
 })
 watch(tool, (t) => {
-  if (t !== 'select' && t !== 'hand') select([])
+  if (t !== 'select' && t !== 'hand' && t !== 'lasso') select([])
   // Drawing on an element ends with a tool that does not draw.
-  if (t !== 'pen' && t !== 'highlighter' && t !== 'eraser' && t !== 'hand') attach.value = null
+  if (t !== 'pen' && t !== 'eraser' && t !== 'hand') attach.value = null
 })
 watch(attachTarget, (target) => {
   if (!target) attach.value = null
@@ -1353,21 +1369,8 @@ const bar = computed(() => {
   return { x: Math.min(Math.max(top.x, 140), size.w - 140), y: below ? Math.min(bottom.y + 16, size.h - 120) : top.y - 14, below }
 })
 
-const tools: { id: Tool; icon: string; label: string; key: string }[] = [
-  { id: 'select', icon: 'ph:cursor', label: 'Select', key: 'V' },
-  { id: 'hand', icon: 'ph:hand', label: 'Hand', key: 'H' },
-  { id: 'pen', icon: 'ph:pen-nib', label: 'Pen', key: 'P' },
-  { id: 'highlighter', icon: 'ph:highlighter', label: 'Highlighter', key: 'M' },
-  { id: 'eraser', icon: 'ph:eraser', label: 'Eraser', key: 'E' },
-  { id: 'text', icon: 'ph:text-t', label: 'Text', key: 'T' },
-  { id: 'sticky', icon: 'ph:note-blank', label: 'Sticky note', key: 'S' },
-  { id: 'shape', icon: 'ph:square', label: 'Shape', key: 'R, O, D' },
-  { id: 'frame', icon: 'ph:frame-corners', label: 'Frame', key: 'F' },
-  { id: 'arrow', icon: 'ph:arrow-up-right', label: 'Arrow', key: 'L' },
-]
 /** The board's own width decides the layout (a narrow board beside the sidebar on a wide screen too). */
 const narrow = computed(() => size.w < 720)
-const toolIcon = (t: (typeof tools)[number]) => (t.id === 'shape' ? SHAPE_ICONS[shapeKind.value] : t.icon)
 
 /**
  * The dot grid follows the camera exactly: an SVG pattern in board units. (A CSS background rounds
@@ -1400,10 +1403,10 @@ const connecting = computed(() => {
 const ink = computed(() => {
   const g = gesture.value
   if (g?.kind !== 'draw') return null
-  const highlight = tool.value === 'highlighter'
+  const highlight = highlighting.value
   return {
     d: strokePath(g.points, penWidth(), { pen: g.pressure, last: false }),
-    fill: strokeColor(highlight ? 'yellow' : pen.color),
+    fill: strokeColor(pen.value.color ?? (highlight ? 'yellow' : undefined)),
     opacity: highlight ? 0.4 : 1,
   }
 })
@@ -1620,64 +1623,15 @@ const cursor = computed(() => {
       Back to content
     </button>
 
-    <!-- Pen options -->
-    <div
-      v-if="!readonly && !embedded && (tool === 'pen' || tool === 'highlighter')"
-      data-ui
-      class="absolute bottom-[calc(3.75rem+env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-line bg-surface p-1 shadow-md"
-    >
-      <template v-if="tool === 'pen'">
-        <button
-          v-for="c in [undefined, ...PICKER_COLORS.slice(1, 7)]"
-          :key="c ?? 'ink'"
-          class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover"
-          :title="c ?? 'Ink'"
-          @click="pen.color = c"
-        >
-          <span class="h-4 w-4 rounded-full" :class="pen.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-surface' : ''" :style="{ background: strokeColor(c) }" />
-        </button>
-        <span class="mx-1 h-5 w-px bg-line" />
-        <button v-for="s in PEN_SIZES" :key="s" class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover" :class="pen.size === s ? 'bg-hover' : ''" :title="`Size ${s}`" @click="pen.size = s">
-          <span class="rounded-full bg-ink" :style="{ width: `${s + 2}px`, height: `${s + 2}px` }" />
-        </button>
-      </template>
-      <span v-else class="px-2 text-xs text-ink-soft">Highlighter</span>
-    </div>
-
-    <!-- Tools -->
-    <div
-      v-if="!embedded"
-      data-ui
-      class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-0.5 overflow-x-auto rounded-xl border border-line bg-surface p-1 shadow-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      :class="narrow ? 'left-3 max-w-[calc(100%-8.75rem)]' : 'left-1/2 max-w-[calc(100%-1.5rem)] -translate-x-1/2'"
-    >
-      <template v-if="!readonly">
-        <button
-          v-for="t in tools"
-          :key="t.id"
-          class="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
-          :class="tool === t.id ? 'bg-accent/15 text-accent' : 'text-ink-soft hover:bg-hover hover:text-ink'"
-          :title="`${t.label} (${t.key})`"
-          :aria-label="t.label"
-          :aria-pressed="tool === t.id"
-          @click="tool = t.id"
-        >
-          <AppIcon :fallback="toolIcon(t)" :size="18" />
-        </button>
-        <span class="mx-1 h-5 w-px shrink-0 bg-line" />
-        <button
-          ref="pickerAnchor"
-          class="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm text-ink-soft hover:bg-hover hover:text-ink"
-          title="Add an object (@)"
-          @click="pickerOpen = !pickerOpen"
-        >
-          <AppIcon fallback="ph:cards" :size="18" /><span v-if="!narrow">Object</span>
-        </button>
-      </template>
-      <template v-else>
-        <span class="px-2 text-xs text-ink-faint">Read only</span>
-      </template>
-    </div>
+    <BoardToolbar
+      v-if="!embedded && !readonly"
+      v-model:tool="tool"
+      v-model:draw-mode="drawMode"
+      :draw-modes="DRAW_MODES"
+      :narrow="size.w < 1040"
+      @object="(anchor) => ((pickerAnchor = anchor), (pickerOpen = !pickerOpen))"
+    />
+    <div v-else-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink-faint shadow-md">Read only</div>
 
     <!-- Zoom -->
     <div v-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-3 flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md">

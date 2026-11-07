@@ -34,6 +34,11 @@ GitHub release page.
   and fingers move the view: a tap selects, and a finger drags only what is already selected, so
   panning never drags a card along. A palm, or a touch just as the pen lifts, is ignored. **Pen and
   fingers** in the board menu sets this per device (Auto, Pen draws, Fingers draw).
+- **A new whiteboard toolbar.** The pen, shapes, sticky notes and arrows show a row above the
+  tools: four pen presets (each a pen or a highlighter with its color, width and, for pens, a
+  dashed or dotted line), the shapes, the notes' colors, the arrows' courses, and settings for
+  the rest (a shape's fill and outline, a note's text size, an arrow's ends, line and color). The
+  highlighter now has colors and widths too. The settings are kept on each device.
 - **A whiteboard fills its page.** The title is in a thin bar above the board, and tags,
   properties, comments and backlinks are in a **Details** panel beside it (closed until opened).
 

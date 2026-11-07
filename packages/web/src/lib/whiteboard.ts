@@ -118,6 +118,14 @@ export function strokePath(points: number[], size: number, options: { sx?: numbe
 }
 
 /** Whether the points carry pressure from a pen (a mouse and fingers report 0.5 or 0 throughout). */
+/** A dashed or dotted stroke is drawn as a line through its points (x, y, pressure in turn), scaled by sx, sy. */
+export function centerlinePath(points: number[], sx = 1, sy = 1): string {
+  const f = (n: number) => Math.round(n * 100) / 100
+  let d = ''
+  for (let i = 0; i + 1 < points.length; i += 3) d += `${i ? ' L' : 'M'}${f(points[i]! * sx)},${f(points[i + 1]! * sy)}`
+  return d
+}
+
 export const hasPressure = (points: number[]) => {
   for (let i = 2; i < points.length; i += 3) if (points[i] !== 0.5 && points[i] !== 0) return true
   return false

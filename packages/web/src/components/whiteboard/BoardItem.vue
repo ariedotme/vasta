@@ -4,7 +4,7 @@
 // and holds the draft.
 import { computed } from 'vue'
 import type { ObjectSummary, ObjectType, PlacedElement } from '@vasta/core'
-import { STICKY_INK, fillColor, hasPressure, shapePath, stickyColor, strokeColor, strokePath } from '../../lib/whiteboard.ts'
+import { STICKY_INK, centerlinePath, dashArray, fillColor, hasPressure, shapePath, stickyColor, strokeColor, strokePath } from '../../lib/whiteboard.ts'
 import ObjectCard from '../ObjectCard.vue'
 import AppIcon from '../AppIcon.vue'
 import BoardCardEmbed from './BoardCardEmbed.vue'
@@ -99,6 +99,19 @@ function onInput(event: Event) {
       :style="clip ? { clipPath: `inset(${Math.max(0, clip.top)}px ${Math.max(0, clip.right)}px ${Math.max(0, clip.bottom)}px ${Math.max(0, clip.left)}px)` } : undefined"
     >
       <path
+        v-if="element.dash && !element.highlight"
+        :d="centerlinePath(element.points, box.w / element.sw, box.h / element.sh)"
+        :data-element="element.id"
+        fill="none"
+        :stroke="strokeColor(element.color)"
+        :stroke-width="element.size"
+        :stroke-dasharray="dashArray(element.dash, element.size)"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        style="pointer-events: visibleStroke"
+      />
+      <path
+        v-else
         :d="path"
         :data-element="element.id"
         :fill="strokeColor(element.color ?? (element.highlight ? 'yellow' : undefined))"
