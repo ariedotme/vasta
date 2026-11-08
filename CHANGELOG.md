@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **A type opens on the view you last picked in it**, per type, on this device (it opened on its
+  first view before).
+
 ### Fixed
 
 - **A query embedded in a page** keeps its settings open while you edit them; they closed after
