@@ -660,7 +660,7 @@ export class ClientStore extends Store {
     const next = applyEdit(stored, object, base ?? stored)
     if (!next) return stored
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    return this.putObject({ ...completeRepeat(next, stored, this.getType(next.typeId), timeZone), content: stored.content, updatedAt: at })
+    return this.putObject({ ...completeRepeat(next, stored, this.getType(next.typeId), timeZone, base ?? stored), content: stored.content, updatedAt: at })
   }
 
   createType(data: { spaceId: Id; name: string; pluralName?: string; icon?: Icon }, at: IsoDateTime): ObjectType {

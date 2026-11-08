@@ -11,7 +11,9 @@ GitHub release page.
 - **A repeating task set to done is due next time**: it keeps its to-do status with its due date
   at the next occurrence, as in other reminder apps; done on the last occurrence of a series that
   ends, it stays done, and another status meaning done (a "Dropped") ends it. On the calendar,
-  only the occurrence it is due next has a checkbox. Before, done finished the whole series.
+  only the occurrence it is due next has a checkbox (the first one not cancelled), and every
+  occurrence of a series that ended shows as done. Done from two devices at once completes one
+  occurrence, not two. Before, done finished the whole series.
 
 ### Fixed
 

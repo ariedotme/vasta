@@ -303,35 +303,57 @@ export function splitSeries(value: DateValue, occurrence: IsoDateTime, change: O
 }
 
 /**
- * A task done whose due date repeats is due next time instead, as reminders in other apps do: its
- * due date becomes the series from the next occurrence that is not cancelled (splitSeries' rest of
- * it, so a COUNT ends where it did) and its status goes back to the to-do one it had (or the first
- * to-do one). Done is the first option meaning done, the one checkboxes set; others (a "Dropped")
- * end it, as does the last occurrence done. `object` is the task being saved, `stored` the one it
- * replaces; only a status changed by this save counts, so a merge of changes made elsewhere never
- * repeats it.
+ * The occurrence a repeating date is at: the first one the rule gives that is not cancelled (its
+ * key, as `CalendarEntry.occurrence`), the one a repeating task is done on next. Undefined when
+ * the date does not repeat or every occurrence is cancelled.
  */
-export function completeRepeat(object: ObjectRecord, stored: ObjectRecord | undefined, type: ObjectType | undefined, timeZone: string): ObjectRecord {
+export function currentOccurrence(value: DateValue, timeZone: string): IsoDateTime | undefined {
+  return nextOccurrences(value, timeZone).next().value
+}
+
+function* nextOccurrences(value: DateValue, timeZone: string): Generator<IsoDateTime> {
+  const rule = value.rrule ? parseRule(value.rrule) : undefined
+  if (!rule) return
+  for (const times of series(value, rule, timeZone)) {
+    const exception = value.exceptions?.[times.start]
+    if (!exception || validException(exception)) yield times.start
+  }
+}
+
+/**
+ * A task done whose due date repeats is due next time instead, as reminders in other apps do: the
+ * occurrence it is at (currentOccurrence, the one with a checkbox on the calendar) is done, its due
+ * date becomes the series from the next one (splitSeries' rest of it, so a COUNT ends where it did)
+ * and its status goes back to the to-do one it had (or the first to-do one). Done is the first
+ * option meaning done, the one checkboxes set; others (a "Dropped") end it, as does the last
+ * occurrence done. `object` is the task being saved, `stored` the one it replaces and `base` the
+ * copy the change was made to (when it was edited for a while); only a status changed by this save
+ * counts, so a merge of changes made elsewhere never repeats it, and done on an occurrence done
+ * elsewhere meanwhile (the due date moved on since `base`) is dropped rather than done again.
+ */
+export function completeRepeat(object: ObjectRecord, stored: ObjectRecord | undefined, type: ObjectType | undefined, timeZone: string, base: ObjectRecord | undefined = stored): ObjectRecord {
   const status = type?.system === 'task' ? type.properties.find((p) => p.id === 'status') : undefined
   if (status?.kind !== 'select') return object
   const optionOf = (o: ObjectRecord | undefined) => {
     const value = o?.props.status
     return value?.kind === 'select' ? status.options.find((option) => option.id === value.value[0]) : undefined
   }
+  const dueOf = (o: ObjectRecord | undefined) => (o?.props.due?.kind === 'date' ? o.props.due.value : undefined)
   const done = status.options.find((option) => option.status === 'done')
   const before = optionOf(stored)
   const todo = before?.status === 'todo' ? before : status.options.find((option) => option.status === 'todo')
-  const due = object.props.due?.kind === 'date' ? object.props.due.value : undefined
-  const rule = due?.rrule ? parseRule(due.rrule) : undefined
-  if (!done || !todo || !due || !rule || optionOf(object) !== done || before?.status === 'done') return object
-  let next: IsoDateTime | undefined
-  let first = true
-  for (const times of series(due, rule, timeZone)) {
-    if (first) first = false
-    else if (!due.exceptions?.[times.start] || validException(due.exceptions[times.start])) {
-      next = times.start
-      break
-    }
+  const due = dueOf(object)
+  if (!done || !todo || !due?.rrule || optionOf(object) !== done || before?.status === 'done') return object
+  const upcoming = nextOccurrences(due, timeZone)
+  const current = upcoming.next().value
+  const next = upcoming.next().value
+  if (!current) return object
+  const seen = dueOf(base)
+  const kept = dueOf(stored)
+  const at = kept && currentOccurrence(kept, timeZone)
+  if (base !== stored && seen && at === current && currentOccurrence(seen, timeZone) !== at) {
+    const { status: _status, ...props } = object.props
+    return { ...object, props: stored?.props.status ? { ...props, status: stored.props.status } : props }
   }
   const rest = next ? splitSeries(due, next, currentTimes(due, next), timeZone)?.after : undefined
   if (!rest) return object
@@ -430,6 +452,7 @@ export function calendarObjects(store: Store, spaceId: Id, types: Map<Id, Object
 export function objectEntries(objects: ObjectSummary[], types: Map<Id, ObjectType>, range: DayRange, timeZone: string): CalendarEntry[] {
   const entries: CalendarEntry[] = []
   const add = (object: ObjectSummary, kind: CalendarEntry['kind'], field: string, value: DateValue) => {
+    const current = value.rrule ? currentOccurrence(value, timeZone) : undefined
     for (const occurrence of occurrences(value, range, timeZone)) {
       entries.push({
         key: `${object.id}:${field}:${occurrence.occurrence ?? occurrence.start}`,
@@ -439,6 +462,7 @@ export function objectEntries(objects: ObjectSummary[], types: Map<Id, ObjectTyp
         ...occurrence,
         allDay: value.resolution === 'day',
         ...(occurrence.occurrence ? { recurring: true } : {}),
+        ...(occurrence.occurrence && occurrence.occurrence === current ? { current: true } : {}),
       })
     }
   }

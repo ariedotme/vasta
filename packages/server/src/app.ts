@@ -1394,7 +1394,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
         updatedAt: now(),
       }
     }
-    const stored = store.putObject(completeRepeat(object, existing, store.getType(object.typeId), userOf(c).timeZone ?? 'UTC'))
+    const stored = store.putObject(completeRepeat(object, existing, store.getType(object.typeId), userOf(c).timeZone ?? 'UTC', base && typeof base === 'object' ? base : existing))
     changed(stored)
     return c.json(stored)
   })

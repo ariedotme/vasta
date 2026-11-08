@@ -18,7 +18,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node firstsync.mjs [chromium|webkit]   # LAST_OBJECT=<id>: also open it offline
     node refused.mjs             # a refused change: toast, Settings list, dismiss (PHONE=1, SHOTS=<dir>)
     node httpsave.mjs            # HTTP mode: a rename made elsewhere while typing is not undone
-    node calendar.mjs [chromium|webkit] [base] [phone]   # repeating dates: drag, resize, the three choices, bars; phone = long press (chromium)
+    node calendar.mjs [chromium|webkit] [base] [phone]   # repeating dates: drag, resize, the three choices, bars, a repeating task's checkbox; phone = long press (chromium)
     node table.mjs [chromium|webkit] [base]   # Columns menu, resizing, filters through a relation (MODE=json too)
     node formula.mjs [chromium|webkit] [base]  # a formula column, writing one in Type settings, sort, filter, the object page (MODE=json too)
     node blocks.mjs [chromium|webkit] [base]   # block colors, copy link to block, opening it, ids of duplicates (MODE=json too)

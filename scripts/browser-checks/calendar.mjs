@@ -1,6 +1,6 @@
 // The calendar's repeating dates in the test env: drag and resize with the mouse, the "This event /
 // This and following / All events" question, the occurrence popover, multi-day bars in the month,
-// and on a phone profile a long press that drags (a quick swipe still scrolls).
+// a repeating task's checkbox (on the occurrence it is at, done moves it to the next one), and on a phone profile a long press that drags (a quick swipe still scrolls).
 //   node calendar.mjs [chromium|webkit] [base] [phone]
 // The phone run needs Chromium (touch moves go through CDP).
 import { mkdtempSync } from 'node:fs'
@@ -56,7 +56,7 @@ const task = bundle.types.find((t) => t.system === 'task')
 const pageType = bundle.types.find((t) => t.system === 'page')
 
 // Objects left by an earlier run that failed.
-for (const prefix of ['Sync', 'Dentist', 'Trip', 'Popme', 'Touchme']) {
+for (const prefix of ['Sync', 'Dentist', 'Trip', 'Popme', 'Touchme', 'Bins', 'Ended']) {
   for (const object of await get(`/api/spaces/${space.id}/search?q=${prefix}&limit=100`)) {
     if (new RegExp(`^${prefix}( (chromium|webkit)|$)`).test(object.title)) await page.request.delete(`${base}/api/objects/${object.id}`, { headers })
   }
@@ -206,6 +206,34 @@ if (!phone) {
   await mouseDrag({ x: barBox.x + barBox.width / 2, y: barBox.y + barBox.height / 2 }, { x: target.x + target.width / 2, y: target.y + target.height / 2 })
   await until(async () => (await get(`/api/objects/${trip.id}`)).date.start === '2027-03-10T00:00:00.000Z', 'the trip starts on the 10th')
   if ((await get(`/api/objects/${trip.id}`)).date.end !== '2027-03-12T00:00:00.000Z') throw new Error('the trip changed length')
+}
+
+if (!phone) {
+  step('month view: a weekly task whose first week is cancelled has its checkbox on the second, and done moves it on; an ended one is struck through every week')
+  const bins = await post('/api/objects', {
+    typeId: task.id,
+    title: `Bins ${tag}`,
+    props: { due: { kind: 'date', value: { start: '2027-03-01T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY;COUNT=4', exceptions: { '2027-03-01T00:00:00.000Z': { cancelled: true } } } } },
+  })
+  const doneOption = task.properties.find((p) => p.id === 'status').options.find((o) => o.status === 'done')
+  const ended = await post('/api/objects', {
+    typeId: task.id,
+    title: `Ended ${tag}`,
+    props: { status: { kind: 'select', value: [doneOption.id] }, due: { kind: 'date', value: { start: '2027-03-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' } } },
+  })
+  await page.goto(`${base}/calendar?view=month&date=2027-03-01`)
+  const binsEntries = page.locator('.vasta-entry', { hasText: `Bins ${tag}` })
+  await until(async () => (await binsEntries.count()) === 3, 'three weeks of bins')
+  const checkboxes = () => page.locator('[data-day] .vasta-entry', { hasText: `Bins ${tag}` }).locator('button[title="Mark as done"]')
+  await until(async () => (await checkboxes().count()) === 1, 'one checkbox')
+  if (!(await page.locator('[data-day="2027-03-08"] .vasta-entry', { hasText: `Bins ${tag}` }).locator('button[title="Mark as done"]').count())) throw new Error('the checkbox is not on March 8')
+  await checkboxes().click()
+  await until(async () => dueOf(await get(`/api/objects/${bins.id}`)).start === '2027-03-15T00:00:00.000Z', 'bins due March 15')
+  await until(async () => (await page.locator('[data-day="2027-03-15"] .vasta-entry', { hasText: `Bins ${tag}` }).locator('button[title="Mark as done"]').count()) === 1, 'the checkbox moved to March 15')
+  const endedEntries = page.locator('.vasta-entry', { hasText: `Ended ${tag}` })
+  await until(async () => (await endedEntries.count()) >= 4, 'the ended task shows every week')
+  for (const title of await endedEntries.locator('span.font-medium').all()) if (!(await title.getAttribute('class')).includes('line-through')) throw new Error('a week of the ended task is not struck through')
+  for (const id of [bins.id, ended.id]) await page.request.delete(`${base}/api/objects/${id}`, { headers })
 }
 
 for (const id of [weekly.id, dentist.id, trip.id]) await page.request.delete(`${base}/api/objects/${id}`, { headers })

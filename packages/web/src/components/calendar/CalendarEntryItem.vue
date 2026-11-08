@@ -30,12 +30,9 @@ const resizable = computed(() => props.variant === 'block' && !!dragging?.resiza
 
 const summary = computed(() => (props.entry.objectId ? summaryOf(props.entry.objectId) : undefined))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
-// A repeating task is done one occurrence at a time, the one it is due next (completeRepeat): the others have no checkbox.
-const isTask = computed(() => {
-  if (type.value?.system !== 'task' || props.entry.field !== 'due') return false
-  const due = summary.value?.props.due
-  return !props.entry.occurrence || (due?.kind === 'date' && Date.parse(due.value.start) === Date.parse(props.entry.occurrence))
-})
+const isTask = computed(() => type.value?.system === 'task' && props.entry.field === 'due')
+// A repeating task is done one occurrence at a time, the one it is at (completeRepeat): the others have no checkbox.
+const checkable = computed(() => isTask.value && (!props.entry.recurring || !!props.entry.current))
 const done = computed(() => isTask.value && isDone(type.value, summary.value?.props.status?.kind === 'select' ? summary.value.props.status.value : undefined))
 const title = computed(() => (props.entry.kind === 'external' ? (props.entry.title ?? '') : displayTitle(summary.value, type.value)))
 const color = computed(() => (props.entry.kind === 'external' ? (props.source?.color ?? 'sky') : (type.value?.color ?? 'gray')))
@@ -97,7 +94,7 @@ function onContextMenu(event: MouseEvent) {
   >
     <span class="flex min-w-0 items-center gap-1">
       <button
-        v-if="isTask"
+        v-if="checkable"
         class="shrink-0 rounded-sm hover:opacity-70"
         :title="done ? 'Mark as to do' : 'Mark as done'"
         @click.prevent.stop="toggleDone"

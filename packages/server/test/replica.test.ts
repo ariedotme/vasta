@@ -346,6 +346,18 @@ describe('local replica', () => {
     expect([stored.title, stored.description]).toEqual(['Task, renamed', 'From the laptop'])
   })
 
+  it('makes a repeating task set to done on the device due next time', async () => {
+    const { user, phone } = setup()
+    const due = { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' }
+    const task = (await (await user.request('/api/objects', json({ typeId: builtinTypeId('s', 'task'), title: 'Bins', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: due } } }))).json()) as ObjectRecord
+    await phone.sync.sync()
+    const base = phone.store.getObject(task.id)!
+    const saved = phone.store.saveObject({ ...base, props: { ...base.props, status: { kind: 'select', value: ['done'] } } }, now(), base)
+    expect(saved.props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
+    await phone.sync.sync()
+    expect((await serverObject(user.request, task.id)).props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
+  })
+
   it('deletes a type with its objects offline, follows purges, and drops a space the user left', async () => {
     const { store, user, phone, laptop } = setup()
     const type = (await (await user.request('/api/types', json({ spaceId: 's', name: 'Book' }))).json()) as { id: string }
