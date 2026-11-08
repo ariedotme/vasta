@@ -12,6 +12,8 @@ GitHub release page.
   each change, in the middle of setting up a filter.
 - **A link to an object of another space** opens that space and shows the object's text and
   properties; only its title showed before.
+- **A link or embed** no longer loses its title and preview when its object is saved while its
+  summary is loading.
 
 ## 0.7.1 (2026-11-07)
 
