@@ -449,8 +449,8 @@ const stays = (t: Tool) => t === 'pen' || t === 'eraser' || t === 'hand' || t ==
 
 type Point = { x: number; y: number }
 type Gesture =
-  /** `tap`: a finger on an element not selected pans, and selects it if it does not move. */
-  | { kind: 'pan'; sx: number; sy: number; x: number; y: number; tap?: Id }
+  /** `tap`: a finger on an element or arrow pans, and selects it if it does not move; 'clear' clears the selection on empty space. */
+  | { kind: 'pan'; sx: number; sy: number; x: number; y: number; tap?: Id | 'clear'; at: number }
   | { kind: 'scroll'; el: HTMLElement; top: number; sy: number }
   | { kind: 'move'; start: Point; moved: boolean; sx: number; sy: number; from: Box | undefined; others: Box[] }
   /** `tl`: a turned element's top left corner, which stays put while its size changes. */
@@ -506,7 +506,7 @@ const pressureOf = (e: PointerEvent) => (e.pointerType === 'pen' ? Math.max(e.pr
 /** The pen's width is what it looks like on screen at the zoom it draws at, so a zoomed-out board still gets a visible line. */
 const penWidth = () => pen.value.size / camera.zoom
 
-const pan = (p: Point): Gesture => ({ kind: 'pan', sx: p.x, sy: p.y, x: camera.x, y: camera.y })
+const pan = (p: Point, at = 0): Gesture => ({ kind: 'pan', sx: p.x, sy: p.y, x: camera.x, y: camera.y, at })
 
 /** Start moving the selection, and what lies inside selected frames. */
 function startMove(world: Point, p: Point) {
@@ -573,7 +573,7 @@ function onPointerDown(event: PointerEvent) {
   if (pointers.size === 2) {
     if (gesture.value?.kind === 'draw') return // a second finger while drawing with one: keep the line
     // If the first finger started panning before the second landed, restore the camera to before the pan.
-    if (gesture.value?.kind === 'pan') {
+    if (gesture.value?.kind === 'pan' && event.timeStamp - gesture.value.at < 150) {
       camera.x = gesture.value.x
       camera.y = gesture.value.y
     }
@@ -587,11 +587,11 @@ function onPointerDown(event: PointerEvent) {
   const world = toWorld(p.x, p.y)
   const elementId = elementAt(event.target)
   const handle = handleAt(event.target)
-  if (event.button === 1 || spaceHeld.value || (tool.value === 'hand' && event.pointerType !== 'pen')) return void (gesture.value = pan(p))
+  if (event.button === 1 || spaceHeld.value || (tool.value === 'hand' && event.pointerType !== 'pen')) return void (gesture.value = pan(p, event.timeStamp))
   // A pen's eraser end (or its eraser button).
   if (event.pointerType === 'pen' && (event.button === 5 || event.buttons & 32) && !props.readonly) return startErase(event)
   if ((event.button !== 0 && event.pointerType === 'mouse') || props.readonly) {
-    if (!elementId) gesture.value = pan(p)
+    if (!elementId) gesture.value = pan(p, event.timeStamp)
     return
   }
   // A finger in a card's contents scrolls them (the board's own touch handling owns every touch).
@@ -603,10 +603,12 @@ function onPointerDown(event: PointerEvent) {
   // With fingers on the board, they navigate: they pan, a tap selects, and they move only what is
   // already selected (so a finger meant to move the view never drags an element along).
   // Tools that make something (text, notes, shapes, frames, arrows, the lasso) still work with a finger.
-  if (isTouch && !handle && (tool.value === 'select' || tool.value === 'hand' || (pencilOnly.value && drawing.value))) {
-    const select_ = tool.value === 'select' || tool.value === 'hand'
-    if (elementId && select_ && selection.value.has(elementId)) return startMove(world, p)
-    gesture.value = { ...pan(p), ...(elementId && select_ ? { tap: elementId } : {}) }
+  if (isTouch && !handle && (tool.value === 'select' || (pencilOnly.value && drawing.value))) {
+    const select_ = tool.value === 'select'
+    if (elementId && select_ && selection.value.has(elementId) && !event.shiftKey) return startMove(world, p)
+    const arrowId = arrowAt(event.target)
+    const tap: Id | 'clear' | undefined = select_ ? (elementId ?? arrowId ?? 'clear') : undefined
+    gesture.value = { ...pan(p, event.timeStamp), ...(tap ? { tap } : {}) }
     return
   }
   // The pen draws whatever the tool, unless it is on a handle or a tool that makes things.
@@ -701,7 +703,7 @@ function onPointerDown(event: PointerEvent) {
   // Empty board: a finger pans, a mouse or pen draws a selection box.
   if (isTouch) {
     select([])
-    gesture.value = pan(p)
+    gesture.value = pan(p, event.timeStamp)
     return
   }
   const keep = event.shiftKey ? new Set(selection.value) : new Set<Id>()
@@ -871,7 +873,15 @@ function onPointerUp(event: PointerEvent) {
   if (event.type === 'pointercancel' && g.kind !== 'pan') return cancelGesture()
   if (g.kind === 'pan' && g.tap && event.type !== 'pointercancel') {
     const p = local(event)
-    if (Math.hypot(p.x - g.sx, p.y - g.sy) < 10) select(event.shiftKey ? [...selection.value, g.tap] : [g.tap])
+    if (Math.hypot(p.x - g.sx, p.y - g.sy) < 10) {
+      if (g.tap === 'clear') select([])
+      else if (event.shiftKey) {
+        const next = new Set(selection.value)
+        if (next.has(g.tap)) next.delete(g.tap)
+        else next.add(g.tap)
+        select(next)
+      } else select([g.tap])
+    }
   }
   if (g.kind === 'move' && g.moved && (preview.dx || preview.dy)) {
     const patches: Record<Id, BoardPatch> = {}
@@ -957,19 +967,19 @@ function onStylusTouch(event: TouchEvent) {
   if (touches.some((t) => t.touchType === 'stylus')) event.preventDefault()
 }
 
-// Safari on a Mac pinches with gesture events instead of wheels.
+// Safari on a Mac (and an iPad with a trackpad) pinches with gesture events instead of wheels.
 let gestureZoom = 1
 function onGestureStart(event: Event) {
-  if ('ontouchstart' in window) return
   event.preventDefault()
+  if (touches()) return
   gestureZoom = camera.zoom
 }
 function onGestureChange(event: Event) {
-  if ('ontouchstart' in window) return
   event.preventDefault()
+  if (touches()) return
   leaveScene()
-  const e = event as Event & { scale: number; clientX: number; clientY: number }
-  const p = local(e)
+  const e = event as Event & { scale: number; clientX?: number; clientY?: number }
+  const p = e.clientX !== undefined && e.clientY !== undefined ? local({ clientX: e.clientX, clientY: e.clientY }) : { x: size.w / 2, y: size.h / 2 }
   zoomAt(p.x, p.y, gestureZoom * e.scale)
 }
 
@@ -1645,10 +1655,8 @@ onMounted(() => {
   // unless they are cancelled; fingers keep their touches for the browser.
   root.value!.addEventListener('touchstart', onStylusTouch, { passive: false })
   root.value!.addEventListener('touchmove', onStylusTouch, { passive: false })
-  if (!('ontouchstart' in window)) {
-    root.value!.addEventListener('gesturestart', onGestureStart)
-    root.value!.addEventListener('gesturechange', onGestureChange)
-  }
+  root.value!.addEventListener('gesturestart', onGestureStart)
+  root.value!.addEventListener('gesturechange', onGestureChange)
 })
 onBeforeUnmount(() => {
   if (editing.value) commitText()

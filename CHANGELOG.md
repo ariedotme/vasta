@@ -11,8 +11,8 @@ GitHub release page.
 - **A link to an object of another space** opens that space and shows the object's text and
   properties; only its title showed before.
 - **Whiteboards**: on touch screens, zooming with two fingers keeps its anchor under the fingers
-  without sliding or flashing on an iPad, and scrolling or zooming no longer selects the element under
-  the finger.
+  without sliding or flashing on an iPad; fingers pan and only move what is already selected, while
+  tapping selects an element or arrow (or clears the selection on empty space).
 
 ## 0.7.1 (2026-11-07)
 
