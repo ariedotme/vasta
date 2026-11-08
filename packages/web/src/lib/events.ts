@@ -8,7 +8,7 @@ import { api } from './api.ts'
 import { router } from '../router.ts'
 import { notifyDesktop, type DesktopNotification } from './platform.ts'
 import { onReplicaChanges, onReplicaRefused, pokeReplica, useReplica } from './replica.ts'
-import { cachedSummary, forgetSummary, notice, refreshCounts, refreshSpaces, replaceType, requestSummaries } from './state.ts'
+import { cachedSummary, notice, refreshCounts, refreshSpaces, replaceType, requestSummaries } from './state.ts'
 
 // The server only sends events of the spaces the user is a member of.
 export type ChangeEvent =
@@ -30,10 +30,7 @@ let stopRefused: (() => void) | undefined
 function dispatch(event: ChangeEvent) {
   if (event.kind === 'object') {
     const cached = cachedSummary(event.id)
-    if (cached && cached.updatedAt < event.updatedAt) {
-      forgetSummary(event.id)
-      requestSummaries([event.id])
-    }
+    if (cached && cached.updatedAt < event.updatedAt) requestSummaries([event.id], true)
     clearTimeout(countsTimer)
     countsTimer = setTimeout(() => void refreshCounts(), 500)
   } else if (event.kind === 'type') {
