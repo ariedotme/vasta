@@ -252,7 +252,8 @@ const started = reactive(new Map<string, Id>())
 const noteOf = (day: string) => entries.value.find((e) => e.kind === 'daily-note' && e.startDay === day)?.objectId ?? started.get(day)
 const starting = ref(false)
 
-async function startNote(text: string, day = anchor.value) {
+/** Start the day's note (from the Daily note type's default template), with what was typed if anything. */
+async function startNote(text?: string, day = anchor.value) {
   if (!workspace.space || starting.value) return
   starting.value = true
   try {

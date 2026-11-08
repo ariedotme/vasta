@@ -293,6 +293,13 @@ describe('local replica', () => {
     second.close()
   })
 
+  it('opens a day’s note asked for without text, which reaches the worker as null', async () => {
+    const { phone } = setup()
+    await phone.sync.sync()
+    const [text] = JSON.parse(JSON.stringify([undefined])) as [string]
+    expect(phone.store.dailyNote('s', '2026-11-03', now(), text).id).toBe(dailyNoteId('s', '2026-11-03'))
+  })
+
   it('gives a day one copy of its template when two devices and the server make its note apart', async () => {
     const { user, phone, laptop } = setup()
     const body: DocNode[] = [
