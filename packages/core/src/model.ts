@@ -595,6 +595,8 @@ export interface CalendarEntry {
   recurring?: boolean
   /** Objects' repeating dates: the start the rule gives this occurrence (it differs once moved). */
   occurrence?: IsoDateTime
+  /** Objects' repeating dates: the first occurrence not cancelled, the one a repeating task is done on (completeRepeat). */
+  current?: boolean
   /** External events only. */
   sourceId?: Id
   title?: string

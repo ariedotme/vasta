@@ -82,6 +82,27 @@ describe('server API', () => {
     expect((await put({ ...base })).title).toBe('Trip')
   })
 
+  it('makes a repeating task done due next time', async () => {
+    const { app } = setup()
+    const due = { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY;COUNT=2' }
+    const task = (await (await app.request('/api/objects', json({ typeId: builtinTypeId('s', 'task'), title: 'Bins', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: due } } }))).json()) as ObjectRecord
+    const done = (object: ObjectRecord) => ({ ...object, props: { ...object.props, status: { kind: 'select', value: ['done'] } }, base: object })
+    const put = async (body: unknown) => (await app.request(`/api/objects/${task.id}`, { ...json(body), method: 'PUT' })).json() as Promise<ObjectRecord>
+    const next = await put(done(task))
+    expect(next.props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z', rrule: 'FREQ=WEEKLY;COUNT=1' } } })
+    expect((await put(done(next))).props).toMatchObject({ status: { value: ['done'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
+  })
+
+  it('does not do a repeating task’s next occurrence when two devices set the same one done', async () => {
+    const { app } = setup()
+    const due = { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' }
+    const task = (await (await app.request('/api/objects', json({ typeId: builtinTypeId('s', 'task'), title: 'Bins', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: due } } }))).json()) as ObjectRecord
+    const done = { ...task, props: { ...task.props, status: { kind: 'select', value: ['done'] } }, base: task }
+    const put = async (body: unknown) => (await app.request(`/api/objects/${task.id}`, { ...json(body), method: 'PUT' })).json() as Promise<ObjectRecord>
+    await put(done)
+    expect((await put(done)).props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
+  })
+
   it('does not undo a write that lands while a save’s body arrives', async () => {
     const { app, store } = setup()
     const object = (await (await app.request('/api/objects', json({ typeId: builtinTypeId('s', 'page'), title: 'Trip' }))).json()) as ObjectRecord

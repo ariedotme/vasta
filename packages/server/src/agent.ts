@@ -111,6 +111,7 @@ import {
   type CardView,
   type NewBoardElement,
 } from '@vasta/core'
+import { completeRepeat } from '@vasta/core/calendar'
 import { docToMarkdown, markdownToDoc } from '@vasta/core/markdown'
 import type { NodeStore } from '@vasta/core/node'
 import { Y, checkDoc } from '@vasta/editor-schema/yjs'
@@ -971,7 +972,7 @@ export class AgentTools {
     related = [...tags, ...related]
     const stored = this.store.transaction(() => {
       for (const other of related) this.store.putObject(other)
-      return this.store.putObject(object)
+      return this.store.putObject(completeRepeat(object, existing, type, this.captures.timeZone))
     })
     for (const other of related) this.changed(other)
     this.changed(stored)
