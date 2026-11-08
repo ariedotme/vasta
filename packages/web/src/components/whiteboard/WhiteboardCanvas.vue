@@ -482,8 +482,10 @@ const handleAt = (target: EventTarget | null) => (target as HTMLElement | null)?
 const touches = () => [...pointers.values()].filter((p) => p.type === 'touch').length
 
 function pinchState() {
-  const [a, b] = [...pointers.values()]
-  return { distance: Math.hypot(a!.x - b!.x, a!.y - b!.y), mid: { x: (a!.x + b!.x) / 2, y: (a!.y + b!.y) / 2 } }
+  const touches = [...pointers.values()].filter((p) => p.type === 'touch')
+  const [a, b] = touches.length >= 2 ? touches : [...pointers.values()]
+  if (!a || !b) return { distance: 0, mid: { x: 0, y: 0 } }
+  return { distance: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }
 }
 
 function cancelGesture() {
@@ -570,6 +572,11 @@ function onPointerDown(event: PointerEvent) {
   }
   if (pointers.size === 2) {
     if (gesture.value?.kind === 'draw') return // a second finger while drawing with one: keep the line
+    // If the first finger started panning before the second landed, restore the camera to before the pan.
+    if (gesture.value?.kind === 'pan') {
+      camera.x = gesture.value.x
+      camera.y = gesture.value.y
+    }
     cancelGesture()
     const { distance, mid } = pinchState()
     gesture.value = { kind: 'pinch', distance, zoom: camera.zoom, mid, cam: { x: camera.x, y: camera.y } }
@@ -593,10 +600,10 @@ function onPointerDown(event: PointerEvent) {
     gesture.value = { kind: 'scroll', el: scroller, top: scroller.scrollTop, sy: p.y }
     return
   }
-  // With a pen drawing, fingers navigate: they pan, a tap selects, and they move only what is
-  // already selected (so a finger meant to move the view never drags a card along).
+  // With fingers on the board, they navigate: they pan, a tap selects, and they move only what is
+  // already selected (so a finger meant to move the view never drags an element along).
   // Tools that make something (text, notes, shapes, frames, arrows, the lasso) still work with a finger.
-  if (isTouch && pencilOnly.value && !handle && (tool.value === 'select' || tool.value === 'hand' || drawing.value)) {
+  if (isTouch && !handle && (tool.value === 'select' || tool.value === 'hand' || (pencilOnly.value && drawing.value))) {
     const select_ = tool.value === 'select' || tool.value === 'hand'
     if (elementId && select_ && selection.value.has(elementId)) return startMove(world, p)
     gesture.value = { ...pan(p), ...(elementId && select_ ? { tap: elementId } : {}) }
@@ -727,6 +734,7 @@ function onPointerMove(event: PointerEvent) {
   if (g.kind === 'pinch' && pointers.size >= 2) {
     leaveScene()
     const { distance, mid } = pinchState()
+    if (!distance || !g.distance) return
     const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, g.zoom * (distance / g.distance)))
     // The point under the fingers' middle at the start stays under it.
     const anchor = { x: (g.mid.x - g.cam.x) / g.zoom, y: (g.mid.y - g.cam.y) / g.zoom }
@@ -952,10 +960,12 @@ function onStylusTouch(event: TouchEvent) {
 // Safari on a Mac pinches with gesture events instead of wheels.
 let gestureZoom = 1
 function onGestureStart(event: Event) {
+  if ('ontouchstart' in window) return
   event.preventDefault()
   gestureZoom = camera.zoom
 }
 function onGestureChange(event: Event) {
+  if ('ontouchstart' in window) return
   event.preventDefault()
   leaveScene()
   const e = event as Event & { scale: number; clientX: number; clientY: number }
@@ -1635,14 +1645,20 @@ onMounted(() => {
   // unless they are cancelled; fingers keep their touches for the browser.
   root.value!.addEventListener('touchstart', onStylusTouch, { passive: false })
   root.value!.addEventListener('touchmove', onStylusTouch, { passive: false })
-  root.value!.addEventListener('gesturestart', onGestureStart)
-  root.value!.addEventListener('gesturechange', onGestureChange)
+  if (!('ontouchstart' in window)) {
+    root.value!.addEventListener('gesturestart', onGestureStart)
+    root.value!.addEventListener('gesturechange', onGestureChange)
+  }
 })
 onBeforeUnmount(() => {
   if (editing.value) commitText()
   props.doc.off('update', refresh)
   cancelAnimationFrame(frame)
   observer?.disconnect()
+  root.value?.removeEventListener('touchstart', onStylusTouch)
+  root.value?.removeEventListener('touchmove', onStylusTouch)
+  root.value?.removeEventListener('gesturestart', onGestureStart)
+  root.value?.removeEventListener('gesturechange', onGestureChange)
   undo.destroy()
 })
 // Elements another device deleted leave the selection.
