@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **"Pin to sidebar" on Tasks did nothing**: the sidebar left Tasks out of its sections, as they
+  have their own row at the top. Pinned to a section, Tasks now show there too. New spaces no
+  longer pin Tasks, since they have that row; in an older space, Tasks may show once under Pinned
+  (Remove from Pinned takes it away).
+
 ## 0.8.0 (2026-11-08)
 
 ### Added

@@ -46,16 +46,14 @@ interface Item {
   id: Id
   kind: 'type' | 'object'
   to: string
-  /** Its place in the section's items (Tasks, kept out of the list, still has one). */
+  /** Its place in the section's items. */
   index: number
 }
 
 const sections = computed(() =>
   (workspace.space?.sidebar ?? []).map((section) => ({
     ...section,
-    entries: section.items.flatMap((id, index): Item[] =>
-      id === taskType.value?.id ? [] : [{ id, index, kind: typesById.value.has(id) ? 'type' : 'object', to: typesById.value.has(id) ? `/t/${id}` : objectPath(id) }]
-    ),
+    entries: section.items.map((id, index): Item => ({ id, index, kind: typesById.value.has(id) ? 'type' : 'object', to: typesById.value.has(id) ? `/t/${id}` : objectPath(id) })),
   }))
 )
 

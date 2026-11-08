@@ -1,6 +1,6 @@
 // Sidebar sections in the test env: a stray second "Pinned" folds into the first, "Pin to sidebar ›"
-// puts a type in several sections at once with checkboxes, rows drag between sections, and
-// section headers drag to reorder.
+// puts a type in several sections at once with checkboxes, Tasks pinned shows in its section as
+// well as at the top, rows drag between sections, and section headers drag to reorder.
 //   node sidebar.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -100,6 +100,18 @@ await page.locator('[role=menu]').nth(1).locator('[role=menuitemcheckbox]', { ha
 await until(async () => !(await sidebar()).find((x) => x.id === 'later').items.includes(book.id), 'removed from Later')
 await page.keyboard.press('Escape')
 await page.keyboard.press('Escape')
+
+step('Tasks pinned to Reading shows there as well as at the top')
+const task = types.find((t) => t.system === 'task')
+if (own.items.includes(task.id)) throw new Error('a new space pins Tasks')
+const tasksRows = page.locator('nav a', { hasText: /^\s*Tasks/ })
+await tasksRows.first().click()
+await page.locator('button[title="More"]').click()
+await page.getByRole('button', { name: /^Pin to sidebar/ }).click()
+await page.locator('[role=menu] button', { hasText: 'Reading' }).click()
+await page.keyboard.press('Escape')
+await until(async () => (await sidebar()).find((x) => x.id === 'reading').items.includes(task.id), 'Tasks in Reading')
+await until(async () => (await tasksRows.count()) === 2, 'a second Tasks row')
 
 step('drag the type from Reading to the top of Pinned')
 const firstPinned = page.locator('nav a').filter({ hasText: types.find((t) => t.id === own.items.find((i) => i !== types.find((t) => t.system === 'task')?.id))?.pluralName ?? '' }).first()
