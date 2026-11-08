@@ -4,7 +4,7 @@ import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { describe, expect, it } from 'vitest'
-import { createBuiltinTypes, newType, setNutritionEnabled, type ObjectType } from '@vasta/core'
+import { createBuiltinTypes, newObject, newType, setNutritionEnabled, type ObjectType } from '@vasta/core'
 import { NodeMediaStore } from '@vasta/core/media-node'
 import { NodeStore } from '@vasta/core/node'
 import { createApp } from '../src/app.ts'
@@ -77,6 +77,14 @@ describe('MCP endpoint', () => {
     await call('add_comment', { id: forAna.id, text: 'Before Friday, @ana' })
     expect((await call('get_object', { id: forAna.id })).comments).toEqual([{ by: 'arie (arie)', at: expect.any(String), text: 'Before Friday, @ana' }])
     await expect(call('add_comment', { id: forAna.id, text: '  ' })).rejects.toThrow('needs text')
+  })
+
+  it('makes a repeating task set to done due next time', async () => {
+    const { store, call } = await setup()
+    const type = store.listTypes('s').find((t) => t.system === 'task')!
+    const bins = store.putObject(newObject(type, { title: 'Bins', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: { start: '2026-11-02T00:00:00.000Z', resolution: 'day', rrule: 'FREQ=WEEKLY' } } } }, 'bins', AT))
+    await call('update_object', { id: bins.id, properties: { Status: 'Done' } })
+    expect(store.getObject(bins.id)!.props).toMatchObject({ status: { value: ['todo'] }, due: { value: { start: '2026-11-09T00:00:00.000Z' } } })
   })
 
   it('offers the tools, limited to the token user’s spaces', async () => {

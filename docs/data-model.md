@@ -395,6 +395,14 @@ first occurrence, and timed repeats follow the wall clock of `timeZone` so 09:00
 Objects store their own date in `date_*` columns (including `date_rrule`, `date_tz` and
 `date_exceptions`); date properties live in `props`.
 
+A task set to done whose `due` repeats is due next time instead (`completeRepeat`): the occurrence
+it is at (`currentOccurrence`: the first the rule gives that is not cancelled; `CalendarEntry.current`
+marks it, the one with a checkbox) is done, `due` becomes the series from the next one (a COUNT
+lowered by the ones passed) and the status goes back to the to-do option it had (or the first one).
+Done is the first option meaning done (the one checkboxes set); another one, or done on the last
+occurrence, ends it. Saves (app, replica, MCP) do this, sync merges do not; a save whose `base`
+was at an occurrence done since keeps the stored status, so done twice does not skip one.
+
 Occurrences changed on their own are `exceptions`, keyed by the start the rule gives the occurrence
 (an ISO instant, or midnight UTC for days; `CalendarEntry.occurrence`): `{ start, end? }` moves or
 resizes it (it shows where it was moved to, even outside the range the rule was expanded for),

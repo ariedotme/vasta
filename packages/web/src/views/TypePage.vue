@@ -71,11 +71,27 @@ const hasMetrics = computed(() => !!statusProperty(type.value))
 const metricsActive = computed(() => hasMetrics.value && activeViewId.value === METRICS_VIEW)
 const fixedActive = computed(() => metricsActive.value || (!!fixedView.value && activeViewId.value === fixedView.value.id))
 
+// A type opens on the view last picked in it, per type, on this device.
+const viewKey = `vasta.view.${props.id}`
+function lastView() {
+  try {
+    return localStorage.getItem(viewKey) ?? ''
+  } catch {
+    return ''
+  }
+}
+watch(activeViewId, (id) => {
+  try {
+    if (id) localStorage.setItem(viewKey, id)
+  } catch {}
+})
+
 watch(type, (t) => {
   if (!t) return
   const fixed = FIXED_VIEWS[t.system ?? '']
-  if (!activeViewId.value && fixed) activeViewId.value = fixed.id
-  else if (activeViewId.value !== fixed?.id && activeViewId.value !== METRICS_VIEW && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
+  if (!activeViewId.value) activeViewId.value = lastView() || fixed?.id || ''
+  const metrics = activeViewId.value === METRICS_VIEW && !!statusProperty(t)
+  if (activeViewId.value !== fixed?.id && !metrics && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
 }, { immediate: true })
 
 const view = computed<ViewDef>(() => type.value?.views.find((v) => v.id === activeViewId.value) ?? { id: 'default', name: 'All', layout: 'list' })

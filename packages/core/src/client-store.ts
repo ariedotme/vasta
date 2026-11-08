@@ -8,7 +8,7 @@
 // change not pushed yet survives an older one from the server. Rich text merges through Yjs.
 import { newId } from './ids.ts'
 import { Y } from '@vasta/editor-schema/yjs'
-import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
+import { OccurrenceError, calendarObjects, changeOccurrence, compareEntries, completeRepeat, dayReferences, objectEntries, type DayRange, type OccurrenceEdit } from './calendar.ts'
 import { calendarEntries, parseCalendar, type ParsedCalendar } from './ics.ts'
 import type { CalendarEntry, Icon, Id, IsoDateTime, ObjectRecord, ObjectSummary, ObjectType, Person, Space } from './model.ts'
 import { QuoteError, recordCapture, standaloneCapture, type CaptureDestinations, applyEdit, createQuote, findOrCreateDailyNote, writeDailyText, listInbox, newObject, newType, querySpace, setCaptureDone, type InboxItem } from './operations.ts'
@@ -651,13 +651,16 @@ export class ClientStore extends Store {
   /**
    * Save the fields of an object. Only fields that differ from `base` (the copy the caller
    * edited, when it kept one for a while) are written, so a change pulled meanwhile is not
-   * undone. Rich text and media are left alone: text changes through the open Y.Doc.
+   * undone. Rich text and media are left alone: text changes through the open Y.Doc. A repeating
+   * task done is due next time instead (completeRepeat, in the device's zone).
    */
   saveObject(object: ObjectRecord, at: IsoDateTime, base?: ObjectRecord): ObjectRecord {
     const stored = this.requireObject(object.id)
     if (object.typeId !== stored.typeId && this.getType(object.typeId)?.spaceId !== stored.spaceId) throw new InvalidError('unknown type')
     const next = applyEdit(stored, object, base ?? stored)
-    return next ? this.putObject({ ...next, content: stored.content, updatedAt: at }) : stored
+    if (!next) return stored
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return this.putObject({ ...completeRepeat(next, stored, this.getType(next.typeId), timeZone, base ?? stored), content: stored.content, updatedAt: at })
   }
 
   createType(data: { spaceId: Id; name: string; pluralName?: string; icon?: Icon }, at: IsoDateTime): ObjectType {
@@ -760,7 +763,8 @@ export class ClientStore extends Store {
 
   dailyNote(spaceId: Id, day: string, at: IsoDateTime, text?: string): ObjectRecord {
     if (!this.getSpace(spaceId)) throw new NotFoundError('not found')
-    if (text !== undefined) {
+    // != null: the replica's messages turn a missing text into null.
+    if (text != null) {
       if (!text.trim()) throw new InvalidError('daily note text is required')
       return writeDailyText(this, spaceId, day, at, textToBlocks(text))
     }
