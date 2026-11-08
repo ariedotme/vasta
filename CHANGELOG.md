@@ -8,6 +8,8 @@ GitHub release page.
 
 ### Fixed
 
+- **A query embedded in a page** keeps its settings open while you edit them; they closed after
+  each change, in the middle of setting up a filter.
 - **A link to an object of another space** opens that space and shows the object's text and
   properties; only its title showed before.
 
