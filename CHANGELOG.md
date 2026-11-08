@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **A type opens on the view you last picked in it**, per type, on this device (it opened on its
+  first view before).
+
 ### Fixed
 
 - **A link to an object of another space** opens that space and shows the object's text and
