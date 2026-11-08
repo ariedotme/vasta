@@ -763,7 +763,8 @@ export class ClientStore extends Store {
 
   dailyNote(spaceId: Id, day: string, at: IsoDateTime, text?: string): ObjectRecord {
     if (!this.getSpace(spaceId)) throw new NotFoundError('not found')
-    if (text !== undefined) {
+    // != null: the replica's messages turn a missing text into null.
+    if (text != null) {
       if (!text.trim()) throw new InvalidError('daily note text is required')
       return writeDailyText(this, spaceId, day, at, textToBlocks(text))
     }

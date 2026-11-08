@@ -120,16 +120,24 @@ export function forgetSummary(id: Id) {
   summaries.delete(id)
 }
 
-/** Request summaries for ids not in the cache; batched into one request per tick. */
-export function requestSummaries(ids: Id[]) {
-  for (const id of ids) if (!summaries.has(id)) pending.add(id)
+/**
+ * Request summaries for ids not in the cache; batched into one request per tick. `refresh`: fetch
+ * them even when cached, keeping the cached one until the new one comes (an object changed
+ * elsewhere), so what shows it is not torn down and rebuilt in between.
+ */
+export function requestSummaries(ids: Id[], refresh = false) {
+  for (const id of ids) if (refresh || !summaries.has(id)) pending.add(id)
   if (!pending.size || flushTimer) return
   flushTimer = setTimeout(async () => {
     flushTimer = undefined
     const batch = [...pending]
     pending.clear()
     try {
-      primeSummaries(await api.summaries(batch))
+      const fresh = await api.summaries(batch)
+      primeSummaries(fresh)
+      // Asked for but not sent (deleted, or no longer shared): drop the cached one.
+      const sent = new Set(fresh.map((summary) => summary.id))
+      for (const id of batch) if (!sent.has(id)) summaries.delete(id)
     } catch {}
   }, 10)
 }

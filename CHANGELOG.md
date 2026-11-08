@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **A type opens on the view you last picked in it**, per type, on this device (it opened on its
+  first view before).
+
 ### Changed
 
 - **A repeating task set to done is due next time**: it keeps its to-do status with its due date
@@ -17,6 +22,11 @@ GitHub release page.
 
 ### Fixed
 
+- **A query embedded in a page** keeps its settings open while you edit them; they closed after
+  each change, in the middle of setting up a filter.
+- **Daily note templates on the calendar.** When the Daily note type has a default template, a
+  day without a note shows a Start the daily note button that makes it from the template; the box
+  to write in hid the template until something was saved.
 - **A link to an object of another space** opens that space and shows the object's text and
   properties; only its title showed before.
 

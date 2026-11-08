@@ -2,11 +2,12 @@
 // The calendar's Day view, which is also Today: what is scheduled that day, its daily note
 // (edited in place, with what refers to the day), and what was created that day.
 import { computed, provide, ref, watch } from 'vue'
-import type { CalendarEntry, CalendarSource, Id, ObjectSummary } from '@vasta/core'
+import { defaultTemplate, type CalendarEntry, type CalendarSource, type Id, type ObjectSummary } from '@vasta/core'
 import { ENTRY_DRAGGING } from '../../lib/calendar-drag.ts'
 import { formatClock, isToday, isoWeek } from '../../lib/calendar.ts'
 import { displayTitle } from '../../lib/format.ts'
-import { typesById } from '../../lib/state.ts'
+import { systemType, typesById } from '../../lib/state.ts'
+import { templatesOf } from '../../lib/templates.ts'
 import ObjectPage from '../../views/ObjectPage.vue'
 import AppIcon from '../AppIcon.vue'
 import TipsCard from '../TipsCard.vue'
@@ -27,10 +28,15 @@ const props = defineProps<{
   /** Show the day's habits here (when the calendar's side column, which has them, is hidden). */
   habits?: boolean
 }>()
-const emit = defineEmits<{ details: [entry: CalendarEntry, element: HTMLElement]; create: [element: HTMLElement]; 'start-note': [text: string] }>()
+const emit = defineEmits<{ details: [entry: CalendarEntry, element: HTMLElement]; create: [element: HTMLElement]; 'start-note': [text?: string] }>()
 
 const draft = ref('')
 watch(() => [props.day, props.noteId], () => { draft.value = '' })
+/** The Daily note type has a default template: the note starts from it, not from what is typed here. */
+const hasTemplate = computed(() => {
+  const type = systemType('daily-note')
+  return !!type && !!defaultTemplate(templatesOf(type.id), type.id)
+})
 
 // A list is no place to drag entries to another day or time.
 provide(ENTRY_DRAGGING, { movable: () => false, resizable: () => false, drop: () => {} })
@@ -85,6 +91,9 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
         </ObjectLink>
       </div>
       <ObjectPage v-if="noteId" :id="noteId" :key="noteId" variant="embedded" backlinks-title="References to this day" />
+      <button v-else-if="hasTemplate" class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink" :disabled="starting" @click="emit('start-note')">
+        <AppIcon fallback="ph:plus" /> {{ starting ? 'Starting…' : 'Start the daily note' }}
+      </button>
       <form v-else class="space-y-2" @submit.prevent="draft.trim() && emit('start-note', draft)">
         <textarea v-model="draft" :disabled="starting" aria-label="Daily note" placeholder="Write something about this day…" class="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm" rows="3" />
         <button class="rounded-lg px-3 py-2 text-sm ring-1 ring-line hover:bg-hover disabled:opacity-50" :disabled="starting || !draft.trim()">

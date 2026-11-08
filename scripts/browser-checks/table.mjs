@@ -1,6 +1,6 @@
 // Table views and filters through relations in the test env: the Columns menu (hide, reorder by
 // dragging), resizing a column by its header edge, a filter on a related object's field on a type
-// page and in a query.
+// page and in a query, and a query embedded in a page keeping its settings open while edited.
 //   node table.mjs [chromium|webkit] [base]        MODE=json: the replica turned off (HTTP mode)
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -82,6 +82,7 @@ await sleep(1500) // the replica pulls them
 const savedView = async () => (await get(`/api/types/${book.id}`)).views[0]
 
 let query
+let host
 try {
   step('the default table: title, tags, the properties, last edited')
   await page.goto(`${base}/t/${book.id}`)
@@ -143,7 +144,22 @@ try {
   await page.locator('div[data-column="author"] button[title="Show column"]').click()
   await until(async () => (await headerFields()).includes('author'), 'Author shown in the query')
   await until(async () => !(await get(`/api/objects/${query.id}`)).query.table.columns.find((c) => c.field === 'author').hidden, 'query columns saved')
+
+  step('the query embedded in a page: its settings stay open after a change is saved')
+  host = await post('/api/objects', {
+    typeId: bundle.types.find((t) => t.system === 'page').id,
+    title: `Reading list ${tag}`,
+    content: { body: { type: 'doc', content: [{ type: 'objectEmbed', attrs: { objectId: query.id, display: 'embed' } }, { type: 'paragraph' }] } },
+  })
+  await sleep(1000)
+  await page.goto(`${base}/o/${host.id}`)
+  await page.locator('button', { hasText: 'Edit query' }).click()
+  await page.locator('button', { hasText: 'Add filter' }).click()
+  await until(async () => (await get(`/api/objects/${query.id}`)).query.filter.items.length === 2, 'the new filter saved')
+  await sleep(1000)
+  if (!(await page.locator('button', { hasText: 'Add filter' }).isVisible())) throw new Error('the query settings closed after saving')
 } finally {
+  if (host) await page.request.delete(`${base}/api/objects/${host.id}`, { headers })
   if (query) await page.request.delete(`${base}/api/objects/${query.id}`, { headers })
   for (const type of [book, person]) await page.request.delete(`${base}/api/types/${type.id}`, { headers })
 }
