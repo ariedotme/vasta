@@ -103,6 +103,8 @@ export function replaceType(type: ObjectType) {
 
 const summaries = reactive(new Map<Id, ObjectSummary>())
 const pending = new Set<Id>()
+/** Ids of the pending batch asked for with `refresh`: only those may be dropped when not sent. */
+const refreshing = new Set<Id>()
 let flushTimer: ReturnType<typeof setTimeout> | undefined
 
 export function primeSummaries(list: ObjectSummary[]) {
@@ -126,18 +128,24 @@ export function forgetSummary(id: Id) {
  * elsewhere), so what shows it is not torn down and rebuilt in between.
  */
 export function requestSummaries(ids: Id[], refresh = false) {
-  for (const id of ids) if (refresh || !summaries.has(id)) pending.add(id)
+  for (const id of ids) {
+    if (refresh) refreshing.add(id)
+    if (refresh || !summaries.has(id)) pending.add(id)
+  }
   if (!pending.size || flushTimer) return
   flushTimer = setTimeout(async () => {
     flushTimer = undefined
     const batch = [...pending]
+    const refreshed = [...refreshing]
     pending.clear()
+    refreshing.clear()
     try {
       const fresh = await api.summaries(batch)
       primeSummaries(fresh)
-      // Asked for but not sent (deleted, or no longer shared): drop the cached one.
+      // Refreshed but not sent (deleted, or no longer shared): drop the cached one. Others were not
+      // cached when asked for, so one cached since was primed meanwhile and stays.
       const sent = new Set(fresh.map((summary) => summary.id))
-      for (const id of batch) if (!sent.has(id)) summaries.delete(id)
+      for (const id of refreshed) if (!sent.has(id)) summaries.delete(id)
     } catch {}
   }, 10)
 }
