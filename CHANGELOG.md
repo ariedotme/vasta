@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.8.0 (2026-11-08)
+
 ### Added
 
 - **A type opens on the view you last picked in it**, per type, on this device (it opened on its
