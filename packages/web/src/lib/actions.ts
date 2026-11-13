@@ -11,7 +11,7 @@ import { previewLine, typedLine, type CompletionSource } from './typed-line.ts'
 import { people } from './people.ts'
 import { loadTemplates, templates } from './templates.ts'
 import { router } from '../router.ts'
-import { closePane, openObject, pageObjectId, paneObjectId } from './open.ts'
+import { closePane, objectPath, openObject, pageObjectId, paneObjectId } from './open.ts'
 
 /** With `line`, the title and properties are read from it, e.g. `Dune author:"Frank Herbert"`. */
 export async function createObject(typeId: Id, data: Partial<ObjectRecord> = {}, open = true, line?: string): Promise<ObjectRecord> {
@@ -317,6 +317,20 @@ async function restorePlaces(id: Id, places: SidebarPlace[]) {
 }
 
 export const isInSidebar = (id: Id) => !!workspace.space?.sidebar.some((s) => s.items.includes(id))
+
+/** A view pinned in the sidebar is the item `<typeId>?view=<viewId>`, which is also its page's path after /t/. */
+export const viewItem = (typeId: Id, viewId: string) => `${typeId}?view=${encodeURIComponent(viewId)}`
+
+export function parseViewItem(item: string): { typeId: Id; viewId: string } | null {
+  const at = item.indexOf('?view=')
+  return at < 0 ? null : { typeId: item.slice(0, at), viewId: decodeURIComponent(item.slice(at + 6)) }
+}
+
+/** Where a sidebar item opens: a view, a type or an object. */
+export function sidebarItemPath(item: string) {
+  if (parseViewItem(item) || typesById.value.has(item)) return `/t/${item}`
+  return objectPath(item)
+}
 
 const PINNED = 'Pinned'
 

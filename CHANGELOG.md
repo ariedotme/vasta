@@ -12,6 +12,9 @@ GitHub release page.
   type view or query results, and the ⋯ More menu of an object's page and side pane now have a
   "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
   in the desktop app, matching existing block-link behaviour.
+- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
+  view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
+  of Tasks, in the sidebar; its row opens the type on that view.
 
 ### Fixed
 
@@ -19,6 +22,8 @@ GitHub release page.
   have their own row at the top. Pinned to a section, Tasks now show there too. New spaces no
   longer pin Tasks, since they have that row; in an older space, Tasks may show once under Pinned
   (Remove from Pinned takes it away).
+- **A type opens on the view you last picked in it** only once you pick one: the view it opened
+  on by default was remembered too, so reordering views later didn't change where it opened.
 
 ## 0.8.0 (2026-11-08)
 
