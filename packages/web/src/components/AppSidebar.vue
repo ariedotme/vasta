@@ -34,7 +34,7 @@ import IconPicker from './IconPicker.vue'
 import TypeIcon from './TypeIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
 import TypePicker from './TypePicker.vue'
-import { objectPath, openObject } from '../lib/open.ts'
+import { copyObjectLink, objectPath, openObject } from '../lib/open.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,6 +120,7 @@ function objectMenu(event: MouseEvent, id: Id, sectionId: string) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(summaryOf(id)) },
     { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(id) },
+    { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(id) },
     { kind: 'separator' },
     pinMenu(id),
     ...inSectionItems(id, sectionId),
