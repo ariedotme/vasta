@@ -2,16 +2,15 @@
 // Opens the first pinned item, like a start page; falls back to a short welcome.
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { openToday } from '../lib/actions.ts'
-import { typesById, ui, workspace } from '../lib/state.ts'
+import { openToday, sidebarItemPath } from '../lib/actions.ts'
+import { ui, workspace } from '../lib/state.ts'
 import AppIcon from '../components/AppIcon.vue'
-import { objectPath } from '../lib/open.ts'
 
 const router = useRouter()
 
 onMounted(() => {
   const first = workspace.space?.sidebar[0]?.items[0]
-  if (first) void router.replace(typesById.value.has(first) ? `/t/${first}` : objectPath(first))
+  if (first) void router.replace(sidebarItemPath(first))
 })
 </script>
 
