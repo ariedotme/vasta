@@ -269,7 +269,8 @@ export class AccountService {
   createSpace(name: string, ownerId: Id): Space {
     const at = this.now()
     const id = randomUUID()
-    const pinned = [builtinTypeId(id, 'page'), builtinTypeId(id, 'task')]
+    // Tasks have their own row at the top of the sidebar; pinned, they would show twice.
+    const pinned = [builtinTypeId(id, 'page')]
     const space: Space = { id, name: name.trim() || 'Space', sidebar: [{ id: randomUUID(), name: 'Pinned', items: pinned }], createdAt: at }
     this.store.transaction(() => {
       this.store.putSpace(space)

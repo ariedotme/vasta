@@ -37,11 +37,12 @@ than tinted, so it reads as "the card you're on". Section carets and the "+" of 
 hover only (always on touch). The footer holds icon tools: Settings, theme, shortcuts, Trash with
 its count.
 
-**Pinning**: any type or object can sit in one or more sidebar sections, mixed. Every right-click
-menu on one has "Pin to sidebar ›", a submenu with a checkbox per section (it stays open, so several
-can be ticked) and New section…; the More menus of type and object pages open the same list. In the
-sidebar, rows drag within and between sections (⌥ copies), types drag in from All types, links to
-objects or types (cards, list rows) drag in from the page, and section headers drag to reorder.
+**Pinning**: any type or object can sit in one or more sidebar sections, mixed (Tasks too, besides
+their row at the top). Every right-click menu on one has "Pin to sidebar ›", a submenu with a
+checkbox per section (it stays open, so several can be ticked) and New section…; the More menus of
+type and object pages open the same list. In the sidebar, rows drag within and between sections (⌥
+copies), types drag in from All types, links to objects or types (cards, list rows) drag in from the
+page, and section headers drag to reorder.
 
 **Hover-only affordances**: secondary actions that would clutter an empty page (an object's Icon
 and Cover buttons, section carets) appear on hover or focus, and are always visible on touch
