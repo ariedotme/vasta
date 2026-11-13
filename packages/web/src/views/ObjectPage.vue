@@ -36,7 +36,7 @@ import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
 import { openRemoteText } from '../lib/remote-text.ts'
 import { PAGE_OBJECT_ID } from '../lib/page.ts'
-import { closePane } from '../lib/open.ts'
+import { closePane, copyObjectLink } from '../lib/open.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { colorSource, tagAncestors, tagColor } from '../lib/tags.ts'
@@ -797,6 +797,9 @@ async function startFrom(template: ObjectRecord) {
             <RouterLink :to="`/t/${object.typeId}`" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover">
               <AppIcon fallback="ph:cube" /> Open type
             </RouterLink>
+            <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="copyObjectLink(object.id), (menuOpen = false)">
+              <AppIcon fallback="ph:link" /> Copy link to page
+            </button>
             <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="saveTemplateFrom">
               <AppIcon fallback="ph:copy-simple" /> Save as template…
             </button>

@@ -10,7 +10,7 @@ import { openContextMenu } from '../lib/overlays.ts'
 import { runServerQuery } from '../lib/query.ts'
 import { primeSummaries, typesById } from '../lib/state.ts'
 import ObjectCollection from './ObjectCollection.vue'
-import { openObject } from '../lib/open.ts'
+import { copyObjectLink, openObject } from '../lib/open.ts'
 
 /** `readonly`: property cells of a table do not edit (a whiteboard card, a page that cannot be edited). */
 const props = defineProps<{ query: QueryDef; parentId?: Id; limit?: number; readonly?: boolean }>()
@@ -64,6 +64,7 @@ function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, typesById.value.get(object.typeId)) },
     { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
+    { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(object.id) },
     pinMenu(object.id),
   ])
 }

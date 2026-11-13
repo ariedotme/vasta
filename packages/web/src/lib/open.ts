@@ -8,6 +8,7 @@ import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router'
 import type { Id } from '@vasta/core'
 import { paneNavigation, router } from '../router.ts'
 import { isPhone } from './viewport.ts'
+import { lastError, notice } from './state.ts'
 
 export type OpenPlace = 'page' | 'pane'
 
@@ -27,6 +28,21 @@ export const objectPath = (id: Id) => `/o/${id}`
 /** The route of an object's page, for links (they keep ⌘-click, middle click and "Copy link"). */
 export function objectRoute(id: Id, options: Pick<OpenOptions, 'block' | 'query'> = {}): RouteLocationRaw {
   return { path: objectPath(id), ...(options.query ? { query: options.query } : {}), ...(options.block ? { hash: `#b-${options.block}` } : {}) }
+}
+
+/**
+ * "Copy link to page": <server>/o/<object-id> in the browser, vasta://o/<object-id> in the
+ * desktop app. Shows a notice on success or an error banner on rejection.
+ */
+export async function copyObjectLink(objectId: Id) {
+  const path = `o/${objectId}`
+  const desktop = '__TAURI_INTERNALS__' in window
+  try {
+    await navigator.clipboard.writeText(desktop ? `vasta://${path}` : `${location.origin}/${path}`)
+    notice.value = { message: 'Link to the page copied' }
+  } catch {
+    lastError.value = 'Could not copy the link'
+  }
 }
 
 /**

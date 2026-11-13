@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **"Copy link to page" in object menus**: the right-click menu of an object in the sidebar, a
+  type view or query results, and the ⋯ More menu of an object's page and side pane now have a
+  "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
+  in the desktop app, matching existing block-link behaviour.
+
 ### Fixed
 
 - **"Pin to sidebar" on Tasks did nothing**: the sidebar left Tasks out of its sections, as they
