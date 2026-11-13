@@ -26,7 +26,7 @@ import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
-import { openObject } from '../lib/open.ts'
+import { copyObjectLink, openObject } from '../lib/open.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -211,6 +211,7 @@ function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, type.value) },
     { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
+    { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(object.id) },
     pinMenu(object.id),
     { kind: 'separator' },
     {
