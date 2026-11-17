@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.11.0 (2026-11-17)
+
 ### Added
 
 - **Reminders have styles.** Pick how a reminder reaches you: **Pop-up** (a window of the desktop
