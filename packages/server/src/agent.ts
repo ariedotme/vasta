@@ -262,6 +262,8 @@ export interface AgentReminderInput {
   climbAfter?: number | null
   escapeAfter?: number
   paused?: boolean
+  /** An object to open once it is answered; null: none (the default, the app stays out of the way). */
+  openAfter?: Id | null
 }
 
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
@@ -1470,6 +1472,7 @@ export class AgentTools {
       snooze: rule.snooze,
       climbAfter: rule.climbAfter,
       escapeAfter: rule.escapeAfter,
+      ...(rule.openAfter && this.visibleId(rule.openAfter) ? { openAfter: { id: rule.openAfter, title: this.titleOf(rule.openAfter) ?? '' } } : {}),
       ...(rule.paused ? { paused: true } : {}),
       stats: this.insistent.stats(this.options.user, rule.id),
     }
@@ -1533,6 +1536,7 @@ export class AgentTools {
     if (input.climbAfter !== undefined) changes.climbAfter = input.climbAfter
     if (input.escapeAfter !== undefined) changes.escapeAfter = input.escapeAfter
     if (input.paused !== undefined) changes.paused = input.paused
+    if (input.openAfter !== undefined) changes.openAfter = input.openAfter === null ? null : this.object(input.openAfter).id
     try {
       const rule = current ? this.insistent.update(user, current.id, changes) : this.insistent.create(user, { ...changes, spaceId, ...(object ? { objectId: object.id } : {}) })
       return this.reminderView(rule)

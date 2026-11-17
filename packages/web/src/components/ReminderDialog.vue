@@ -48,6 +48,8 @@ const snooze = ref(existing?.snooze ?? 15)
 const climbAfter = ref<number | null>(existing?.climbAfter ?? 2)
 const escapeAfter = ref(existing?.escapeAfter ?? 10)
 const paused = ref(!!existing?.paused)
+/** The note the desktop app opens once it is answered; null: it stays out of the way. */
+const openAfter = ref<string | null>(existing?.openAfter ?? null)
 const busy = ref(false)
 const error = ref('')
 
@@ -105,7 +107,7 @@ const latestOn = computed({
 // What it shows -------------------------------------------------------------------
 const tagType = computed(() => systemType('tag'))
 const queryType = computed(() => systemType('query'))
-const pickerFor = ref<'tag' | 'query' | null>(null)
+const pickerFor = ref<'tag' | 'query' | 'after' | null>(null)
 const pickerAnchor = ref<HTMLElement | null>(null)
 const picked = computed(() => (content.value.kind === 'tag' && content.value.tagId ? summaryOf(content.value.tagId) : content.value.kind === 'query' && content.value.queryId ? summaryOf(content.value.queryId) : undefined))
 const count = computed({
@@ -122,10 +124,15 @@ const contentKind = computed({
   },
 })
 function pick(o: ObjectSummary) {
+  if (pickerFor.value === 'after') {
+    openAfter.value = o.id
+    pickerFor.value = null
+    return
+  }
   content.value = pickerFor.value === 'query' ? { kind: 'query', queryId: o.id, count: count.value } : { kind: 'tag', tagId: o.id, count: count.value }
   pickerFor.value = null
 }
-function openPicker(kind: 'tag' | 'query', event: MouseEvent) {
+function openPicker(kind: 'tag' | 'query' | 'after', event: MouseEvent) {
   pickerAnchor.value = event.currentTarget as HTMLElement
   pickerFor.value = kind
 }
@@ -170,6 +177,7 @@ function input(): RuleInput {
     climbAfter: climbAfter.value,
     escapeAfter: escapeAfter.value,
     paused: paused.value,
+    openAfter: openAfter.value,
   }
 }
 
@@ -282,7 +290,8 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
           <span class="text-xs text-ink-faint">Picked anew each time, not the ones of last time.</span>
         </div>
         <PopoverMenu :open="!!pickerFor" :anchor="pickerAnchor" width="20rem" @update:open="(open: boolean) => !open && (pickerFor = null)">
-          <ObjectPicker v-if="pickerFor" no-create :type-ids="pickerFor === 'tag' ? (tagType ? [tagType.id] : []) : queryType ? [queryType.id] : []" @pick="pick" />
+          <ObjectPicker v-if="pickerFor === 'after'" no-create @pick="pick" />
+          <ObjectPicker v-else-if="pickerFor" no-create :type-ids="pickerFor === 'tag' ? (tagType ? [tagType.id] : []) : queryType ? [queryType.id] : []" @pick="pick" />
         </PopoverMenu>
       </fieldset>
 
@@ -373,6 +382,19 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
         </div>
         <p v-if="textAnswer && isHabit" class="mt-2 text-xs text-ink-faint">Saying or typing it also marks the habit done for the day.</p>
         <p class="mt-2 text-xs text-ink-faint">Swiping a notification away does not count. “Not today” asks for a reason.</p>
+      </fieldset>
+
+      <!-- Afterwards -->
+      <fieldset v-if="usesWindow" class="space-y-2">
+        <legend class="mb-2 font-medium">Once I answer</legend>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button type="button" class="rounded-full border px-3 py-1" :class="chip(!openAfter)" @click="openAfter = null">Get out of the way</button>
+          <button type="button" class="flex items-center gap-1.5 rounded-full border px-3 py-1" :class="chip(!!openAfter)" @click="openPicker('after', $event)">
+            <AppIcon fallback="ph:arrow-square-out" :size="13" />
+            {{ openAfter ? `Open “${summaryOf(openAfter)?.title || 'a note'}”` : 'Open a note…' }}
+          </button>
+        </div>
+        <p class="text-xs text-ink-faint">{{ openAfter ? 'Vasta comes forward with it.' : 'Vasta stays hidden; the app you were in comes back.' }}</p>
       </fieldset>
 
       <!-- Snoozing -->

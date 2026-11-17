@@ -19,6 +19,9 @@ if (standalone) {
   for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, (event) => event.preventDefault(), { passive: false })
 }
 
+// The desktop app's reminder pop-up: transparent from the first paint (style.css).
+if (new URLSearchParams(location.search).get('popup') === '1') document.documentElement.classList.add('vasta-popup')
+
 createApp(App).use(router).mount('#app')
 // The app's assets loaded: a later blank page may reload itself again (index.html).
 try {

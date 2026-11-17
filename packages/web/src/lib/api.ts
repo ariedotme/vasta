@@ -197,6 +197,8 @@ export interface InsistentRule {
   snooze: number
   climbAfter: number | null
   escapeAfter: number
+  /** An object the desktop app opens once it is answered; none: it stays out of the way. */
+  openAfter?: Id
   paused?: boolean
   createdAt: string
   /** What the list shows: its title, or its object's. */
@@ -205,7 +207,7 @@ export interface InsistentRule {
   stats: RuleStats
 }
 
-export type RuleInput = Partial<Omit<InsistentRule, 'id' | 'createdAt' | 'name' | 'object' | 'stats'>>
+export type RuleInput = Partial<Omit<InsistentRule, 'id' | 'createdAt' | 'name' | 'object' | 'stats' | 'openAfter'>> & { openAfter?: Id | null }
 
 /** An insistent reminder going on (or answered), as its page shows it. */
 export interface NagView {
@@ -227,6 +229,8 @@ export interface NagView {
   steps: number
   sent: number
   escapeAfter: number
+  /** What to open once it is answered (the desktop app brings its window forward with it). */
+  openAfter?: { id: Id; title: string }
   outcome?: NagOutcome
   reason?: string
 }

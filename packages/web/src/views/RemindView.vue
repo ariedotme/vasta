@@ -175,7 +175,10 @@ function finish(view: NagView, kind: NagAnswer | 'elsewhere') {
               : view.outcome === 'ignored'
                 ? { icon: 'ph:clock-counter-clockwise', title: 'This one is over', text: 'Its day ended before an answer.' }
                 : { icon: 'ph:check-circle', title: view.outcome === 'ok' ? 'Seen' : 'Done', text: kind === 'elsewhere' ? 'Answered somewhere else.' : 'That counts.' }
-  if (takeover) setTimeout(closeTakeover, kind === 'snooze' ? 1800 : 1400)
+  // Answered (not snoozed, skipped or let go): the note it opens afterwards, if it has one.
+  const answered = view.outcome === 'ok' || view.outcome === 'done' || view.outcome === 'typed' || view.outcome === 'said'
+  const open = answered && view.openAfter ? `o/${view.openAfter.id}` : undefined
+  if (takeover) setTimeout(() => closeTakeover(open), kind === 'snooze' ? 1800 : 1400)
 }
 
 const skip = () => {
@@ -216,7 +219,7 @@ watch(
 <template>
   <div
     class="flex min-h-full flex-col items-center justify-center px-5"
-    :class="[takeover ? 'h-full bg-canvas' : '', popup ? 'py-6' : 'py-10']"
+    :class="[takeover ? 'h-full bg-canvas' : '', popup ? 'overflow-hidden rounded-2xl border border-line py-6' : 'py-10']"
     :data-takeover="takeover || undefined"
   >
     <!-- The desktop takeover has no title bar: its top edge moves the window (it is full screen anyway). -->

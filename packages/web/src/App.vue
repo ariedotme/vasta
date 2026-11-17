@@ -74,7 +74,8 @@ function onTouchEnd(event: TouchEvent) {
 
 <template>
   <!-- The takeover needs only the session, not the workspace (it may be loading the replica). -->
-  <div v-if="bare && session.user" class="h-full overflow-y-auto bg-canvas text-ink">
+  <!-- The pop-up's window is transparent: its page rounds its own corners. -->
+  <div v-if="bare && session.user" class="h-full overflow-y-auto text-ink" :class="route.query.popup === '1' ? 'bg-transparent' : 'bg-canvas'">
     <RouterView />
   </div>
   <div v-else-if="session.user && workspace.ready" class="flex h-full flex-col pt-[env(safe-area-inset-top)]" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">

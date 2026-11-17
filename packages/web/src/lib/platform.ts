@@ -86,9 +86,13 @@ export function takeoverReady() {
   void window.__TAURI_INTERNALS__?.invoke('takeover_ready').catch(() => {})
 }
 
-/** The takeover window (an insistent reminder over the whole screen) is done: the app closes it. */
-export function closeTakeover() {
-  void window.__TAURI_INTERNALS__?.invoke('close_takeover').catch(() => {})
+/**
+ * The reminder's window (the pop-up or the takeover) is done: the app closes it. `open`: a page
+ * ("o/<id>") to show in the app's window afterwards (desktop 0.11); without it the app gets out of
+ * the way.
+ */
+export function closeTakeover(open?: string) {
+  void window.__TAURI_INTERNALS__?.invoke('close_takeover', open ? { open } : {}).catch(() => {})
 }
 
 /** Logging out: the desktop app stops hearing this user's reminders. */

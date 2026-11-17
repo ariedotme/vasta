@@ -520,6 +520,7 @@ function registerReminderTools(server: McpServer, tools: AgentTools) {
     climbAfter: z.number().int().min(1).nullable().optional().describe('Snoozes that climb one step; null: snoozing never climbs'),
     escapeAfter: z.number().int().min(0).optional().describe('Seconds before the takeover offers its way out'),
     paused: z.boolean().optional(),
+    openAfter: z.string().nullable().optional().describe('An object (id) the desktop app opens once it is answered; null: none, the default (the app stays out of the way)'),
   }
 
   server.registerTool(

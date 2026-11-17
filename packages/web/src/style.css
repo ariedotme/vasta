@@ -104,6 +104,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The desktop app's reminder pop-up (?popup=1, main.ts): a transparent window, so the page can
+   round its corners. */
+html.vasta-popup,
+html.vasta-popup body {
+  background: transparent;
+}
+
 /* An object's properties: a table of name | value rows (ObjectPage, ReverseRelations). */
 .vasta-prop-row { display: flex; align-items: flex-start; border-bottom: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent); font-size: 0.875rem; }
 .vasta-prop-row:first-child { border-top: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent); }

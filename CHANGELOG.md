@@ -11,7 +11,9 @@ GitHub release page.
 - **Reminders have styles.** Pick how a reminder reaches you: **Pop-up** (a window of the desktop
   app floats over everything until you answer), **Full screen**, **Notification**, **Escalating**
   or **Relentless**, or set its steps yourself with **Custom**. The pop-up needs Vasta for desktop
-  0.11.
+  0.11; it has rounded corners like the rest of Vasta.
+- **Once you answer a pop-up or full-screen reminder, Vasta gets out of the way**: the app you were
+  in comes back. Or pick a note for it to open instead (**Once I answer › Open a note…**).
 - **Agents can set up reminders.** Claude Code, Codex and other agents connected through the MCP
   can list your reminders with their stats, make and change them (by style or step by step,
   showing a tag or a saved query by name), remove them, and start one right now so you can see how

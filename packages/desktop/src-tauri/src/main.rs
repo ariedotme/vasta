@@ -607,9 +607,16 @@ fn dismiss_takeover(app: &AppHandle, id: String) {
 }
 
 /// The takeover's page, once its reminder is answered (or let go), or when it cannot show it.
+/// `open`: a page of the web app ("o/<id>") the reminder opens once answered, in the window
+/// brought forward; without it Vasta stays out of the way.
 #[tauri::command]
-fn close_takeover(app: AppHandle) {
+fn close_takeover(app: AppHandle, open: Option<String>) {
     takeover::close(&app, None);
+    if let Some(path) = open.filter(|p| !p.is_empty()) {
+        #[cfg(target_os = "macos")]
+        let _ = app.show();
+        open_path(&app, &path);
+    }
 }
 
 /// The takeover's page shows its reminder and its way out: it may stay.

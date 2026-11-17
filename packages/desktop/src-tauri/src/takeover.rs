@@ -29,6 +29,9 @@ const READY: Duration = Duration::from_secs(15);
 pub struct Takeovers {
     current: Mutex<Option<String>>,
     ready: Mutex<bool>,
+    /// Vasta was the app in front when the reminder showed up: when it goes, Vasta stays; when it
+    /// was not, the app hides again, so the app that was in front gets its place back.
+    was_active: Mutex<bool>,
 }
 
 /// The page shows the reminder (with its way out): it may stay.
@@ -67,6 +70,10 @@ pub fn open(app: &AppHandle, takeover: Takeover, url: Url) {
     };
     // The reminder on the screen with the pointer; for the whole screen, covers on the others.
     let shown = app.get_webview_window(TAKEOVER).is_some();
+    if !shown {
+        let active = app.webview_windows().iter().any(|(label, window)| !is_takeover(label) && window.is_focused().unwrap_or(false));
+        *app.state::<Takeovers>().was_active.lock().unwrap() = active;
+    }
     // Another reminder's covers go when this one only pops up.
     if takeover.popup {
         for (label, window) in app.webview_windows() {
@@ -150,6 +157,8 @@ fn over_all(app: &AppHandle, label: &str, url: WebviewUrl) -> tauri::Result<Webv
                 .skip_taskbar(true)
                 .visible_on_all_workspaces(true)
                 .shadow(false)
+                // The pop-up's page rounds its corners; the full screen paints all of it.
+                .transparent(true)
                 .visible(false);
             let window = builder.build()?;
             #[cfg(target_os = "macos")]
@@ -170,9 +179,16 @@ pub fn close(app: &AppHandle, id: Option<&str>) {
         }
         *current = None;
     }
+    let mut closed = false;
     for (label, window) in app.webview_windows() {
         if is_takeover(&label) {
             let _ = window.close();
+            closed = true;
         }
+    }
+    // Out of the way again, unless Vasta was what the user was using.
+    #[cfg(target_os = "macos")]
+    if closed && !*app.state::<Takeovers>().was_active.lock().unwrap() {
+        let _ = app.hide();
     }
 }

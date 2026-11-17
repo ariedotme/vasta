@@ -52,6 +52,10 @@ reminders, and the channels everything goes through, are Settings › Reminder c
   priority 5 instead of 4, Web Push notifications that stay until answered), repeated every few
   minutes until answered (or not: the pop-up and full screen stay until answered). "Custom" edits
   the steps.
+- **Once answered** (`openAfter`, optional): a note the desktop app opens when the pop-up or the
+  takeover is answered (OK, done, typed or said; not snoozed, skipped or let go): the page passes it
+  to `close_takeover`, which shows it in the app's window. Without one, the app hides again if it
+  was not the app in front when the reminder showed up, so the user is back where they were.
 - **Snoozing has a cost**: a snooze (5 to 60 minutes) pauses it and the ladder's clock, but every few
   snoozes it climbs a step. **Not today** asks for a one-line reason, which is kept.
 

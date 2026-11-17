@@ -110,11 +110,13 @@ export interface InsistentRule {
   climbAfter: number | null
   /** Seconds before the desktop pop-up or takeover offers its way out. */
   escapeAfter: number
+  /** An object to open once it is answered (the desktop app's window comes forward with it); none: the app stays out of the way. */
+  openAfter?: Id
   paused?: boolean
   createdAt: string
 }
 
-export type RuleInput = Partial<Omit<InsistentRule, 'id' | 'createdAt'>>
+export type RuleInput = Partial<Omit<InsistentRule, 'id' | 'createdAt' | 'openAfter'>> & { openAfter?: Id | null }
 
 export class InsistentError extends Error {}
 
@@ -354,7 +356,7 @@ export class InsistentReminders {
     const current = this.rule(user.id, id)
     if (!current) throw new InsistentError('no such reminder')
     const { objectId: _objectId, ...changes } = input
-    const rule = this.check(user, { ...current, ...changes, id: current.id, createdAt: current.createdAt })
+    const rule = this.check(user, { ...current, ...changes, id: current.id, createdAt: current.createdAt } as InsistentRule)
     this.store.db.prepare('UPDATE reminder_rules SET rule = ? WHERE id = ?').run(JSON.stringify(rule), id)
     // A paused reminder stops asking now.
     if (rule.paused) for (const nag of this.openNags(user.id).filter((n) => n.ruleId === id)) this.close(nag, 'ignored')
@@ -443,6 +445,13 @@ export class InsistentReminders {
     if (rule.repeat !== null && !REPEATS.includes(rule.repeat)) throw new InsistentError(`repeat every ${REPEATS.join(', ')} minutes, or never`)
     if (!SNOOZES.includes(rule.snooze)) throw new InsistentError(`snooze for ${SNOOZES.join(', ')} minutes`)
     if (rule.climbAfter !== null && (!Number.isInteger(rule.climbAfter) || rule.climbAfter < 1 || rule.climbAfter > 10)) throw new InsistentError('climb a step after 1 to 10 snoozes, or never')
+    // null (from a change) clears it.
+    const openAfter = rule.openAfter as Id | null | undefined
+    if (!openAfter) delete rule.openAfter
+    else {
+      const after = this.store.getObject(openAfter)
+      if (!after || after.deletedAt || !spaces.has(after.spaceId)) throw new InsistentError('the object to open afterwards does not exist')
+    }
     if (!Number.isInteger(rule.escapeAfter) || rule.escapeAfter < 3 || rule.escapeAfter > 120) throw new InsistentError('the way out of the pop-up or takeover shows after 3 to 120 seconds')
     if (!Array.isArray(rule.steps) || !rule.steps.length || rule.steps.length > 6) throw new InsistentError('a ladder has 1 to 6 steps')
     const steps = rule.steps.map((step, i) => {
@@ -469,6 +478,7 @@ export class InsistentReminders {
       snooze: rule.snooze,
       climbAfter: rule.climbAfter,
       escapeAfter: rule.escapeAfter,
+      ...(rule.openAfter ? { openAfter: rule.openAfter } : {}),
       ...(rule.paused ? { paused: true } : {}),
       createdAt: rule.createdAt,
     }
@@ -914,6 +924,7 @@ export class InsistentReminders {
       steps: rule.steps.length,
       sent: nag.sent,
       escapeAfter: rule.escapeAfter,
+      ...(rule.openAfter && this.store.getObject(rule.openAfter) && !this.store.getObject(rule.openAfter)!.deletedAt ? { openAfter: { id: rule.openAfter, title: this.store.getObject(rule.openAfter)!.title } } : {}),
       ...(nag.outcome ? { outcome: nag.outcome } : {}),
       ...(nag.reason ? { reason: nag.reason } : {}),
       ruleId: rule.id,
