@@ -127,6 +127,20 @@ export const DEFAULT_STEPS: LadderStep[] = [
   { after: 45, channels: ['push', 'ntfy', 'telegram', 'takeover'], urgent: true },
 ]
 
+/** The editor's ladder presets (the same as web/src/lib/insistent.ts), for agents to name one. */
+export const LADDER_PRESETS: Record<'gentle' | 'insistent' | 'relentless', { repeat: number; steps: LadderStep[] }> = {
+  gentle: { repeat: 30, steps: [{ after: 0, channels: ['push', 'desktop', 'ntfy'] }] },
+  insistent: { repeat: 15, steps: DEFAULT_STEPS },
+  relentless: {
+    repeat: 5,
+    steps: [
+      { after: 0, channels: ['push', 'desktop', 'ntfy'], urgent: true },
+      { after: 10, channels: ['push', 'ntfy', 'telegram'], urgent: true },
+      { after: 15, channels: ['push', 'ntfy', 'telegram', 'takeover'], urgent: true },
+    ],
+  },
+}
+
 const pad = (clock: string) => clock.replace(/^(\d):/, '0$1:')
 
 // Nags -------------------------------------------------------------------------
@@ -590,10 +604,27 @@ export class InsistentReminders {
     }
   }
 
-  /** A new nag for an occurrence, unless it already had one, the habit is not due, or it is done. */
-  private start(user: User, rule: InsistentRule, occurrence: { occurrence: string; day: string; at: number }): Nag | undefined {
+  /**
+   * Start a reminder now, whatever its time (and even paused or on a day it skips), and send its
+   * first step: to try one out. It then repeats and climbs like any other until answered.
+   */
+  async startNow(user: User, id: string) {
+    const rule = this.rule(user.id, id)
+    if (!rule) throw new InsistentError('no such reminder')
+    const at = this.now()
+    const day = dayIn(at, this.timeZone(user))
+    const occurrence = { occurrence: `now:${at}`, day, at }
+    if (this.isDone(rule, occurrence)) throw new InsistentError(`“${this.titleOf(rule)}” is already done today, so it has nothing to ask`)
+    const nag = this.start(user, rule, occurrence, true)
+    if (!nag) throw new InsistentError('it was just started')
+    await this.advance(user, rule, nag, at)
+    return this.view(user, nag.id)
+  }
+
+  /** A new nag for an occurrence, unless it already had one, the habit is not due (`manual`: start anyway), or it is done. */
+  private start(user: User, rule: InsistentRule, occurrence: { occurrence: string; day: string; at: number }, manual = false): Nag | undefined {
     if (this.store.db.prepare('SELECT 1 FROM reminder_nags WHERE rule_id = ? AND occurrence = ?').get(rule.id, occurrence.occurrence)) return undefined
-    if (this.skipsDay(rule, occurrence.day) || this.isDone(rule, occurrence)) return undefined
+    if ((!manual && this.skipsDay(rule, occurrence.day)) || this.isDone(rule, occurrence)) return undefined
     const now = Math.max(occurrence.at, this.now())
     // The one before ends (it was ignored) when the next one starts.
     for (const open of this.openNags(user.id).filter((n) => n.ruleId === rule.id)) this.close(open, open.outcome ?? 'ignored', now)

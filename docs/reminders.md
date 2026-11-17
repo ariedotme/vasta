@@ -80,6 +80,11 @@ Where it is answered:
   the monotonic one), every 90 seconds while they are here (macOS reads the system's idle time;
   elsewhere a running app counts as here), and when they go idle.
 
+Agents reach them through the MCP (`list_reminders`, `set_reminder`, `start_reminder`,
+`remove_reminder`; [agents.md](agents.md)), within what Settings › Agents lets them see and change:
+a reminder about a hidden object, in a hidden space or showing a hidden tag does not exist for them.
+`start_reminder` (`InsistentReminders.startNow`) starts a nag now, outside the rule's schedule.
+
 Routes (app sessions): `GET|POST /api/auth/reminders/rules` (`?object=` for an object's),
 `PUT|DELETE /api/auth/reminders/rules/:id`, `GET /api/auth/reminders/nags` (going on now),
 `GET|POST /api/auth/reminders/nags/:id` (`{ answer: ok|done|typed|said|snooze|skip|escape, texts?, reason? }`).

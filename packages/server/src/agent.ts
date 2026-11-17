@@ -125,6 +125,7 @@ import { isValidDay } from './daily.ts'
 import type { ChangeFeed } from './events.ts'
 import { parseIcon } from './icons.ts'
 import { listInbox } from './inbox.ts'
+import { InsistentError, LADDER_PRESETS, type AckMode, type InsistentReminders, type InsistentRule, type LadderStep, type RuleContent, type RuleInput, type RuleWhen } from './insistent.ts'
 
 export class AgentError extends Error {}
 
@@ -232,6 +233,35 @@ export interface AgentOptions {
   user: User
   /** The web app's address, for links to objects. */
   webUrl: string
+  /** Insistent reminders (docs/reminders.md), when the server sends reminders. */
+  insistent?: InsistentReminders
+}
+
+/** What an agent sends for a reminder's content: a tag by title or path, a saved query by title or id. */
+export type AgentReminderContent =
+  | { kind: 'target' }
+  | { kind: 'tasks' }
+  | { kind: 'tag'; tag: string; count?: number }
+  | { kind: 'query'; query: string; count?: number }
+
+export interface AgentReminderInput {
+  /** The reminder to change; a new one without it. */
+  id?: string
+  /** What it is about (new reminders only): a habit, a task, an event, any object. */
+  object?: Id
+  title?: string
+  space?: string
+  when?: RuleWhen
+  content?: AgentReminderContent
+  ack?: AckMode
+  /** A ladder preset; `steps` and `repeat` given too win over it. */
+  preset?: keyof typeof LADDER_PRESETS
+  repeat?: number | null
+  steps?: LadderStep[]
+  snooze?: number
+  climbAfter?: number | null
+  escapeAfter?: number
+  paused?: boolean
 }
 
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
@@ -1387,6 +1417,148 @@ export class AgentTools {
     if (result.type) this.options.feed.emit({ kind: 'type', id: result.type.id, spaceId: result.type.spaceId })
     this.changed(result.object)
     return this.getObject(id)
+  }
+
+  // Insistent reminders (docs/reminders.md) ------------------------------------------
+
+  /** Whether the server sends reminders (the MCP offers the reminder tools only then). */
+  get remindersOn() {
+    return !!this.options.insistent
+  }
+
+  private get insistent(): InsistentReminders {
+    if (!this.options.insistent) throw new AgentError('reminders are off on this server')
+    return this.options.insistent
+  }
+
+  /** A rule agents may see: in a space they see, about an object they see, showing a tag or query they see. */
+  private reminderVisible(rule: InsistentRule) {
+    if (!this.visibleSpaces().some((s) => s.id === rule.spaceId)) return false
+    if (rule.objectId && !this.visibleId(rule.objectId)) return false
+    if (rule.content.kind === 'tag' && this.hiddenTags(rule.spaceId).has(rule.content.tagId)) return false
+    if (rule.content.kind === 'query' && !this.visibleId(rule.content.queryId)) return false
+    return true
+  }
+
+  private reminderRule(id: string, write = false): InsistentRule {
+    const rule = this.insistent.rule(this.options.user.id, id)
+    if (!rule || !this.reminderVisible(rule)) throw new AgentError(`no reminder ${id} (list_reminders shows them)`)
+    if (write) this.writable(rule.spaceId)
+    return rule
+  }
+
+  private reminderView(rule: InsistentRule) {
+    const { content } = rule
+    const presets = Object.keys(LADDER_PRESETS) as (keyof typeof LADDER_PRESETS)[]
+    const preset = presets.find((p) => LADDER_PRESETS[p].repeat === rule.repeat && JSON.stringify(LADDER_PRESETS[p].steps) === JSON.stringify(rule.steps))
+    return {
+      id: rule.id,
+      name: this.insistent.titleOf(rule),
+      ...(rule.objectId ? { about: { id: rule.objectId, title: this.titleOf(rule.objectId) ?? '', url: this.url(rule.objectId) } } : {}),
+      space: this.store.getSpace(rule.spaceId)?.name ?? rule.spaceId,
+      when: rule.when,
+      content:
+        content.kind === 'tag'
+          ? { kind: 'tag', tag: this.titleOf(content.tagId) ?? content.tagId, count: content.count ?? 1 }
+          : content.kind === 'query'
+            ? { kind: 'query', query: this.titleOf(content.queryId) ?? content.queryId, count: content.count ?? 1 }
+            : content,
+      ack: rule.ack,
+      ...(preset ? { preset } : {}),
+      repeat: rule.repeat,
+      steps: rule.steps,
+      snooze: rule.snooze,
+      climbAfter: rule.climbAfter,
+      escapeAfter: rule.escapeAfter,
+      ...(rule.paused ? { paused: true } : {}),
+      stats: this.insistent.stats(this.options.user, rule.id),
+    }
+  }
+
+  private reminderContent(spaceId: Id, content: AgentReminderContent): RuleContent {
+    const count = 'count' in content && content.count !== undefined ? { count: content.count } : {}
+    switch (content.kind) {
+      case 'target':
+      case 'tasks':
+        return { kind: content.kind }
+      case 'tag': {
+        const [tagId] = this.tagIds(spaceId, [content.tag])
+        if (!tagId || this.hiddenTags(spaceId).has(tagId)) throw new AgentError(`no tag "${content.tag}" in this space`)
+        return { kind: 'tag', tagId, ...count }
+      }
+      case 'query': {
+        const queries = this.store.listObjects(builtinTypeId(spaceId, 'query')).filter((o) => !o.deletedAt && this.visible(o))
+        const query = queries.find((o) => o.id === content.query) ?? queries.find((o) => fold(o.title) === fold(content.query))
+        if (!query) throw new AgentError(`no saved query "${content.query}" in this space`)
+        return { kind: 'query', queryId: query.id, ...count }
+      }
+      default:
+        throw new AgentError('content is "target", "tasks", "tag" or "query"')
+    }
+  }
+
+  /** The user's insistent reminders (about one object, with `object`), and the ones asking right now. */
+  listReminders(input: { object?: Id } = {}) {
+    const user = this.options.user
+    const rules = (input.object ? this.insistent.rulesFor(user.id, this.object(input.object).id) : this.insistent.rules(user.id)).filter((r) => this.reminderVisible(r))
+    const ids = new Set(rules.map((r) => r.id))
+    const asking = this.insistent
+      .openNags(user.id)
+      .filter((n) => ids.has(n.ruleId))
+      .map((n) => ({ id: n.id, reminder: n.ruleId, day: n.day, startedAt: new Date(n.startedAt).toISOString(), step: n.step, sent: n.sent, snoozes: n.snoozes }))
+    return { reminders: rules.map((r) => this.reminderView(r)), ...(asking.length ? { askingNow: asking } : {}) }
+  }
+
+  /** Make a reminder (without `id`) or change one; what is not given keeps its value (or the default that fits the object). */
+  setReminder(input: AgentReminderInput) {
+    const user = this.options.user
+    const current = input.id ? this.reminderRule(input.id, true) : undefined
+    if (current && input.object && input.object !== current.objectId) throw new AgentError("a reminder's object cannot change: make a new reminder")
+    const object = !current && input.object ? this.object(input.object, true) : undefined
+    const spaceId = current?.spaceId ?? object?.spaceId ?? this.space(input.space, true).id
+    const changes: RuleInput = {}
+    if (input.title !== undefined) changes.title = input.title
+    if (input.when) changes.when = input.when
+    if (input.content) changes.content = this.reminderContent(spaceId, input.content)
+    if (input.ack) changes.ack = input.ack
+    if (input.preset) {
+      const preset = LADDER_PRESETS[input.preset]
+      if (!preset) throw new AgentError(`the presets are ${Object.keys(LADDER_PRESETS).join(', ')}`)
+      changes.repeat = preset.repeat
+      changes.steps = preset.steps
+    }
+    if (input.repeat !== undefined) changes.repeat = input.repeat
+    if (input.steps) changes.steps = input.steps
+    if (input.snooze !== undefined) changes.snooze = input.snooze
+    if (input.climbAfter !== undefined) changes.climbAfter = input.climbAfter
+    if (input.escapeAfter !== undefined) changes.escapeAfter = input.escapeAfter
+    if (input.paused !== undefined) changes.paused = input.paused
+    try {
+      const rule = current ? this.insistent.update(user, current.id, changes) : this.insistent.create(user, { ...changes, spaceId, ...(object ? { objectId: object.id } : {}) })
+      return this.reminderView(rule)
+    } catch (error) {
+      if (error instanceof InsistentError) throw new AgentError(error.message)
+      throw error
+    }
+  }
+
+  /** Remove a reminder, with its history. */
+  removeReminder(id: string) {
+    const rule = this.reminderRule(id, true)
+    this.insistent.remove(this.options.user.id, rule.id)
+    return { id: rule.id, name: this.insistent.titleOf(rule), removed: true }
+  }
+
+  /** Start a reminder now, to try it: its first step goes out at once, then it repeats and climbs until answered. */
+  async startReminder(id: string) {
+    const rule = this.reminderRule(id, true)
+    try {
+      const nag = await this.insistent.startNow(this.options.user, rule.id)
+      return { started: true, nag, note: 'Its first step went out now. It repeats and climbs its ladder until it is answered, snoozed or skipped (pausing the reminder stops it).' }
+    } catch (error) {
+      if (error instanceof InsistentError) throw new AgentError(error.message)
+      throw error
+    }
   }
 }
 

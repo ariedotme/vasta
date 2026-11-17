@@ -1715,7 +1715,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     (c) => {
       const origin = new URL(c.req.url)
       const address = webUrl ?? `${isHttps(c) ? 'https' : origin.protocol.slice(0, -1)}://${c.req.header('x-forwarded-host') ?? origin.host}`
-      return handleMcp(c.req.raw, new AgentTools({ store, accounts: users, feed, now, user: userOf(c), webUrl: address }), MCP_VERSION)
+      return handleMcp(c.req.raw, new AgentTools({ store, accounts: users, feed, now, user: userOf(c), webUrl: address, ...(reminders ? { insistent: reminders.insistent } : {}) }), MCP_VERSION)
     }
   )
   app.route('/api/auth', authApi)

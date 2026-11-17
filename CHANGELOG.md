@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Agents can set up insistent reminders.** Claude Code, Codex and other agents connected
+  through the MCP can list your insistent reminders with their stats, make and change them (by
+  ladder preset or step by step, showing a tag or a saved query by name), remove them, and start
+  one right now so you can see how it feels.
+
 ## 0.10.0 (2026-11-17)
 
 ### Added
