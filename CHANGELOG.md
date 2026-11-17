@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.9.0 (2026-11-17)
+
 ### Added
 
 - **Instructions for agents.** Settings › Agents has a text box per space ("read the page About
