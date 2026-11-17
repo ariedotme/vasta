@@ -8,10 +8,28 @@ GitHub release page.
 
 ### Added
 
-- **Agents can set up insistent reminders.** Claude Code, Codex and other agents connected
-  through the MCP can list your insistent reminders with their stats, make and change them (by
-  ladder preset or step by step, showing a tag or a saved query by name), remove them, and start
-  one right now so you can see how it feels.
+- **Reminders have styles.** Pick how a reminder reaches you: **Pop-up** (a window of the desktop
+  app floats over everything until you answer), **Full screen**, **Notification**, **Escalating**
+  or **Relentless**, or set its steps yourself with **Custom**. The pop-up needs Vasta for desktop
+  0.11.
+- **Agents can set up reminders.** Claude Code, Codex and other agents connected through the MCP
+  can list your reminders with their stats, make and change them (by style or step by step,
+  showing a tag or a saved query by name), remove them, and start one right now so you can see how
+  it feels.
+
+### Changed
+
+- **Insistent reminders are now just Reminders**, in Settings › Reminders, with their editor in
+  parts: when it starts, what it shows, how it reaches you, how you answer it. The channels they
+  and the habit, event and food reminders go through are Settings › Reminder channels.
+
+### Fixed
+
+- **Edit** and **New reminder…** in Settings did nothing once a reminder had been opened for
+  editing.
+- **Desktop (macOS): clicking a reminder's notification opens it.** The app now sends
+  notifications through macOS's current notification system, which reports the click; macOS may ask
+  once to allow Vasta's notifications.
 
 ## 0.10.0 (2026-11-17)
 

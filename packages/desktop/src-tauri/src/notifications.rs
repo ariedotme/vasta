@@ -62,28 +62,18 @@ pub fn show(app: &AppHandle, key: String, title: String, body: String, path: Opt
     app.notification().builder().id(id).title(title).body(body).show().map_err(|error| error.to_string())
 }
 
-/// macOS: show reminders as banners while Vasta is the app in front too. The notification
-/// library's delegate (mac-notification-sys) has no `userNotificationCenter:shouldPresentNotification:`,
-/// so macOS sent them straight to Notification Center then. Added to its class before any
-/// notification sets the delegate.
+/// macOS: ask once for permission to show notifications (UNUserNotificationCenter, which also
+/// shows them while Vasta is the app in front and reports their clicks). macOS asks the user only
+/// the first time; afterwards this answers at once.
 #[cfg(target_os = "macos")]
-pub fn banner_in_front() {
-    use objc2::encode::Encode;
-    use objc2::runtime::{AnyClass, AnyObject, Bool, Imp, Sel};
-    use objc2::sel;
-
-    extern "C-unwind" fn present(_: &AnyObject, _: Sel, _: &AnyObject, _: &AnyObject) -> Bool {
-        Bool::YES
-    }
-    let Some(class) = AnyClass::get(c"NotificationCenterDelegate") else {
-        eprintln!("Notifications: no NotificationCenterDelegate class");
-        return;
-    };
-    let types = std::ffi::CString::new(format!("{}@:@@", Bool::ENCODING)).unwrap();
-    unsafe {
-        let imp: Imp = std::mem::transmute(present as extern "C-unwind" fn(_, _, _, _) -> _);
-        objc2::ffi::class_addMethod(class as *const AnyClass as *mut AnyClass, sel!(userNotificationCenter:shouldPresentNotification:), imp, types.as_ptr());
-    }
+pub fn ask_permission() {
+    tauri::async_runtime::spawn(async {
+        match notify_rust::request_auth().await {
+            Ok(true) => {}
+            Ok(false) => eprintln!("Notifications: not allowed in System Settings"),
+            Err(error) => eprintln!("Notifications: {error}"),
+        }
+    });
 }
 
 /// The page a clicked notification opens; None when it is not one of ours.

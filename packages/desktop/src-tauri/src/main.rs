@@ -975,7 +975,7 @@ fn main() {
             app.manage(notifications::Notifications::default());
             app.manage(takeover::Takeovers::default());
             #[cfg(target_os = "macos")]
-            notifications::banner_in_front();
+            notifications::ask_permission();
             notifications::start(handle.clone(), notifications::Hooks { credentials: notify_credentials, refused: notify_token_refused, takeover: open_takeover, dismiss: dismiss_takeover });
             presence::start(handle.clone(), notify_credentials);
             let clicks = handle.clone();

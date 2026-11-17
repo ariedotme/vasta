@@ -35,8 +35,8 @@ matches a topic. Objects are never deleted for good: trash_object moves one to t
 the user can restore it. What an agent writes is recorded as made through its token
 (createdVia, updatedVia: query "createdVia is-not-empty" finds what agents wrote).`
 
-const REMINDER_INSTRUCTIONS = `Insistent reminders keep asking until answered, climbing a ladder of channels up to the desktop
-app taking over the screen: list_reminders, set_reminder (ask the user before making or loosening
+const REMINDER_INSTRUCTIONS = `Reminders ask until answered, in a style: a desktop pop-up, the whole screen, notifications, or
+escalating through channels: list_reminders, set_reminder (ask the user before making or loosening
 one), start_reminder to try one now.`
 
 const space = z.string().optional().describe('Space id or name; the default space when omitted')
@@ -477,7 +477,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     ({ text, space }) => run(() => tools.capture({ text, ...(space ? { space } : {}) }))
   )
 
-  // Insistent reminders (docs/reminders.md), when the server sends reminders.
+  // Reminders (docs/reminders.md), when the server sends reminders.
   if (tools.remindersOn) registerReminderTools(server, tools)
 
   return server
@@ -505,14 +505,17 @@ function registerReminderTools(server: McpServer, tools: AgentTools) {
       .optional()
       .describe('What the reminder shows, so even an ignored notification gets read'),
     ack: z.enum(['ok', 'done', 'type', 'say']).optional().describe('How it is answered: OK, doing the habit or task, typing its text word for word, or saying it out loud (typing or saying it on a habit marks the habit done)'),
-    preset: z.enum(['gentle', 'insistent', 'relentless']).optional().describe('A ladder: gentle (every 30 min, notifications only), insistent (every 15 min, louder at each step, the desktop takeover at 45), relentless (every 5 min, Telegram at 10, the takeover at 15)'),
+    style: z
+      .enum(['popup', 'fullscreen', 'notification', 'escalating', 'relentless'])
+      .optional()
+      .describe('How it reaches the user: popup (a desktop window floating over everything until answered), fullscreen (the desktop app over the whole screen), notification (every 30 min, notifications only), escalating (every 15 min, louder at each step, the screen at 45), relentless (every 5 min, Telegram at 10, the screen at 15)'),
     repeat: z.number().int().nullable().optional().describe('Minutes between repeats (2, 5, 10, 15, 20, 30, 45, 60, 90 or 120); null: only at the ladder’s steps'),
     steps: z
       .array(z.object({ after: z.number().int().min(0).describe('Minutes after it starts; the first step is 0'), channels: z.array(z.enum(NAG_CHANNELS)).min(1), urgent: z.boolean().optional().describe('ntfy priority 5, Web Push that stays, Telegram with sound') }))
       .min(1)
       .max(6)
       .optional()
-      .describe('A ladder of its own (wins over preset). Channels: push (phones and browsers), desktop (the desktop app’s notification), ntfy, telegram, takeover (the desktop app over the whole screen)'),
+      .describe('A ladder of its own (wins over style). Channels: push (phones and browsers), desktop (the desktop app’s notification), ntfy, telegram, popup (a desktop window floating over everything), takeover (the desktop app over the whole screen)'),
     snooze: z.number().int().optional().describe('Minutes a snooze lasts (5, 10, 15, 30 or 60)'),
     climbAfter: z.number().int().min(1).nullable().optional().describe('Snoozes that climb one step; null: snoozing never climbs'),
     escapeAfter: z.number().int().min(0).optional().describe('Seconds before the takeover offers its way out'),
@@ -523,7 +526,7 @@ function registerReminderTools(server: McpServer, tools: AgentTools) {
     'list_reminders',
     {
       title: 'List reminders',
-      description: "The user's insistent reminders (about one object, with object): when each starts, what it shows, how it is answered, its ladder, and honest stats of the last 30 days (answered how and how fast, snoozes, skips with reasons, ignored). askingNow: the ones going on.",
+      description: "The user's reminders (about one object, with object): when each starts, what it shows, how it is answered, its ladder, and honest stats of the last 30 days (answered how and how fast, snoozes, skips with reasons, ignored). askingNow: the ones going on.",
       inputSchema: { object: z.string().optional().describe('Only the reminders about this object') },
       annotations: READ,
     },
@@ -535,7 +538,7 @@ function registerReminderTools(server: McpServer, tools: AgentTools) {
     {
       title: 'Set a reminder',
       description:
-        'Make an insistent reminder (without id) or change one: a reminder that repeats and climbs a ladder of channels (up to the desktop app taking over the screen) until it gets a real answer. On an object (a habit, task, event, or any object to be reminded of) or about nothing (with a title). Unset fields get what fits the object: a habit at its "Remind at", answered by doing it. Ask the user before making or loosening one.',
+        'Make a reminder (without id) or change one: it asks until it gets a real answer, in a style (a desktop pop-up, the whole screen, notifications, or escalating through channels). On an object (a habit, task, event, or any object to be reminded of) or about nothing (with a title). Unset fields get what fits the object: a habit at its "Remind at", answered by doing it. Ask the user before making or loosening one.',
       inputSchema: { id: z.string().optional().describe('The reminder to change'), object: z.string().optional().describe('What a new reminder is about'), space, ...reminderShape },
       annotations: WRITE,
     },
@@ -557,7 +560,7 @@ function registerReminderTools(server: McpServer, tools: AgentTools) {
     'remove_reminder',
     {
       title: 'Remove a reminder',
-      description: 'Remove an insistent reminder and its history (pausing it with set_reminder keeps them). Ask the user first.',
+      description: 'Remove a reminder and its history (pausing it with set_reminder keeps them). Ask the user first.',
       inputSchema: { id: z.string() },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },

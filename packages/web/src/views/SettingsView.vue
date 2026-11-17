@@ -93,8 +93,8 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
       <SprintSettings />
       <InboxSettings />
       <NutritionSettings />
-      <ReminderSettings />
       <InsistentSettings />
+      <ReminderSettings />
       <ChannelSettings />
       <TokenSettings />
       <AgentSettings />

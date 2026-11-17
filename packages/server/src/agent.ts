@@ -125,7 +125,7 @@ import { isValidDay } from './daily.ts'
 import type { ChangeFeed } from './events.ts'
 import { parseIcon } from './icons.ts'
 import { listInbox } from './inbox.ts'
-import { InsistentError, LADDER_PRESETS, type AckMode, type InsistentReminders, type InsistentRule, type LadderStep, type RuleContent, type RuleInput, type RuleWhen } from './insistent.ts'
+import { InsistentError, REMINDER_STYLES, type AckMode, type InsistentReminders, type InsistentRule, type LadderStep, type RuleContent, type RuleInput, type RuleWhen } from './insistent.ts'
 
 export class AgentError extends Error {}
 
@@ -254,8 +254,8 @@ export interface AgentReminderInput {
   when?: RuleWhen
   content?: AgentReminderContent
   ack?: AckMode
-  /** A ladder preset; `steps` and `repeat` given too win over it. */
-  preset?: keyof typeof LADDER_PRESETS
+  /** A style (its ladder and repeat); `steps` and `repeat` given too win over it. */
+  style?: keyof typeof REMINDER_STYLES
   repeat?: number | null
   steps?: LadderStep[]
   snooze?: number
@@ -1419,7 +1419,7 @@ export class AgentTools {
     return this.getObject(id)
   }
 
-  // Insistent reminders (docs/reminders.md) ------------------------------------------
+  // Reminders (docs/reminders.md) ------------------------------------------
 
   /** Whether the server sends reminders (the MCP offers the reminder tools only then). */
   get remindersOn() {
@@ -1449,8 +1449,8 @@ export class AgentTools {
 
   private reminderView(rule: InsistentRule) {
     const { content } = rule
-    const presets = Object.keys(LADDER_PRESETS) as (keyof typeof LADDER_PRESETS)[]
-    const preset = presets.find((p) => LADDER_PRESETS[p].repeat === rule.repeat && JSON.stringify(LADDER_PRESETS[p].steps) === JSON.stringify(rule.steps))
+    const styles = Object.keys(REMINDER_STYLES) as (keyof typeof REMINDER_STYLES)[]
+    const style = styles.find((p) => REMINDER_STYLES[p].repeat === rule.repeat && JSON.stringify(REMINDER_STYLES[p].steps) === JSON.stringify(rule.steps)) ?? 'custom'
     return {
       id: rule.id,
       name: this.insistent.titleOf(rule),
@@ -1464,7 +1464,7 @@ export class AgentTools {
             ? { kind: 'query', query: this.titleOf(content.queryId) ?? content.queryId, count: content.count ?? 1 }
             : content,
       ack: rule.ack,
-      ...(preset ? { preset } : {}),
+      style,
       repeat: rule.repeat,
       steps: rule.steps,
       snooze: rule.snooze,
@@ -1521,11 +1521,11 @@ export class AgentTools {
     if (input.when) changes.when = input.when
     if (input.content) changes.content = this.reminderContent(spaceId, input.content)
     if (input.ack) changes.ack = input.ack
-    if (input.preset) {
-      const preset = LADDER_PRESETS[input.preset]
-      if (!preset) throw new AgentError(`the presets are ${Object.keys(LADDER_PRESETS).join(', ')}`)
-      changes.repeat = preset.repeat
-      changes.steps = preset.steps
+    if (input.style) {
+      const style = REMINDER_STYLES[input.style]
+      if (!style) throw new AgentError(`the styles are ${Object.keys(REMINDER_STYLES).join(', ')}`)
+      changes.repeat = style.repeat
+      changes.steps = style.steps
     }
     if (input.repeat !== undefined) changes.repeat = input.repeat
     if (input.steps) changes.steps = input.steps

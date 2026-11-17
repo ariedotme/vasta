@@ -16,6 +16,8 @@ import { listen, speechLanguage, speechUnavailable, type Listening } from '../li
 const props = defineProps<{ id: string }>()
 const route = useRoute()
 const takeover = route.query.takeover === '1'
+/** The desktop app's floating pop-up (?popup=1): a small window, so a tighter layout. */
+const popup = takeover && route.query.popup === '1'
 
 const nag = ref<NagView | null>(null)
 const error = ref('')
@@ -213,8 +215,8 @@ watch(
 
 <template>
   <div
-    class="flex min-h-full flex-col items-center justify-center px-5 py-10"
-    :class="takeover ? 'h-full bg-canvas' : ''"
+    class="flex min-h-full flex-col items-center justify-center px-5"
+    :class="[takeover ? 'h-full bg-canvas' : '', popup ? 'py-6' : 'py-10']"
     :data-takeover="takeover || undefined"
   >
     <!-- The desktop takeover has no title bar: its top edge moves the window (it is full screen anyway). -->
@@ -241,16 +243,16 @@ watch(
         <AppIcon :fallback="nag.ack === 'say' ? 'ph:microphone' : nag.ack === 'type' ? 'ph:keyboard' : 'ph:bell-ringing'" :size="14" />
         {{ status }}
       </p>
-      <h1 class="text-center text-3xl font-bold tracking-tight md:text-4xl">{{ nag.title }}</h1>
+      <h1 class="text-center font-bold tracking-tight" :class="popup ? 'text-2xl' : 'text-3xl md:text-4xl'">{{ nag.title }}</h1>
 
       <!-- Saying or typing the text: one phrase at a time. -->
-      <section v-if="nag.expected.length" class="mt-8">
+      <section v-if="nag.expected.length" :class="popup ? 'mt-5' : 'mt-8'">
         <div v-if="nag.expected.length > 1" class="mb-4 flex justify-center gap-1.5" aria-hidden="true">
           <span v-for="(_, i) in nag.expected" :key="i" class="h-1.5 w-8 rounded-full transition-colors" :class="i < index || (i === index && matched) ? 'bg-emerald-500' : i === index ? 'bg-ink-faint' : 'bg-line'" />
         </div>
         <blockquote
-          class="rounded-2xl border bg-surface px-6 py-7 text-center text-2xl leading-snug font-medium shadow-sm transition-colors md:text-[1.75rem]"
-          :class="matched ? 'border-emerald-400 text-emerald-700 dark:text-emerald-300' : 'border-line'"
+          class="rounded-2xl border bg-surface text-center leading-snug font-medium shadow-sm transition-colors"
+          :class="[popup ? 'px-5 py-5 text-xl' : 'px-6 py-7 text-2xl md:text-[1.75rem]', matched ? 'border-emerald-400 text-emerald-700 dark:text-emerald-300' : 'border-line']"
           data-phrase
         >
           “{{ current }}”
@@ -335,7 +337,7 @@ watch(
       </div>
 
       <!-- The takeover never traps anyone. -->
-      <div v-if="takeover" class="mt-10 text-center text-xs text-ink-faint">
+      <div v-if="takeover" class="text-center text-xs text-ink-faint" :class="popup ? 'mt-6' : 'mt-10'">
         <span v-if="escapeIn">You can leave in {{ escapeIn }} s</span>
         <button v-else type="button" class="underline-offset-2 hover:text-ink hover:underline" data-escape @click="answer('escape')">Let me go (counts as skipped)</button>
       </div>

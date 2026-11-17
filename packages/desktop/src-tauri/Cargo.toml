@@ -28,6 +28,9 @@ url = "2"
 getrandom = "=0.3.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+# Notifications through UNUserNotificationCenter: the old NSUserNotificationCenter that
+# tauri-plugin-notification's notify-rust uses by default no longer reports clicks on recent macOS.
+notify-rust = { version = "=4.18.2", default-features = false, features = ["preview-macos-un"] }
 objc2 = "=0.6.5"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSPanel", "NSResponder", "NSWindow"] }
 

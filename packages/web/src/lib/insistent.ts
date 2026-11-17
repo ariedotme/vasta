@@ -1,6 +1,6 @@
-// Insistent reminders in the app (server/src/insistent.ts): the editor dialog (an object's
-// "Remind me…", Settings › Reminders' "New reminder…"), the ladder presets it offers, and how a
-// rule reads in a line.
+// Reminders in the app (server/src/insistent.ts): the editor dialog (an object's "Remind me…",
+// Settings › Reminders' "New reminder…"), the styles it offers (how a reminder reaches you: a
+// pop-up, the whole screen, notifications, escalating), and how a rule reads in a line.
 import { reactive } from 'vue'
 import type { Id } from '@vasta/core'
 import type { InsistentRule, LadderStep, NagChannel, RuleInput } from './api.ts'
@@ -21,20 +21,53 @@ export const CHANNELS: { id: NagChannel; label: string; icon: string; hint: stri
   { id: 'desktop', label: 'Desktop', icon: 'ph:desktop', hint: 'A notification of the desktop app' },
   { id: 'ntfy', label: 'ntfy', icon: 'ph:bell-ringing', hint: 'Your ntfy topic' },
   { id: 'telegram', label: 'Telegram', icon: 'ph:telegram-logo', hint: 'A message from the bot, with buttons' },
-  { id: 'takeover', label: 'Takeover', icon: 'ph:frame-corners', hint: 'The desktop app takes the whole screen until you answer' },
+  { id: 'popup', label: 'Pop-up', icon: 'ph:app-window', hint: 'A window of the desktop app floating over everything until you answer' },
+  { id: 'takeover', label: 'Full screen', icon: 'ph:frame-corners', hint: 'The desktop app takes the whole screen until you answer' },
 ]
 
-export const PRESETS: { id: string; label: string; description: string; repeat: number | null; steps: LadderStep[] }[] = [
+/** A reminder's style: how it reaches you (the same as REMINDER_STYLES in server/src/insistent.ts). */
+export interface ReminderStyle {
+  id: string
+  label: string
+  icon: string
+  description: string
+  repeat: number | null
+  steps: LadderStep[]
+  /** It needs the desktop app open. */
+  desktop?: boolean
+}
+
+export const STYLES: ReminderStyle[] = [
   {
-    id: 'gentle',
-    label: 'Gentle',
+    id: 'popup',
+    label: 'Pop-up',
+    icon: 'ph:app-window',
+    description: 'A window floats over everything until you answer.',
+    repeat: null,
+    steps: [{ after: 0, channels: ['popup'] }],
+    desktop: true,
+  },
+  {
+    id: 'fullscreen',
+    label: 'Full screen',
+    icon: 'ph:frame-corners',
+    description: 'Takes the whole screen until you answer.',
+    repeat: null,
+    steps: [{ after: 0, channels: ['takeover'] }],
+    desktop: true,
+  },
+  {
+    id: 'notification',
+    label: 'Notification',
+    icon: 'ph:bell',
     description: 'A notification every 30 minutes, nothing louder.',
     repeat: 30,
     steps: [{ after: 0, channels: ['push', 'desktop', 'ntfy'] }],
   },
   {
-    id: 'insistent',
-    label: 'Insistent',
+    id: 'escalating',
+    label: 'Escalating',
+    icon: 'ph:trend-up',
     description: 'Every 15 minutes, louder at each step, the screen at 45.',
     repeat: 15,
     steps: [
@@ -47,6 +80,7 @@ export const PRESETS: { id: string; label: string; description: string; repeat: 
   {
     id: 'relentless',
     label: 'Relentless',
+    icon: 'ph:siren',
     description: 'Every 5 minutes; Telegram at 10, the screen at 15.',
     repeat: 5,
     steps: [
@@ -57,9 +91,9 @@ export const PRESETS: { id: string; label: string; description: string; repeat: 
   },
 ]
 
-/** The preset a rule's ladder is, if any. */
-export function presetOf(rule: Pick<RuleInput, 'repeat' | 'steps'>): string | undefined {
-  return PRESETS.find((p) => p.repeat === rule.repeat && JSON.stringify(p.steps) === JSON.stringify(rule.steps))?.id
+/** The style a rule's ladder is, if any (else its steps are its own: "custom"). */
+export function styleOf(rule: Pick<RuleInput, 'repeat' | 'steps'>): ReminderStyle | undefined {
+  return STYLES.find((p) => p.repeat === rule.repeat && JSON.stringify(p.steps) === JSON.stringify(rule.steps))
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -80,6 +114,8 @@ export function whenText(rule: Pick<InsistentRule, 'when'>, objectTime?: string)
 }
 
 export function ladderText(rule: Pick<InsistentRule, 'repeat' | 'steps'>): string {
+  const style = styleOf(rule)
+  if (style) return style.label
   const top = rule.steps.at(-1)!
   const last = rule.steps.length > 1 ? `, up to ${top.channels.map((c) => CHANNELS.find((x) => x.id === c)?.label ?? c).join(' + ')} at ${top.after} min` : ''
   return `${rule.repeat ? `Every ${rule.repeat} min` : 'Once per step'}${last}`

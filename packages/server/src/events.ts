@@ -34,7 +34,7 @@ export interface DesktopNotification {
   url?: string
 }
 
-/** A reminder that takes the screen (desktop 0.10 and later): the app opens `path` of the web app full screen. */
+/** A reminder in the desktop app's own window (0.10 and later): the app opens `path` of the web app full screen, or floating (`popup`). */
 export interface DesktopTakeover {
   /** The nag (server/src/insistent.ts). */
   id: string
@@ -44,6 +44,8 @@ export interface DesktopTakeover {
   path: string
   /** Seconds before the way out shows. */
   escapeAfter: number
+  /** A window floating over everything instead of the whole screen (desktop 0.11 and later; older apps take the screen). */
+  popup?: boolean
 }
 
 interface DesktopListener {

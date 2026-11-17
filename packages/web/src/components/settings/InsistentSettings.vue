@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Insistent reminders (server/src/insistent.ts): every one the user has, with its honest stats,
+// Reminders (server/src/insistent.ts): every one the user has, with its honest stats,
 // the ones going on now, a new free-standing one ("an affirmation every morning"), and quiet
 // hours, which all of them wait out. Each object's own are also under its "Remind me…".
 import { computed, onMounted, ref } from 'vue'
@@ -54,14 +54,14 @@ const objectTime = (rule: InsistentRule) => {
 }
 const icons = (rule: InsistentRule) => [...new Set(rule.steps.flatMap((s) => s.channels))].map((c) => CHANNELS.find((x) => x.id === c)!)
 const ackIcon = { ok: 'ph:hand-tap', done: 'ph:check-circle', type: 'ph:keyboard', say: 'ph:microphone' } as const
-const anyTakeover = computed(() => rules.value?.some((r) => !r.paused && r.steps.some((s) => s.channels.includes('takeover'))))
+const anyTakeover = computed(() => rules.value?.some((r) => !r.paused && r.steps.some((s) => s.channels.includes('takeover') || s.channels.includes('popup'))))
 </script>
 
 <template>
   <SettingsSection
-    id="insistent"
-    title="Insistent reminders"
-    description="Reminders that keep asking until you really answer: done, typed, said out loud, snoozed or skipped with a reason. Each climbs a ladder of channels, up to the desktop app taking the screen. Set one on any object with “Remind me…” in its menu, or here."
+    id="reminders"
+    title="Reminders"
+    description="Reminders that ask until you really answer: OK, done, typed, said out loud, snoozed or skipped with a reason. Each has a style: a pop-up over everything, the whole screen, notifications, or escalating through your channels. Set one on any object with “Remind me…” in its menu, or here."
   >
     <p v-if="unavailable" class="text-sm text-ink-soft">{{ unavailable }}</p>
     <div v-else-if="rules" class="space-y-5">
@@ -97,7 +97,7 @@ const anyTakeover = computed(() => rules.value?.some((r) => !r.paused && r.steps
       </ul>
       <p v-else class="text-sm text-ink-faint">None yet.</p>
       <button type="button" :class="secondary" @click="edit()"><AppIcon fallback="ph:plus" :size="13" class="mr-1 inline" /> New reminder…</button>
-      <p v-if="anyTakeover && !takeoverApps && !desktop?.takeover" class="text-xs text-amber-700 dark:text-amber-400">Some steps take the screen: that needs Vasta for desktop 0.10 or later, running. Until then those steps arrive as notifications.</p>
+      <p v-if="anyTakeover && !takeoverApps && !desktop?.takeover" class="text-xs text-amber-700 dark:text-amber-400">Some reminders pop up or take the screen: that needs Vasta for desktop open (0.11 or later for the pop-up). Until then they arrive as notifications.</p>
 
       <div class="space-y-2 border-t border-line pt-4">
         <label class="flex items-center gap-2.5 text-sm">
@@ -105,7 +105,7 @@ const anyTakeover = computed(() => rules.value?.some((r) => !r.paused && r.steps
           Quiet hours
         </label>
         <div v-if="quietOn" class="flex flex-wrap items-center gap-2 pl-6 text-sm text-ink-soft">
-          Nothing insists from
+          No reminder asks from
           <input v-model="quiet.from" type="time" :class="field" class="!mt-0 !w-32" aria-label="Quiet from" @change="saveQuiet" />
           to
           <input v-model="quiet.to" type="time" :class="field" class="!mt-0 !w-32" aria-label="Quiet until" @change="saveQuiet" />

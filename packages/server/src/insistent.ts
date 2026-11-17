@@ -51,8 +51,11 @@ import type { ChangeFeed } from './events.ts'
 
 // Rules ------------------------------------------------------------------------
 
-/** Where a step of the ladder reaches the user. `takeover`: the desktop app's full-screen window. */
-export const NAG_CHANNELS = ['push', 'desktop', 'ntfy', 'telegram', 'takeover'] as const
+/**
+ * Where a step of the ladder reaches the user. `popup`: the desktop app's window floating over
+ * everything; `takeover`: the desktop app over the whole screen.
+ */
+export const NAG_CHANNELS = ['push', 'desktop', 'ntfy', 'telegram', 'popup', 'takeover'] as const
 export type NagChannel = (typeof NAG_CHANNELS)[number]
 
 export interface LadderStep {
@@ -105,7 +108,7 @@ export interface InsistentRule {
   snooze: number
   /** Snoozes that climb one step of the ladder; null: snoozing never does. */
   climbAfter: number | null
-  /** Seconds before the desktop takeover offers its way out. */
+  /** Seconds before the desktop pop-up or takeover offers its way out. */
   escapeAfter: number
   paused?: boolean
   createdAt: string
@@ -127,10 +130,15 @@ export const DEFAULT_STEPS: LadderStep[] = [
   { after: 45, channels: ['push', 'ntfy', 'telegram', 'takeover'], urgent: true },
 ]
 
-/** The editor's ladder presets (the same as web/src/lib/insistent.ts), for agents to name one. */
-export const LADDER_PRESETS: Record<'gentle' | 'insistent' | 'relentless', { repeat: number; steps: LadderStep[] }> = {
-  gentle: { repeat: 30, steps: [{ after: 0, channels: ['push', 'desktop', 'ntfy'] }] },
-  insistent: { repeat: 15, steps: DEFAULT_STEPS },
+/**
+ * A reminder's style: how it reaches the user, as a ladder and a repeat (the same as
+ * web/src/lib/insistent.ts). Agents name one; a ladder of its own is "custom".
+ */
+export const REMINDER_STYLES: Record<'popup' | 'fullscreen' | 'notification' | 'escalating' | 'relentless', { repeat: number | null; steps: LadderStep[] }> = {
+  popup: { repeat: null, steps: [{ after: 0, channels: ['popup'] }] },
+  fullscreen: { repeat: null, steps: [{ after: 0, channels: ['takeover'] }] },
+  notification: { repeat: 30, steps: [{ after: 0, channels: ['push', 'desktop', 'ntfy'] }] },
+  escalating: { repeat: 15, steps: DEFAULT_STEPS },
   relentless: {
     repeat: 5,
     steps: [
@@ -435,7 +443,7 @@ export class InsistentReminders {
     if (rule.repeat !== null && !REPEATS.includes(rule.repeat)) throw new InsistentError(`repeat every ${REPEATS.join(', ')} minutes, or never`)
     if (!SNOOZES.includes(rule.snooze)) throw new InsistentError(`snooze for ${SNOOZES.join(', ')} minutes`)
     if (rule.climbAfter !== null && (!Number.isInteger(rule.climbAfter) || rule.climbAfter < 1 || rule.climbAfter > 10)) throw new InsistentError('climb a step after 1 to 10 snoozes, or never')
-    if (!Number.isInteger(rule.escapeAfter) || rule.escapeAfter < 3 || rule.escapeAfter > 120) throw new InsistentError('the way out of the takeover shows after 3 to 120 seconds')
+    if (!Number.isInteger(rule.escapeAfter) || rule.escapeAfter < 3 || rule.escapeAfter > 120) throw new InsistentError('the way out of the pop-up or takeover shows after 3 to 120 seconds')
     if (!Array.isArray(rule.steps) || !rule.steps.length || rule.steps.length > 6) throw new InsistentError('a ladder has 1 to 6 steps')
     const steps = rule.steps.map((step, i) => {
       const channels = [...new Set(step.channels ?? [])]

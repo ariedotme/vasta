@@ -1,13 +1,14 @@
 <script setup lang="ts">
-// The editor of an insistent reminder (server/src/insistent.ts): when it starts, what it shows,
-// how it is answered, and its ladder (the channels each step goes through, minutes apart, repeated
-// until answered), with what snoozing costs. An existing one shows its honest stats too: how often
+// The editor of a reminder (server/src/insistent.ts), in parts: when it starts, what it shows,
+// how it reaches you (a style: a pop-up, the whole screen, notifications, escalating; or steps of
+// its own, each through some channels, minutes apart, repeated until answered) and how it is
+// answered, with what snoozing costs. An existing one shows its honest stats too: how often
 // it was done, snoozed, skipped or ignored, so it can be tuned when it is too much or too easy to
 // ignore. Opened by an object's "Remind me…" and Settings › Reminders (lib/insistent.ts).
 import { computed, onMounted, ref, watch } from 'vue'
 import { habitRemindAt, type ObjectSummary } from '@vasta/core'
 import { authApi, type AckMode, type LadderStep, type NagChannel, type ReminderSettings, type RuleContent, type RuleInput, type RuleWhen } from '../lib/api.ts'
-import { CHANNELS, PRESETS, closeReminderEditor, presetOf, reminderEditor } from '../lib/insistent.ts'
+import { CHANNELS, STYLES, closeReminderEditor, reminderEditor, styleOf } from '../lib/insistent.ts'
 import { desktop } from '../lib/platform.ts'
 import { summaryOf, systemType, typesById } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
@@ -16,7 +17,10 @@ import ObjectPicker from './ObjectPicker.vue'
 import PopoverMenu from './PopoverMenu.vue'
 import ReminderStats from './ReminderStats.vue'
 
-const existing = reminderEditor.rule
+/** A deep copy that also takes Vue's reactive proxies (structuredClone refuses them). */
+const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+const existing = reminderEditor.rule ? copy(reminderEditor.rule) : undefined
 const objectId = existing?.objectId ?? reminderEditor.objectId
 const object = computed(() => (objectId ? summaryOf(objectId) : undefined))
 const type = computed(() => (object.value ? typesById.value.get(object.value.typeId) : undefined))
@@ -36,8 +40,10 @@ const title = ref(existing?.title ?? '')
 const when = ref<RuleWhen>(existing?.when ?? (habitTime.value ? { kind: 'object' } : hasTime.value ? { kind: 'object', before: 0 } : { kind: 'daily', at: '09:00' }))
 const content = ref<RuleContent>(existing?.content ?? (objectId ? { kind: 'target' } : { kind: 'tag', tagId: '', count: 1 }))
 const ack = ref<AckMode>(existing?.ack ?? (isHabit.value || isTask.value ? 'done' : 'ok'))
-const repeat = ref<number | null>(existing?.repeat ?? 15)
-const steps = ref<LadderStep[]>(structuredClone(existing?.steps ?? PRESETS[1]!.steps))
+// A new one pops up when the desktop app is there to show it, else it is a notification.
+const firstStyle = STYLES.find((s) => s.id === (desktop.value?.takeover ? 'popup' : 'notification'))!
+const repeat = ref<number | null>(existing ? existing.repeat : firstStyle.repeat)
+const steps = ref<LadderStep[]>(copy(existing?.steps ?? firstStyle.steps))
 const snooze = ref(existing?.snooze ?? 15)
 const climbAfter = ref<number | null>(existing?.climbAfter ?? 2)
 const escapeAfter = ref(existing?.escapeAfter ?? 10)
@@ -62,11 +68,11 @@ onMounted(async () => {
 function channelGap(id: NagChannel): string {
   const s = settings.value
   if (!s) return ''
-  if (id === 'ntfy') return s.ntfy ? '' : 'Set up ntfy in Settings › Reminders'
-  if (id === 'telegram') return s.telegram && s.telegramReady ? '' : 'Turn on Telegram in Settings › Reminders'
+  if (id === 'ntfy') return s.ntfy ? '' : 'Set up ntfy in Settings › Reminder channels'
+  if (id === 'telegram') return s.telegram && s.telegramReady ? '' : 'Turn on Telegram in Settings › Reminder channels'
   if (id === 'push') return s.push?.devices.length ? '' : 'Turn on notifications on a phone or browser'
   if (id === 'desktop') return s.desktop ? '' : 'Desktop notifications are off'
-  if (id === 'takeover') return s.takeoverApps || desktop.value?.takeover ? '' : 'Needs Vasta for desktop 0.10 or later, open'
+  if (id === 'takeover' || id === 'popup') return s.takeoverApps || desktop.value?.takeover ? '' : `Needs Vasta for desktop ${id === 'popup' ? '0.11' : '0.10'} or later, open`
   return ''
 }
 
@@ -132,14 +138,16 @@ const ACKS = computed(() => [
 ])
 const textAnswer = computed(() => ack.value === 'type' || ack.value === 'say')
 
-// The ladder ------------------------------------------------------------------------
-const preset = computed(() => presetOf({ repeat: repeat.value, steps: steps.value }) ?? 'custom')
-function usePreset(id: string) {
-  const p = PRESETS.find((x) => x.id === id)
+// How it reaches you: a style, or steps of its own ------------------------------------
+const style = computed(() => styleOf({ repeat: repeat.value, steps: steps.value })?.id ?? 'custom')
+const customizing = ref(style.value === 'custom')
+function useStyle(id: string) {
+  const p = STYLES.find((x) => x.id === id)
   if (!p) return
   repeat.value = p.repeat
-  steps.value = structuredClone(p.steps)
+  steps.value = copy(p.steps)
 }
+const desktopMissing = (channels: NagChannel[]) => channels.some((c) => (c === 'popup' || c === 'takeover') && channelGap(c))
 function toggleChannel(step: LadderStep, id: NagChannel) {
   step.channels = step.channels.includes(id) ? step.channels.filter((c) => c !== id) : CHANNELS.map((c) => c.id).filter((c) => c === id || step.channels.includes(c))
 }
@@ -147,7 +155,7 @@ function addStep() {
   const last = steps.value.at(-1)!
   steps.value.push({ after: last.after + (repeat.value ?? 15), channels: [...last.channels], urgent: true })
 }
-const usesTakeover = computed(() => steps.value.some((s) => s.channels.includes('takeover')))
+const usesWindow = computed(() => steps.value.some((s) => s.channels.includes('takeover') || s.channels.includes('popup')))
 
 // Saving ----------------------------------------------------------------------------
 function input(): RuleInput {
@@ -193,7 +201,7 @@ async function remove() {
   }
 }
 
-const heading = computed(() => (existing ? 'Insistent reminder' : object.value ? `Remind me of “${object.value.title || 'this'}”` : 'New insistent reminder'))
+const heading = computed(() => (existing ? 'Reminder' : object.value ? `Remind me of “${object.value.title || 'this'}”` : 'New reminder'))
 const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-line text-ink-soft hover:bg-hover')
 </script>
 
@@ -278,45 +286,31 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
         </PopoverMenu>
       </fieldset>
 
-      <!-- How it is answered -->
-      <fieldset>
-        <legend class="mb-2 font-medium">It stops when I answer by</legend>
-        <div class="grid gap-1.5 sm:grid-cols-2">
-          <label
-            v-for="option in ACKS"
-            :key="option.value"
-            class="flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5"
-            :class="[ack === option.value ? 'border-ink' : 'border-line hover:bg-hover', option.needsText && content.kind === 'tasks' ? 'pointer-events-none opacity-40' : '']"
-          >
-            <input v-model="ack" type="radio" :value="option.value" class="sr-only" :disabled="option.needsText && content.kind === 'tasks'" />
-            <AppIcon :fallback="option.icon" class="mt-0.5 text-ink-soft" />
-            <span>
-              {{ option.label }}
-              <span class="block text-xs text-ink-faint">{{ option.hint }}</span>
-            </span>
-          </label>
-        </div>
-        <p v-if="textAnswer && isHabit" class="mt-2 text-xs text-ink-faint">Saying or typing it also marks the habit done for the day.</p>
-        <p class="mt-2 text-xs text-ink-faint">Swiping a notification away does not count. “Not today” asks for a reason.</p>
-      </fieldset>
-
-      <!-- The ladder -->
+      <!-- How it reaches you -->
       <fieldset class="space-y-3">
-        <legend class="mb-2 font-medium">How insistent</legend>
-        <div class="grid gap-1.5 sm:grid-cols-3">
+        <legend class="mb-2 font-medium">How it reaches me</legend>
+        <div class="grid gap-1.5 sm:grid-cols-3" data-styles>
           <button
-            v-for="p in PRESETS"
+            v-for="p in STYLES"
             :key="p.id"
             type="button"
             class="rounded-xl border px-3 py-2.5 text-left"
-            :class="preset === p.id ? 'border-ink' : 'border-line hover:bg-hover'"
-            @click="usePreset(p.id)"
+            :class="[style === p.id ? 'border-ink' : 'border-line hover:bg-hover', p.desktop && desktopMissing(p.steps[0]!.channels) ? 'border-dashed' : '']"
+            :title="p.desktop ? channelGap(p.steps[0]!.channels[0]!) || undefined : undefined"
+            @click="useStyle(p.id)"
           >
-            <span class="font-medium">{{ p.label }}</span>
+            <span class="flex items-center gap-1.5 font-medium"><AppIcon :fallback="p.icon" :size="14" /> {{ p.label }}</span>
             <span class="block text-xs text-ink-faint">{{ p.description }}</span>
           </button>
+          <button type="button" class="rounded-xl border px-3 py-2.5 text-left" :class="style === 'custom' ? 'border-ink' : 'border-line hover:bg-hover'" @click="customizing = true">
+            <span class="flex items-center gap-1.5 font-medium"><AppIcon fallback="ph:sliders-horizontal" :size="14" /> Custom</span>
+            <span class="block text-xs text-ink-faint">Steps and channels of its own.</span>
+          </button>
         </div>
+        <p v-if="desktopMissing(steps.flatMap((s) => s.channels))" class="text-xs text-ink-faint">The pop-up and full screen need Vasta for desktop open; until then they arrive as notifications of the apps that are.</p>
+        <button v-if="!customizing" type="button" class="text-xs text-accent hover:underline" @click="customizing = true">Customize steps…</button>
 
+        <template v-if="customizing">
         <div class="flex flex-wrap items-center gap-2 text-ink-soft">
           Repeat
           <select v-model="repeat" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Repeat every">
@@ -356,26 +350,49 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
         </ol>
         <button v-if="steps.length < 6" type="button" class="text-xs text-accent hover:underline" @click="addStep">+ Add a step</button>
         <p v-if="steps.some((s) => s.channels.some((c) => channelGap(c)))" class="text-xs text-ink-faint">Dashed channels are not set up yet: hover one to see why. Until then that step skips them.</p>
+        </template>
+      </fieldset>
+
+      <!-- How it is answered -->
+      <fieldset>
+        <legend class="mb-2 font-medium">It stops when I answer by</legend>
+        <div class="grid gap-1.5 sm:grid-cols-2">
+          <label
+            v-for="option in ACKS"
+            :key="option.value"
+            class="flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5"
+            :class="[ack === option.value ? 'border-ink' : 'border-line hover:bg-hover', option.needsText && content.kind === 'tasks' ? 'pointer-events-none opacity-40' : '']"
+          >
+            <input v-model="ack" type="radio" :value="option.value" class="sr-only" :disabled="option.needsText && content.kind === 'tasks'" />
+            <AppIcon :fallback="option.icon" class="mt-0.5 text-ink-soft" />
+            <span>
+              {{ option.label }}
+              <span class="block text-xs text-ink-faint">{{ option.hint }}</span>
+            </span>
+          </label>
+        </div>
+        <p v-if="textAnswer && isHabit" class="mt-2 text-xs text-ink-faint">Saying or typing it also marks the habit done for the day.</p>
+        <p class="mt-2 text-xs text-ink-faint">Swiping a notification away does not count. “Not today” asks for a reason.</p>
       </fieldset>
 
       <!-- Snoozing -->
       <fieldset class="flex flex-wrap items-center gap-2 text-ink-soft">
-        <legend class="mb-2 font-medium text-ink">Snoozing has a cost</legend>
+        <legend class="mb-2 font-medium text-ink">{{ steps.length > 1 ? 'Snoozing has a cost' : 'Snoozing' }}</legend>
         Snooze for
         <select v-model.number="snooze" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Snooze minutes">
           <option v-for="m in [5, 10, 15, 30, 60]" :key="m" :value="m">{{ m }} min</option>
         </select>
-        ; every
+        <template v-if="steps.length > 1">; every
         <select v-model="climbAfter" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Snoozes per step">
           <option :value="null">— (never climbs)</option>
           <option v-for="n in [1, 2, 3, 4, 5]" :key="n" :value="n">{{ n }}</option>
         </select>
-        {{ climbAfter === 1 ? 'snooze climbs' : 'snoozes climb' }} one step of the ladder.
+        {{ climbAfter === 1 ? 'snooze climbs' : 'snoozes climb' }} one step of the ladder.</template>
       </fieldset>
 
-      <fieldset v-if="usesTakeover" class="flex flex-wrap items-center gap-2 text-ink-soft">
-        <legend class="mb-2 font-medium text-ink">The takeover</legend>
-        The desktop app covers every screen and Space with it. The way out (counted as skipped) shows after
+      <fieldset v-if="usesWindow" class="flex flex-wrap items-center gap-2 text-ink-soft">
+        <legend class="mb-2 font-medium text-ink">The way out</legend>
+        The desktop window stays over everything until you answer. Its way out (counted as skipped) shows after
         <select v-model.number="escapeAfter" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Seconds before the way out">
           <option v-for="n in [5, 10, 20, 30, 60]" :key="n" :value="n">{{ n }} seconds</option>
         </select>

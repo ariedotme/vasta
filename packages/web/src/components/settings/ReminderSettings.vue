@@ -89,7 +89,7 @@ const KINDS = computed(() => [
   { key: 'events' as const, label: 'Events and tasks' },
   ...(tracksFood.value ? [{ key: 'food' as const, label: 'Food' }] : []),
   { key: 'work' as const, label: "Others' work" },
-  { key: 'insistent' as const, label: 'Insistent reminders' },
+  { key: 'insistent' as const, label: 'Your reminders' },
 ])
 
 async function findThisDevice() {
@@ -209,7 +209,7 @@ const habitType = computed(() => systemType('habit'))
 </script>
 
 <template>
-  <SettingsSection id="reminders" title="Reminders" description="Sent by the server, so they arrive with the app closed: as notifications on your phone and in browsers, through ntfy, from the Telegram bot, or in the desktop app.">
+  <SettingsSection id="reminder-channels" title="Reminder channels" description="Where reminders reach you. The server sends them, so they arrive with the app closed: as notifications on your phone and in browsers, through ntfy, from the Telegram bot, or in the desktop app (also as a pop-up or over the whole screen).">
     <p v-if="unavailable" class="text-sm text-ink-soft">{{ unavailable }}</p>
     <form v-else-if="current" class="space-y-5" @submit.prevent="save">
       <div>

@@ -470,12 +470,15 @@ export class ReminderService {
       }
     }
     const notification = { key: delivery.key, title: delivery.title, message: delivery.message, ...(delivery.url ? { url: delivery.url } : {}) }
-    if (wants('takeover') && this.options.desktop) {
-      const path = `remind/${nag.id}?takeover=1`
-      const reached = this.options.desktop.takeover(user.id, { id: nag.id, title: delivery.title, message: delivery.message, path, escapeAfter: rule.escapeAfter }, notification)
-      if (!reached && wants('takeover') && !wants('desktop')) failed.push('takeover: no desktop app open')
+    // The desktop app's own window: over the whole screen (takeover) or floating over everything (popup).
+    const window = wants('takeover') || wants('popup')
+    if (window && this.options.desktop) {
+      const popup = !wants('takeover')
+      const path = `remind/${nag.id}?takeover=1${popup ? '&popup=1' : ''}`
+      const reached = this.options.desktop.takeover(user.id, { id: nag.id, title: delivery.title, message: delivery.message, path, escapeAfter: rule.escapeAfter, ...(popup ? { popup } : {}) }, notification)
+      if (!reached && !wants('desktop')) failed.push(`${popup ? 'popup' : 'takeover'}: no desktop app open`)
     }
-    if (wants('desktop') && !wants('takeover') && settings.desktop && this.options.desktop) this.options.desktop.send(user.id, notification)
+    if (wants('desktop') && !window && settings.desktop && this.options.desktop) this.options.desktop.send(user.id, notification)
     if (wants('push') && this.options.push) {
       const actions = answers.filter((a) => a.action !== 'skip').slice(0, 2).map((a) => ({ action: a.action, title: a.label, url: a.url, method: a.action === 'open' ? ('GET' as const) : ('POST' as const) }))
       const sent = await this.options.push.send(user.id, 'insistent', { title: delivery.title, body: delivery.message, tag: `nag:${nag.id}`, ...(delivery.url ? { url: delivery.url } : {}), actions, insistent: delivery.urgent })

@@ -152,7 +152,7 @@ export interface ReminderChanges {
 
 // Insistent reminders (server/src/insistent.ts) ---------------------------------
 
-export type NagChannel = 'push' | 'desktop' | 'ntfy' | 'telegram' | 'takeover'
+export type NagChannel = 'push' | 'desktop' | 'ntfy' | 'telegram' | 'popup' | 'takeover'
 export interface LadderStep {
   /** Minutes after it starts, snoozes left out. */
   after: number

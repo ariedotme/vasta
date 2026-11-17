@@ -22,11 +22,13 @@ The server sends reminders, so they arrive with every app closed (`packages/serv
 
   A click opens the Nutrition page.
 
-## Insistent reminders
+## Reminders (insistent reminders)
 
-A reminder that matters keeps asking until it gets a real answer (`packages/server/src/insistent.ts`).
-One can be set on any object (its menu's **Remind me…**: a habit, a task, an event, an Echo) or on
-nothing (Settings › Insistent reminders, "New reminder…": an affirmation every morning). Each one says:
+A reminder that matters asks until it gets a real answer (`packages/server/src/insistent.ts`; the
+code still calls them insistent reminders, the app calls them Reminders). One can be set on any
+object (its menu's **Remind me…**: a habit, a task, an event, an Echo) or on nothing (Settings ›
+Reminders, "New reminder…": an affirmation every morning). The plain habit, event and food
+reminders, and the channels everything goes through, are Settings › Reminder channels. Each one says:
 
 - **When it starts**: the object's own time (a habit's "Remind at" on its days, while not done; a
   task's or event's start, a few minutes before), a time of day on some weekdays, or **the first time
@@ -40,10 +42,16 @@ nothing (Settings › Insistent reminders, "New reminder…": an affirmation eve
   loosely (`core/text-match.ts`): case, accents and punctuation do not count, nor one slip in a long
   word; said text needs 70 % of the words in order, typed text 90 %. Swiping a notification away
   answers nothing.
-- **The ladder**: steps minutes apart, each through some channels (phones and browsers, the desktop
-  notification, ntfy, Telegram, the **takeover**), urgent or not (ntfy priority 5 instead of 4, Web
-  Push notifications that stay until answered), repeated every few minutes until answered. Presets:
-  Gentle, Insistent, Relentless.
+- **How it reaches the user**, its *style*: **Pop-up** (a window of the desktop app floating over
+  everything, in the middle of the screen with the pointer, until answered), **Full screen** (the
+  takeover), **Notification** (every 30 minutes, notifications only), **Escalating** (every 15
+  minutes, louder at each step, the screen at 45) or **Relentless** (every 5 minutes, Telegram at 10,
+  the screen at 15). A style is a *ladder* (`REMINDER_STYLES` on the server, `STYLES` in
+  web/src/lib/insistent.ts): steps minutes apart, each through some channels (phones and browsers,
+  the desktop notification, ntfy, Telegram, the **pop-up**, the **takeover**), urgent or not (ntfy
+  priority 5 instead of 4, Web Push notifications that stay until answered), repeated every few
+  minutes until answered (or not: the pop-up and full screen stay until answered). "Custom" edits
+  the steps.
 - **Snoozing has a cost**: a snooze (5 to 60 minutes) pauses it and the ladder's clock, but every few
   snoozes it climbs a step. **Not today** asks for a one-line reason, which is kept.
 
@@ -66,8 +74,11 @@ Where it is answered:
 - **Telegram**: buttons under the message (Done, Snooze, Not today, which asks why with a reply), and
   a reply with the text answers a "type it" or "say it" reminder. Once answered, the buttons become
   one saying how.
-- **The takeover** (desktop 0.10 and later, which connect with `?takeover=1`): the server sends a
-  `takeover` event; the app opens the page in a window over the whole screen with the pointer, above
+- **The pop-up and the takeover** (desktop 0.10 and later, which connect with `?takeover=1`; the
+  pop-up from 0.11, older apps take the screen instead): the server sends a `takeover` event, with
+  `popup: true` for the pop-up (its page is `/remind/<id>?takeover=1&popup=1`, laid out tighter): the
+  app opens the page in a window of 560 × 560 points in the middle of the screen with the pointer,
+  above everything and on every Space, without covering the other screens. For the takeover: the app opens the page in a window over the whole screen with the pointer, above
   other apps, the Dock and the menu bar, on every Space and over full-screen apps, and dims the other
   screens (`packages/desktop/src-tauri/src/takeover.rs`). It never traps anyone: the page offers a
   way out after a few seconds (recorded as escaped, a skip); a page that cannot show the reminder

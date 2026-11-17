@@ -1,5 +1,5 @@
-// The takeover: an insistent reminder's last steps cover the screen (server/src/insistent.ts), like
-// break apps do. The server sends a `takeover` event on the app's notification stream
+// The takeover: a reminder covers the screen (server/src/insistent.ts), like break apps do; or, as
+// a pop-up, floats in a window over everything in the middle of the screen with the pointer. The server sends a `takeover` event on the app's notification stream
 // (notifications.rs); the app opens the web app's page for it (/remind/<id>?takeover=1) in a
 // window over the whole screen with the pointer, above other apps and on every Space, and dims the
 // other screens (cover.html). The page answers it and closes it (close_takeover); the server's
@@ -43,7 +43,13 @@ pub struct Takeover {
     pub id: String,
     pub path: String,
     pub escape_after: u64,
+    /// A window floating over everything instead of the whole screen.
+    #[serde(default)]
+    pub popup: bool,
 }
+
+/// The pop-up's size, in points.
+const POPUP: (f64, f64) = (560.0, 560.0);
 
 pub fn is_takeover(label: &str) -> bool {
     label == TAKEOVER || label.starts_with(COVER)
@@ -59,9 +65,18 @@ pub fn open(app: &AppHandle, takeover: Takeover, url: Url) {
         eprintln!("Takeover: no screen");
         return;
     };
-    // The reminder on the screen with the pointer, covers on the others.
+    // The reminder on the screen with the pointer; for the whole screen, covers on the others.
     let shown = app.get_webview_window(TAKEOVER).is_some();
-    match cover(app, TAKEOVER, WebviewUrl::External(url.clone()), &here) {
+    // Another reminder's covers go when this one only pops up.
+    if takeover.popup {
+        for (label, window) in app.webview_windows() {
+            if label.starts_with(COVER) {
+                let _ = window.close();
+            }
+        }
+    }
+    let placed = if takeover.popup { floating(app, TAKEOVER, WebviewUrl::External(url.clone()), &here) } else { cover(app, TAKEOVER, WebviewUrl::External(url.clone()), &here) };
+    match placed {
         Ok(window) => {
             // Another reminder took over meanwhile: this one replaces it.
             if shown {
@@ -76,7 +91,7 @@ pub fn open(app: &AppHandle, takeover: Takeover, url: Url) {
         }
     }
     let mut n = 0;
-    for monitor in monitors.iter().filter(|m| m.position() != here.position() || m.size() != here.size()) {
+    for monitor in monitors.iter().filter(|m| !takeover.popup && (m.position() != here.position() || m.size() != here.size())) {
         n += 1;
         if let Ok(window) = cover(app, &format!("{COVER}{n}"), WebviewUrl::App("cover.html".into()), monitor) {
             let _ = window.show();
@@ -101,6 +116,29 @@ pub fn open(app: &AppHandle, takeover: Takeover, url: Url) {
 
 /// A window over one whole screen, above everything, on every Space.
 fn cover(app: &AppHandle, label: &str, url: WebviewUrl, monitor: &tauri::Monitor) -> tauri::Result<WebviewWindow> {
+    let window = over_all(app, label, url)?;
+    let _ = window.set_shadow(false);
+    let _ = window.set_position(PhysicalPosition::new(monitor.position().x, monitor.position().y));
+    let _ = window.set_size(PhysicalSize::new(monitor.size().width, monitor.size().height));
+    Ok(window)
+}
+
+/// The pop-up: a window in the middle of the screen, above everything, on every Space.
+fn floating(app: &AppHandle, label: &str, url: WebviewUrl, monitor: &tauri::Monitor) -> tauri::Result<WebviewWindow> {
+    let window = over_all(app, label, url)?;
+    let scale = monitor.scale_factor();
+    let (width, height) = ((POPUP.0 * scale) as u32, (POPUP.1 * scale) as u32);
+    let (width, height) = (width.min(monitor.size().width), height.min(monitor.size().height));
+    let x = monitor.position().x + ((monitor.size().width - width) / 2) as i32;
+    let y = monitor.position().y + ((monitor.size().height - height) / 2) as i32;
+    let _ = window.set_shadow(true);
+    let _ = window.set_size(PhysicalSize::new(width, height));
+    let _ = window.set_position(PhysicalPosition::new(x, y));
+    Ok(window)
+}
+
+/// The reminder's window (made once, hidden): no frame, above everything, on every Space.
+fn over_all(app: &AppHandle, label: &str, url: WebviewUrl) -> tauri::Result<WebviewWindow> {
     let window = match app.get_webview_window(label) {
         Some(window) => window,
         None => {
@@ -119,8 +157,6 @@ fn cover(app: &AppHandle, label: &str, url: WebviewUrl, monitor: &tauri::Monitor
             window
         }
     };
-    let _ = window.set_position(PhysicalPosition::new(monitor.position().x, monitor.position().y));
-    let _ = window.set_size(PhysicalSize::new(monitor.size().width, monitor.size().height));
     Ok(window)
 }
 
