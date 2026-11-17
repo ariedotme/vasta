@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.10.0 (2026-11-17)
+
 ### Added
 
 - **Insistent reminders.** A reminder that keeps asking until it gets a real answer. Set one on
