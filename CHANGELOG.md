@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **Updating the desktop app looked like it did nothing.** After Install and Restart, the update
+  downloaded with no sign of it, which takes minutes when GitHub serves it slowly. The window now
+  shows how far the download is, then that it is installing; clicking again while it downloads
+  no longer starts a second download.
+
 ## 0.9.0 (2026-11-17)
 
 ### Added

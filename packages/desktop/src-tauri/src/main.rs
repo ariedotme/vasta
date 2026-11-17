@@ -16,6 +16,7 @@ mod panel;
 mod notifications;
 mod settings;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use settings::Settings;
@@ -604,8 +605,34 @@ fn tell(app: &AppHandle, text: String, kind: MessageDialogKind) {
     ask(app, text, kind, MessageDialogButtons::Ok);
 }
 
+/// Set while an update downloads, so a second "Install and Restart" does not start another.
+static UPDATING: AtomicBool = AtomicBool::new(false);
+
+/// A note at the bottom of the main window while an update downloads (None removes it). Put in the
+/// page by the app itself, so it shows whatever version of the web app the server has.
+fn update_note(app: &AppHandle, text: Option<&str>) {
+    let Some(window) = main_window(app) else { return };
+    let script = match text {
+        Some(text) => format!(
+            "(() => {{ let note = document.getElementById('vasta-update-note'); if (!note) {{ note = document.createElement('div'); note.id = 'vasta-update-note'; \
+             note.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:2147483647;padding:8px 14px;border-radius:10px;\
+             background:rgba(24,24,24,.92);color:#fff;font:13px -apple-system,system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25);pointer-events:none'; \
+             document.body.appendChild(note) }} note.textContent = {} }})()",
+            serde_json::to_string(text).unwrap()
+        ),
+        None => "document.getElementById('vasta-update-note')?.remove()".into(),
+    };
+    let _ = window.eval(script);
+}
+
 /// Look for a newer desktop version and offer it; true when there was one (installed or not).
 async fn check_for_update(app: AppHandle, asked: bool) -> bool {
+    if UPDATING.load(Ordering::SeqCst) {
+        if asked {
+            tell(&app, "An update is downloading; the app restarts when it is ready.".into(), MessageDialogKind::Info);
+        }
+        return true;
+    }
     let say = |text: String, kind: MessageDialogKind| {
         if asked {
             tell(&app, text, kind);
@@ -625,13 +652,41 @@ async fn check_for_update(app: AppHandle, asked: bool) -> bool {
         Ok(Some(update)) => {
             let text = format!("Vasta {} is available (this is {}). Install it now? The app restarts.", update.version, update.current_version);
             if ask(&app, text, MessageDialogKind::Info, MessageDialogButtons::OkCancelCustom("Install and Restart".into(), "Later".into())) {
-                match update.download_and_install(|_, _| {}, || {}).await {
+                if UPDATING.swap(true, Ordering::SeqCst) {
+                    return true;
+                }
+                // The download can take minutes (GitHub serves it slowly at times): say how far it is.
+                let version = update.version.clone();
+                update_note(&app, Some(&format!("Downloading Vasta {version}…")));
+                let mut downloaded: u64 = 0;
+                let mut shown: Option<u64> = None;
+                let progress_app = app.clone();
+                let finished_app = app.clone();
+                let result = update
+                    .download_and_install(
+                        |chunk, total| {
+                            downloaded += chunk as u64;
+                            let Some(total) = total.filter(|t| *t > 0) else { return };
+                            let percent = (downloaded * 100 / total).min(100);
+                            if shown != Some(percent) {
+                                shown = Some(percent);
+                                update_note(&progress_app, Some(&format!("Downloading Vasta {version}… {percent}%")));
+                            }
+                        },
+                        || update_note(&finished_app, Some("Installing the update; Vasta restarts in a moment…")),
+                    )
+                    .await;
+                match result {
                     Ok(()) => {
                         // Before the new version starts its own, on the same port.
                         local::stop(&app);
                         app.restart()
                     }
-                    Err(error) => tell(&app, format!("The update failed: {error}"), MessageDialogKind::Error),
+                    Err(error) => {
+                        UPDATING.store(false, Ordering::SeqCst);
+                        update_note(&app, None);
+                        tell(&app, format!("The update failed: {error}"), MessageDialogKind::Error)
+                    }
                 }
             }
             true
