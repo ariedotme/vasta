@@ -88,6 +88,8 @@ const VALUE_CHECKS: Record<string, (value: unknown) => boolean> = {
   properties: Array.isArray,
   views: Array.isArray,
   openIn: optional((v) => v === 'page' || v === 'pane'),
+  // A type's rules (TypeRules): whether its objects need a cover, a tag.
+  rules: optional((v) => isObject(v) && Object.entries(v as object).every(([key, on]) => ['cover', 'tags'].includes(key) && typeof on === 'boolean')),
   aliases: isStringArray,
   tagIds: isStringArray,
   collectionIds: isStringArray,

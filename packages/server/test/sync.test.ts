@@ -286,6 +286,11 @@ describe('sync', () => {
     a.edit('types', 'type-book', { openIn: null }, 's')
     await a.push()
     expect(store.getType('type-book')).not.toHaveProperty('openIn')
+    // Its rules: a cover, a tag; nothing else.
+    a.edit('types', 'type-book', { rules: { cover: true, tags: false } }, 's')
+    a.edit('types', 'type-book', { rules: { cover: 'yes' } }, 's')
+    expect((await a.push()).changes.map((c) => c.error)).toEqual([undefined, 'invalid value for rules'])
+    expect(store.getType('type-book')?.rules).toEqual({ cover: true, tags: false })
     const dune = (await (await user.request('/api/objects/obj-dune')).json()) as ObjectRecord
     expect(dune).toMatchObject({ title: 'Dune', typeId: 'type-book', spaceId: 's', aliases: [] })
     expect(((await (await user.request('/api/spaces/s/search?q=spice')).json()) as ObjectRecord[]).map((o) => o.id)).toEqual(['obj-dune'])

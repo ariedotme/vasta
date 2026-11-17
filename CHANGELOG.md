@@ -24,6 +24,9 @@ GitHub release page.
 
 ### Fixed
 
+- **A type's rules (needs a cover, needs a tag) are saved on the server.** Set in a type's
+  settings, they stayed on that device and Settings › This device said the server did not take
+  them. Set them again once: turn the rule off and on.
 - **A type opens on the view you last picked in it** only once you pick one: the view it opened
   on by default was remembered too, so reordering views later didn't change where it opened.
 
