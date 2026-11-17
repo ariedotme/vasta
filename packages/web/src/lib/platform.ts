@@ -39,6 +39,10 @@ export interface DesktopInfo {
   device?: string
   /** The app runs this server on its user's computer ("Start on this computer"): one account, logged in by the app. */
   local?: boolean
+  /** The app takes the screen for insistent reminders (0.10 and later). */
+  takeover?: boolean
+  /** Its windows may listen to the microphone, for reminders answered by saying their text. */
+  speech?: boolean
 }
 
 /** This page is the desktop app's own server, on its user's computer. */
@@ -75,6 +79,16 @@ export async function provideNotifyToken() {
   } finally {
     providing = false
   }
+}
+
+/** The takeover window shows its reminder and its way out: the app lets it stay (else it closes it after a few seconds). */
+export function takeoverReady() {
+  void window.__TAURI_INTERNALS__?.invoke('takeover_ready').catch(() => {})
+}
+
+/** The takeover window (an insistent reminder over the whole screen) is done: the app closes it. */
+export function closeTakeover() {
+  void window.__TAURI_INTERNALS__?.invoke('close_takeover').catch(() => {})
 }
 
 /** Logging out: the desktop app stops hearing this user's reminders. */

@@ -1,7 +1,7 @@
 fn main() {
     // Permissions for the app's own commands (allow-<command>): the bundled page gets the connect
     // ones, the capture panel its own, the server's pages only allow-set-shortcut,
-    // allow-capture-result, allow-capture-questions, allow-capture-suggestions, allow-update-app, allow-notify and allow-set-notify-token (capabilities/, main.rs).
+    // allow-capture-result, allow-capture-questions, allow-capture-suggestions, allow-update-app, allow-notify and allow-set-notify-token, and the takeover's page allow-takeover-ready and allow-close-takeover (capabilities/, main.rs).
     let manifest = tauri_build::AppManifest::new().commands(&[
         "startup",
         "connect",
@@ -19,6 +19,8 @@ fn main() {
         "update_app",
         "notify",
         "set_notify_token",
+        "close_takeover",
+        "takeover_ready",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest)).expect("could not build Vasta");
 }

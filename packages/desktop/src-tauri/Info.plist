@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Insistent reminders answered by saying their text: the reminder's page listens (WebKit's speech
+       recognition). Without these, macOS stops the app when the page asks for the microphone. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Vasta listens while you say a reminder's text out loud, to answer it.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Vasta recognizes the reminder's text you say out loud, to answer it.</string>
+</dict>
+</plist>

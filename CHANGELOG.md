@@ -6,6 +6,21 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Insistent reminders.** A reminder that keeps asking until it gets a real answer. Set one on
+  any habit, task, event or note with **Remind me…** in its menu, or on its own in Settings ›
+  Insistent reminders ("an affirmation every morning"). It starts at the object's own time, at a
+  time of day, or the first time you are at the computer after an hour; it shows the object,
+  random notes with a tag or from a query, or today's tasks; and it stops only when you answer:
+  OK, doing the habit or task, typing its text, or saying it out loud (which also marks the habit
+  done). Until then it repeats every few minutes and climbs a ladder of channels you choose:
+  phone, desktop, ntfy (up to its highest priority), Telegram (with buttons, or reply with the
+  text), and at the top the desktop app taking the whole screen, which always offers a way out
+  after a few seconds. Snoozing works, but every few snoozes climb a step; "Not today" asks why.
+  Quiet hours hold everything. Each reminder has honest stats: how often it was done, snoozed,
+  skipped (with your reasons) or ignored, so you can tune it.
+
 ### Fixed
 
 - **Updating the desktop app looked like it did nothing.** After Install and Restart, the update

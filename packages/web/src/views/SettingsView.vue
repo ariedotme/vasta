@@ -14,6 +14,7 @@ import NutritionSettings from '../components/settings/NutritionSettings.vue'
 import SnippetSettings from '../components/settings/SnippetSettings.vue'
 import SprintSettings from '../components/settings/SprintSettings.vue'
 import ReminderSettings from '../components/settings/ReminderSettings.vue'
+import InsistentSettings from '../components/settings/InsistentSettings.vue'
 import ServerAccountsSettings from '../components/settings/ServerAccountsSettings.vue'
 import SessionSettings from '../components/settings/SessionSettings.vue'
 import SpaceSettings from '../components/settings/SpaceSettings.vue'
@@ -93,6 +94,7 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
       <InboxSettings />
       <NutritionSettings />
       <ReminderSettings />
+      <InsistentSettings />
       <ChannelSettings />
       <TokenSettings />
       <AgentSettings />

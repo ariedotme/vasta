@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-takeover-ready"
+description = "Enables the takeover_ready command without any pre-configured scope."
+commands.allow = ["takeover_ready"]
+
+[[permission]]
+identifier = "deny-takeover-ready"
+description = "Denies the takeover_ready command without any pre-configured scope."
+commands.deny = ["takeover_ready"]

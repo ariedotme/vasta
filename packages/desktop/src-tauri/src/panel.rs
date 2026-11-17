@@ -58,3 +58,20 @@ pub fn show(window: &WebviewWindow) {
         panel.makeKeyWindow();
     });
 }
+
+/// The takeover's windows (takeover.rs): above other apps, the Dock and the menu bar, on every
+/// Space and over full-screen apps, left out of ⌘` and Exposé.
+pub fn over_everything(window: &WebviewWindow) {
+    use objc2_app_kit::NSWindow;
+    let Ok(pointer) = window.ns_window() else { return };
+    let pointer = pointer as usize;
+    let _ = window.run_on_main_thread(move || {
+        let Some(window) = (unsafe { (pointer as *const NSWindow).as_ref() }) else { return };
+        // NSStatusWindowLevel: above the Dock and the menu bar, below menus and the input method's windows.
+        window.setLevel(25);
+        window.setCollectionBehavior(
+            NSWindowCollectionBehavior::CanJoinAllSpaces | NSWindowCollectionBehavior::FullScreenAuxiliary | NSWindowCollectionBehavior::Stationary | NSWindowCollectionBehavior::IgnoresCycle,
+        );
+        window.setHidesOnDeactivate(false);
+    });
+}

@@ -4,7 +4,9 @@
 // start at login, updates and reminders as system notifications (notifications.rs). The server's
 // pages get seven commands (set_shortcut, from Settings; capture_result, capture_questions and
 // capture_suggestions, answers to the capture panel; update_app, the web app's "Update"; set_notify_token, the token
-// the app hears reminders with; notify, a reminder from a page, for web apps of 0.1.10); everything else runs in Rust and talks to the page by dispatching DOM events (see
+// the app hears reminders with; notify, a reminder from a page, for web apps of 0.1.10), and the
+// takeover's page (an insistent reminder over the whole screen, takeover.rs) two, takeover_ready and close_takeover;
+// everything else runs in Rust and talks to the page by dispatching DOM events (see
 // packages/web/src/lib/platform.ts). Closing the window or ⌘Q keeps the app in the menu bar; only
 // Quit Vasta ends it. Without a server of their own, people can run one on this computer instead
 // (local.rs): the window then shows that one, and the app logs its user in.
@@ -14,7 +16,9 @@ mod local;
 #[cfg(target_os = "macos")]
 mod panel;
 mod notifications;
+mod presence;
 mod settings;
+mod takeover;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -139,6 +143,11 @@ fn allow_server(app: &AppHandle, server: &Url) {
     if let Err(error) = app.add_capability(capability) {
         eprintln!("Could not allow {origin} to change the shortcut: {error}");
     }
+    // The takeover's page closes it once answered.
+    let takeover = CapabilityBuilder::new(format!("takeover-{origin}")).remote(format!("{origin}/*")).local(false).window(takeover::TAKEOVER).permission("allow-close-takeover").permission("allow-takeover-ready");
+    if let Err(error) = app.add_capability(takeover) {
+        eprintln!("Could not allow {origin}'s takeover to close: {error}");
+    }
 }
 
 /// A path of the web app (e.g. "o/<id>"), or its start page. On the server on this computer, through
@@ -176,6 +185,9 @@ fn desktop_info_script(app: &AppHandle) -> String {
         "notify": true,
         "notifyStream": true,
         "notifyToken": settings.notify_token.is_some(),
+        "takeover": true,
+        // macOS: WebKit's speech recognition, with the microphone and speech usage declared (Info.plist).
+        "speech": cfg!(target_os = "macos"),
         "device": settings.device_name(),
         "local": settings.local,
     });
@@ -571,6 +583,41 @@ fn notify_token_refused(app: &AppHandle) {
     let _ = app.clone().run_on_main_thread(move || refresh_desktop_info(&app));
 }
 
+/// The page of the web app at `path`, as the takeover loads it: on the server on this computer,
+/// through the page that logs its user in.
+fn page_url(app: &AppHandle, path: &str) -> Option<Url> {
+    match (local_port(app), server(app)) {
+        (Some(port), _) => local::running(app).then(|| local::login_url(app, port, path)),
+        (None, Some(server)) => server.join(path).ok(),
+        (None, None) => None,
+    }
+}
+
+/// An insistent reminder takes the screen (from the notification stream's task).
+fn open_takeover(app: &AppHandle, request: takeover::Takeover) {
+    let Some(url) = page_url(app, &request.path) else { return };
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || takeover::open(&handle, request, url));
+}
+
+/// A reminder was answered somewhere (or snoozed): its takeover goes.
+fn dismiss_takeover(app: &AppHandle, id: String) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || takeover::close(&handle, Some(&id)));
+}
+
+/// The takeover's page, once its reminder is answered (or let go), or when it cannot show it.
+#[tauri::command]
+fn close_takeover(app: AppHandle) {
+    takeover::close(&app, None);
+}
+
+/// The takeover's page shows its reminder and its way out: it may stay.
+#[tauri::command]
+fn takeover_ready(app: AppHandle) {
+    takeover::ready(&app);
+}
+
 /// A click on a reminder's notification: its page, with the window brought forward.
 fn open_notification(app: &AppHandle, id: i32) {
     let path = notifications::page_of(app, id);
@@ -920,15 +967,17 @@ fn main() {
             "app-quit" => app.exit(0),
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![startup, connect, use_local, use_server, set_shortcut, open_server, submit_capture, capture_result, capture_questions, close_capture, suggest_capture, capture_suggestions, fit_capture, update_app, notify, set_notify_token])
+        .invoke_handler(tauri::generate_handler![startup, connect, use_local, use_server, set_shortcut, open_server, submit_capture, capture_result, capture_questions, close_capture, suggest_capture, capture_suggestions, fit_capture, update_app, notify, set_notify_token, close_takeover, takeover_ready])
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(AppState { settings: Mutex::new(Settings::load(&handle)), capture_item: Mutex::new(None), folder_item: Mutex::new(None), starting: Mutex::new(()), open_capture: Mutex::new(false) });
             app.manage(local::LocalServer::default());
             app.manage(notifications::Notifications::default());
+            app.manage(takeover::Takeovers::default());
             #[cfg(target_os = "macos")]
             notifications::banner_in_front();
-            notifications::start(handle.clone(), notifications::Hooks { credentials: notify_credentials, refused: notify_token_refused });
+            notifications::start(handle.clone(), notifications::Hooks { credentials: notify_credentials, refused: notify_token_refused, takeover: open_takeover, dismiss: dismiss_takeover });
+            presence::start(handle.clone(), notify_credentials);
             let clicks = handle.clone();
             let _ = handle.notification().on_action(move |action| {
                 if action.action_id() == "tap" {

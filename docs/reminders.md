@@ -22,6 +22,75 @@ The server sends reminders, so they arrive with every app closed (`packages/serv
 
   A click opens the Nutrition page.
 
+## Insistent reminders
+
+A reminder that matters keeps asking until it gets a real answer (`packages/server/src/insistent.ts`).
+One can be set on any object (its menu's **Remind me…**: a habit, a task, an event, an Echo) or on
+nothing (Settings › Insistent reminders, "New reminder…": an affirmation every morning). Each one says:
+
+- **When it starts**: the object's own time (a habit's "Remind at" on its days, while not done; a
+  task's or event's start, a few minutes before), a time of day on some weekdays, or **the first time
+  the user is at the computer** after an hour (the desktop app says when they come back: input after
+  5 minutes without any, or the computer waking; "by 11:00 anyway" starts it wherever they are).
+- **What it shows**, so even an ignored notification gets read: the object, 1 to 5 random objects
+  with a tag (sub-tags too) or from a saved query (the ones of last time come last), or today's tasks.
+- **How it is answered**: OK, doing the habit or task (wherever it is marked done), typing its text
+  word for word, or saying it out loud (the page listens with the browser's speech recognition; typing
+  works where it cannot). Typing or saying it on a habit also marks the habit done. Text is compared
+  loosely (`core/text-match.ts`): case, accents and punctuation do not count, nor one slip in a long
+  word; said text needs 70 % of the words in order, typed text 90 %. Swiping a notification away
+  answers nothing.
+- **The ladder**: steps minutes apart, each through some channels (phones and browsers, the desktop
+  notification, ntfy, Telegram, the **takeover**), urgent or not (ntfy priority 5 instead of 4, Web
+  Push notifications that stay until answered), repeated every few minutes until answered. Presets:
+  Gentle, Insistent, Relentless.
+- **Snoozing has a cost**: a snooze (5 to 60 minutes) pauses it and the ladder's clock, but every few
+  snoozes it climbs a step. **Not today** asks for a one-line reason, which is kept.
+
+Each occurrence is a *nag* (`reminder_nags`; the rules are in `reminder_rules`): open until answered,
+until the habit or task is done anywhere, or until its day ends (two hours at least; then it was
+**ignored**). Quiet hours (per user) hold every repeat until they end. An object with an insistent
+reminder at its own time does not get the plain habit or event reminder too. The **honest stats**
+(the editor and Settings) come from the nags of the last 30 days: answered how and after how long
+(median), snoozes, skips with their reasons, ignored, how often it climbed or took the screen, the
+last 14 days as a strip, and a hint when it looks too easy to ignore or more than needed.
+
+Where it is answered:
+
+- **The page** `/remind/<id>`, which every notification opens: the content, the answer, Snooze and
+  Not today. With `?takeover=1` it is shown alone (the takeover).
+- **Buttons** on ntfy (`http` actions) and Web Push notifications (Android, Chrome and Firefox on
+  computers; iOS shows none) post to `POST /api/remind/<id>/<ok|done|snooze>?s=<signature>`: a link
+  signed with the server's secret (`reminders.secret` in meta) for one answer to one nag, since
+  neither carries the session. "Say it", "Type it" and "Not today" open the page.
+- **Telegram**: buttons under the message (Done, Snooze, Not today, which asks why with a reply), and
+  a reply with the text answers a "type it" or "say it" reminder. Once answered, the buttons become
+  one saying how.
+- **The takeover** (desktop 0.10 and later, which connect with `?takeover=1`): the server sends a
+  `takeover` event; the app opens the page in a window over the whole screen with the pointer, above
+  other apps, the Dock and the menu bar, on every Space and over full-screen apps, and dims the other
+  screens (`packages/desktop/src-tauri/src/takeover.rs`). It never traps anyone: the page offers a
+  way out after a few seconds (recorded as escaped, a skip); a page that cannot show the reminder
+  (logged out, the server unreachable) closes it at once, and so does the app when the page has not
+  said it shows the reminder within 15 seconds (`takeover_ready`), and two minutes after the way
+  out in any case. A `dismiss` event closes it when the nag is answered or snoozed anywhere. Older
+  apps get a notification instead.
+- **Presence**: the desktop app posts `POST /api/notifications/presence` (`{ state: "here" | "away" }`,
+  with its notify token) when the user comes back or the computer wakes (the wall clock jumped past
+  the monotonic one), every 90 seconds while they are here (macOS reads the system's idle time;
+  elsewhere a running app counts as here), and when they go idle.
+
+Routes (app sessions): `GET|POST /api/auth/reminders/rules` (`?object=` for an object's),
+`PUT|DELETE /api/auth/reminders/rules/:id`, `GET /api/auth/reminders/nags` (going on now),
+`GET|POST /api/auth/reminders/nags/:id` (`{ answer: ok|done|typed|said|snooze|skip|escape, texts?, reason? }`).
+
+**Platform limits.** iOS does not let a web app break through Focus or silent mode: Critical Alerts
+need an entitlement Apple grants to apps, and Web Push cannot ask for time-sensitive delivery. On
+phones, insistence comes from repetition, ntfy's priority and Telegram. How the ntfy iOS app shows
+priority 5 (whether it is delivered as time-sensitive) is not verified here: check it on the phone
+with "Send a test" from a step marked urgent. The desktop is where it can be truly invasive, and so
+the takeover is only ever a step of a ladder the user set up.
+
 ## Others' work
 
 In a shared space the server also tells people about each other's work

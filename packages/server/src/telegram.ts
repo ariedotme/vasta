@@ -51,11 +51,32 @@ export interface TelegramMessage {
   audio?: TelegramFile
   video?: TelegramFile
   video_note?: TelegramFile
+  /** The message this one replies to. */
+  reply_to_message?: { message_id: number }
+}
+
+/** A button of an inline keyboard pressed. */
+export interface TelegramCallback {
+  id: string
+  from: { id: number }
+  message?: { message_id: number; chat: { id: number } }
+  data?: string
 }
 
 export interface TelegramUpdate {
   update_id: number
   message?: TelegramMessage
+  callback_query?: TelegramCallback
+}
+
+/** Insistent reminders answered in Telegram (server/src/insistent.ts), for the sender's Vasta user. */
+export interface TelegramNags {
+  /** A button under a reminder: what to tell the user, and the nag to ask "why not today?" about. */
+  callback(telegramUserId: number, data: string): Promise<{ text: string; askWhy?: string }>
+  /** A reply to a reminder's message (its text, or the reason asked for); undefined when it is not one. */
+  reply(telegramUserId: number, replyTo: number, text: string): Promise<string | undefined>
+  /** The message asking why, which the reply answers. */
+  askedWhy(telegramUserId: number, nagId: string, message: number, chat: number): void
 }
 
 export interface TelegramSender {
@@ -80,6 +101,7 @@ export interface TelegramBotOptions {
   apiBase?: string
   fetch?: typeof fetch
   log?: Pick<Console, 'info' | 'warn' | 'error'>
+  nags?: TelegramNags
 }
 
 /**
@@ -240,10 +262,11 @@ export class TelegramBot {
   /** Fetch and handle one batch of updates. */
   async pollOnce(signal?: AbortSignal, timeout = 50) {
     const offset = Number(this.options.store.getMeta(OFFSET_KEY) ?? 0)
-    const updates = await this.call<TelegramUpdate[]>('getUpdates', { offset, timeout, allowed_updates: ['message'] }, signal)
+    const updates = await this.call<TelegramUpdate[]>('getUpdates', { offset, timeout, allowed_updates: ['message', 'callback_query'] }, signal)
     for (const update of updates) {
       try {
         if (update.message) await this.handle(update.message)
+        else if (update.callback_query) await this.button(update.callback_query)
       } catch (error) {
         this.log.error(`Telegram update ${update.update_id} failed: ${(error as Error).message}`)
       }
@@ -268,6 +291,11 @@ export class TelegramBot {
       const id = message.from?.id ?? '<user id>'
       await this.reply(message, `${this.ids(message)}\n\nTo link this Telegram account, open Settings in Vasta and send me the code it shows (/link <code>), or run \`vasta user telegram <username> ${id}\` on the server. Nothing is saved until then.`)
       return
+    }
+    // A reply to an insistent reminder answers it rather than being captured.
+    if (message.reply_to_message && message.from && message.text && this.options.nags) {
+      const answer = await this.options.nags.reply(message.from.id, message.reply_to_message.message_id, message.text)
+      if (answer !== undefined) return this.reply(message, answer)
     }
     const chatTitle = chatName(message.chat)
     const capture = this.options.captureFor({ ...(message.from ? { userId: message.from.id } : {}), chatId: message.chat.id, ...(chatTitle ? { chatTitle } : {}) })
@@ -371,9 +399,38 @@ export class TelegramBot {
     return new Uint8Array(await response.arrayBuffer())
   }
 
-  /** A message to a chat, as the bot (reminders: a linked user's private chat has their user id). */
-  async send(chatId: number, text: string) {
-    await this.call('sendMessage', { chat_id: chatId, text, link_preview_options: { is_disabled: true } })
+  /**
+   * A message to a chat, as the bot (reminders: a linked user's private chat has their user id),
+   * with buttons under it (callback data or links). Its message id.
+   */
+  async send(chatId: number, text: string, extra: { buttons?: ({ text: string; data: string } | { text: string; url: string })[][]; forceReply?: boolean; silent?: boolean } = {}): Promise<number> {
+    const markup = extra.forceReply
+      ? { reply_markup: { force_reply: true, input_field_placeholder: 'One line' } }
+      : extra.buttons?.length
+        ? { reply_markup: { inline_keyboard: extra.buttons.map((row) => row.map((b) => ('data' in b ? { text: b.text, callback_data: b.data } : { text: b.text, url: b.url }))) } }
+        : {}
+    const sent = await this.call<{ message_id: number }>('sendMessage', { chat_id: chatId, text, link_preview_options: { is_disabled: true }, ...(extra.silent ? { disable_notification: true } : {}), ...markup })
+    return sent.message_id
+  }
+
+  /** An insistent reminder was answered: its buttons become one that says how. */
+  async settle(chatId: number, messageId: number, note: string) {
+    await this.call('editMessageReplyMarkup', { chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [[{ text: note, callback_data: 'noop' }]] } })
+  }
+
+  /** A button under a reminder: answer it, or ask why not today. */
+  private async button(query: TelegramCallback) {
+    const nags = this.options.nags
+    if (!nags || !query.data || query.data === 'noop') {
+      await this.call('answerCallbackQuery', { callback_query_id: query.id }).catch(() => {})
+      return
+    }
+    const { text, askWhy } = await nags.callback(query.from.id, query.data)
+    await this.call('answerCallbackQuery', { callback_query_id: query.id, ...(text ? { text } : {}) }).catch(() => {})
+    if (askWhy && query.message) {
+      const id = await this.send(query.message.chat.id, 'Why not today? Reply with one line.', { forceReply: true })
+      nags.askedWhy(query.from.id, askWhy, id, query.message.chat.id)
+    }
   }
 
   private async reply(message: TelegramMessage, text: string) {

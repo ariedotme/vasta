@@ -81,7 +81,11 @@ export interface ReminderSettings {
   telegramReady: boolean
   /** Desktop apps listening for this user right now. */
   desktopApps: number
+  /** Of those, the ones that can take the screen (desktop 0.10 and later). */
+  takeoverApps: number
   work: WorkNotifications
+  /** Quiet hours: insistent reminders wait them out. */
+  quiet: { from: string; to: string } | null
   /** Web Push, when the server sends it: its key and the devices that turned it on. */
   push?: { publicKey: string; devices: PushDevice[] }
 }
@@ -92,6 +96,7 @@ export interface PushKinds {
   events: boolean
   food: boolean
   work: boolean
+  insistent: boolean
 }
 
 /** A browser that gets reminders as notifications (server/src/push.ts). */
@@ -142,6 +147,88 @@ export interface ReminderChanges {
   eventsBefore?: number | null
   food?: Partial<FoodReminders>
   work?: Partial<WorkNotifications>
+  quiet?: { from: string; to: string } | null
+}
+
+// Insistent reminders (server/src/insistent.ts) ---------------------------------
+
+export type NagChannel = 'push' | 'desktop' | 'ntfy' | 'telegram' | 'takeover'
+export interface LadderStep {
+  /** Minutes after it starts, snoozes left out. */
+  after: number
+  channels: NagChannel[]
+  urgent?: boolean
+}
+export type RuleWhen = { kind: 'object'; before?: number } | { kind: 'daily'; at: string; days?: number[] } | { kind: 'wake'; after: string; latest?: string; days?: number[] }
+export type RuleContent = { kind: 'target' } | { kind: 'tag'; tagId: Id; count?: number } | { kind: 'query'; queryId: Id; count?: number } | { kind: 'tasks' }
+export type AckMode = 'ok' | 'done' | 'type' | 'say'
+export type NagOutcome = 'ok' | 'done' | 'typed' | 'said' | 'skipped' | 'escaped' | 'ignored'
+export type NagAnswer = 'ok' | 'done' | 'typed' | 'said' | 'snooze' | 'skip' | 'escape'
+
+export interface RuleStats {
+  total: number
+  open: number
+  done: number
+  ok: number
+  typed: number
+  said: number
+  skipped: number
+  escaped: number
+  ignored: number
+  snoozes: number
+  answered: number
+  medianMinutes: number | null
+  tookOver: number
+  escalated: number
+  reasons: { day: string; reason: string }[]
+  days: { day: string; outcome: NagOutcome | 'open' | null }[]
+}
+
+export interface InsistentRule {
+  id: string
+  objectId?: Id
+  spaceId: Id
+  title?: string
+  when: RuleWhen
+  content: RuleContent
+  ack: AckMode
+  repeat: number | null
+  steps: LadderStep[]
+  snooze: number
+  climbAfter: number | null
+  escapeAfter: number
+  paused?: boolean
+  createdAt: string
+  /** What the list shows: its title, or its object's. */
+  name: string
+  object?: { id: Id; title: string; typeId: Id; deleted: boolean }
+  stats: RuleStats
+}
+
+export type RuleInput = Partial<Omit<InsistentRule, 'id' | 'createdAt' | 'name' | 'object' | 'stats'>>
+
+/** An insistent reminder going on (or answered), as its page shows it. */
+export interface NagView {
+  id: string
+  ruleId: string
+  title: string
+  object?: { id: Id; title: string; typeId: Id; system: string | null }
+  day: string
+  startedAt: string
+  ack: AckMode
+  items: { id: Id; title: string; text: string; typeId: Id }[]
+  tasks?: { id: Id; title: string; due: string }[]
+  /** The texts to type or say. */
+  expected: string[]
+  snooze: number
+  snoozes: number
+  climbAfter: number | null
+  step: number
+  steps: number
+  sent: number
+  escapeAfter: number
+  outcome?: NagOutcome
+  reason?: string
 }
 
 export interface CalendarData {
@@ -214,6 +301,15 @@ export const authApi = {
   updatePushDevice: (id: string, changes: { name?: string; kinds?: Partial<PushKinds> }) => request<ReminderSettings>('PATCH', `/api/auth/reminders/devices/${id}`, changes),
   removePushDevice: (id: string) => request<ReminderSettings>('DELETE', `/api/auth/reminders/devices/${id}`),
   testReminders: () => request<{ channel: string; ok: boolean; error?: string }[]>('POST', '/api/auth/reminders/test'),
+  /** Insistent reminders: all of them, or those about an object. */
+  reminderRules: (objectId?: Id) => request<InsistentRule[]>('GET', `/api/auth/reminders/rules${objectId ? `?object=${encodeURIComponent(objectId)}` : ''}`),
+  createReminderRule: (input: RuleInput & { objectId?: Id }) => request<InsistentRule>('POST', '/api/auth/reminders/rules', input),
+  updateReminderRule: (id: string, input: RuleInput) => request<InsistentRule>('PUT', `/api/auth/reminders/rules/${id}`, input),
+  deleteReminderRule: (id: string) => request<void>('DELETE', `/api/auth/reminders/rules/${id}`),
+  /** The insistent reminders going on now. */
+  nags: () => request<NagView[]>('GET', '/api/auth/reminders/nags'),
+  nag: (id: string) => request<NagView>('GET', `/api/auth/reminders/nags/${id}`),
+  answerNag: (id: string, answer: NagAnswer, extra: { texts?: string[]; reason?: string } = {}) => request<NagView>('POST', `/api/auth/reminders/nags/${id}`, { answer, ...extra }),
   /** A token for the desktop app to hear reminders with (scope notify); replaces the device's last one. */
   desktopToken: (device: string) => request<{ token: string }>('POST', '/api/auth/desktop-token', { device }),
   telegramCode: () => request<{ code: string; expiresAt: string; bot?: string }>('POST', '/api/auth/telegram/code'),

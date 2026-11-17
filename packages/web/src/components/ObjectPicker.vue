@@ -9,7 +9,7 @@ import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
 import TypeIcon from './TypeIcon.vue'
 
-const props = defineProps<{ typeIds?: Id[]; exclude?: Id[]; createLabel?: string }>()
+const props = defineProps<{ typeIds?: Id[]; exclude?: Id[]; createLabel?: string; noCreate?: boolean }>()
 const emit = defineEmits<{ pick: [object: ObjectSummary]; create: [title: string] }>()
 
 const query = ref('')
@@ -36,7 +36,7 @@ async function load() {
 
 const rows = computed(() => [
   ...found.value.map((object) => ({ kind: 'object' as const, object })),
-  ...(query.value.trim() ? [{ kind: 'create' as const, title: query.value.trim() }] : []),
+  ...(query.value.trim() && !props.noCreate ? [{ kind: 'create' as const, title: query.value.trim() }] : []),
 ])
 
 function choose(index: number) {

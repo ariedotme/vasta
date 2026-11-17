@@ -8,7 +8,8 @@
 // keeps its own copy and must never take an old answer for a new one) always go to the network.
 // The app deletes the API and media caches when the user logs out (lib/session.ts).
 // Reminders sent by Web Push (server/src/push.ts) are shown here, with the app closed too; a tap
-// opens the reminder's page in an open window of the app, or a new one.
+// opens the reminder's page in an open window of the app, or a new one, and the buttons of an
+// insistent reminder answer it.
 const SHELL = 'vasta-shell'
 const ASSETS = 'vasta-assets'
 const MEDIA = 'vasta-media'
@@ -92,20 +93,34 @@ self.addEventListener('push', (event) => {
   } catch {
     message = { title: 'Vasta', body: event.data ? event.data.text() : '' }
   }
+  // Insistent reminders (server/src/insistent.ts) carry buttons that answer them (Android, and
+  // Chrome and Firefox on computers; iOS shows none) and stay until answered, alerting again each
+  // time they replace themselves.
+  const actions = Array.isArray(message.actions) ? message.actions : []
   event.waitUntil(
     self.registration.showNotification(message.title || 'Vasta', {
       body: message.body || '',
       icon: '/icon-192.png',
       ...(message.tag ? { tag: message.tag } : {}),
-      data: { url: message.url || '/' },
+      ...(message.insistent ? { requireInteraction: true } : {}),
+      ...(message.tag && actions.length ? { renotify: true } : {}),
+      ...(actions.length ? { actions: actions.map((a) => ({ action: a.action, title: a.title })) } : {}),
+      data: { url: message.url || '/', actions },
     })
   )
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
+  // A button that answers (a signed link of this server): answered without opening the app.
+  const button = event.action && (event.notification.data?.actions || []).find((a) => a.action === event.action)
+  if (button && button.method === 'POST') {
+    const answer = new URL(button.url, self.location.origin)
+    if (answer.origin === self.location.origin) event.waitUntil(fetch(answer.href, { method: 'POST' }).catch(() => {}))
+    return
+  }
   // Only pages of this app: an event of a subscribed calendar may carry its own link.
-  const target = new URL(event.notification.data?.url || '/', self.location.origin)
+  const target = new URL((button && button.url) || event.notification.data?.url || '/', self.location.origin)
   const url = target.origin === self.location.origin ? target.href : self.location.origin + '/'
   event.waitUntil(
     (async () => {

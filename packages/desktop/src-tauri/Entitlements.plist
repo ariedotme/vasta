@@ -4,5 +4,8 @@
 <dict>
   <key>com.apple.security.cs.allow-jit</key>
   <true/>
+  <!-- Insistent reminders answered out loud (Info.plist says why). -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
 </dict>
 </plist>

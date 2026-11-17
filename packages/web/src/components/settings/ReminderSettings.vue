@@ -89,6 +89,7 @@ const KINDS = computed(() => [
   { key: 'events' as const, label: 'Events and tasks' },
   ...(tracksFood.value ? [{ key: 'food' as const, label: 'Food' }] : []),
   { key: 'work' as const, label: "Others' work" },
+  { key: 'insistent' as const, label: 'Insistent reminders' },
 ])
 
 async function findThisDevice() {

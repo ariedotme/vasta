@@ -10,7 +10,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { streamSSE } from 'hono/streaming'
-import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, StoredFile, TokenScope } from '@vasta/core'
+import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, StoredFile, TokenScope, User } from '@vasta/core'
 import {
   ACTIVITY_RETENTION_CHOICES,
   normalizeAgentSettings,
@@ -57,6 +57,7 @@ import { CalendarService, CalendarSyncError, normalizeCalendarUrl } from './cale
 import { CaptureError, CaptureService, mergeCaptures, type CaptureResult } from './capture.ts'
 import { PushError, type PushKinds, type PushService, type PushSubscriptionJson } from './push.ts'
 import { ReminderError, type ReminderService } from './reminders.ts'
+import { InsistentError, type InsistentReminders, type InsistentRule, type NagAnswer, type RuleInput } from './insistent.ts'
 import { ChannelSettings, type TelegramChat } from './channels.ts'
 import { findOrCreateDailyNote, isValidDay } from './daily.ts'
 import { ChangeFeed, type DesktopListeners } from './events.ts'
@@ -431,6 +432,77 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     pushRoute((push, userId, c) => push.remove(userId, c.req.param('id')!))
   )
 
+  // Insistent reminders (Settings › Reminders, an object's "Remind me…"): rules with their stats,
+  // and the nags they make, answered on the page /remind/<id> (also the desktop takeover's).
+  const insistentRoute =
+    (handler: (insistent: InsistentReminders, user: User, c: Context<Env>) => Promise<Response> | Response) =>
+    async (c: Context<Env>) => {
+      if (!reminders) return c.json({ error: 'reminders are off on this server' }, 404)
+      try {
+        return await handler(reminders.insistent, c.get('auth').user, c)
+      } catch (error) {
+        if (error instanceof InsistentError) return c.json({ error: error.message }, 400)
+        throw error
+      }
+    }
+  const ruleView = (insistent: InsistentReminders, user: User, rule: InsistentRule) => {
+    const object = rule.objectId ? store.getObjectSummaries([rule.objectId])[0] : undefined
+    return {
+      ...rule,
+      name: insistent.titleOf(rule),
+      ...(object ? { object: { id: object.id, title: object.title, typeId: object.typeId, deleted: !!object.deletedAt } } : rule.objectId ? { object: { id: rule.objectId, title: '', typeId: '', deleted: true } } : {}),
+      stats: insistent.stats(user, rule.id),
+    }
+  }
+  authApi.get(
+    '/reminders/rules',
+    appAuth,
+    insistentRoute((insistent, user, c) => {
+      const objectId = c.req.query('object')
+      const rules = objectId ? insistent.rulesFor(user.id, objectId) : insistent.rules(user.id)
+      return c.json(rules.map((rule) => ruleView(insistent, user, rule)))
+    })
+  )
+  authApi.post(
+    '/reminders/rules',
+    appAuth,
+    insistentRoute(async (insistent, user, c) => c.json(ruleView(insistent, user, insistent.create(user, await c.req.json<RuleInput>().catch(() => ({})))), 201))
+  )
+  authApi.put(
+    '/reminders/rules/:id',
+    appAuth,
+    insistentRoute(async (insistent, user, c) => c.json(ruleView(insistent, user, insistent.update(user, c.req.param('id')!, await c.req.json<RuleInput>().catch(() => ({}))))))
+  )
+  authApi.delete(
+    '/reminders/rules/:id',
+    appAuth,
+    insistentRoute((insistent, user, c) => {
+      insistent.remove(user.id, c.req.param('id')!)
+      return c.body(null, 204)
+    })
+  )
+  authApi.get(
+    '/reminders/nags',
+    appAuth,
+    insistentRoute((insistent, user, c) => c.json(insistent.openNags(user.id).map((nag) => insistent.view(user, nag.id))))
+  )
+  authApi.get(
+    '/reminders/nags/:id',
+    appAuth,
+    insistentRoute((insistent, user, c) => c.json(insistent.view(user, c.req.param('id')!)))
+  )
+  authApi.post(
+    '/reminders/nags/:id',
+    appAuth,
+    insistentRoute(async (insistent, user, c) => {
+      type Body = { answer?: NagAnswer; texts?: unknown; reason?: unknown }
+      const body = await c.req.json<Body>().catch((): Body => ({}))
+      const texts = Array.isArray(body.texts) ? body.texts.slice(0, 10).map((t) => String(t).slice(0, 2000)) : undefined
+      await insistent.answer(user, c.req.param('id')!, { answer: body.answer as NagAnswer, ...(texts ? { texts } : {}), ...(typeof body.reason === 'string' ? { reason: body.reason } : {}) })
+      return c.json(insistent.view(user, c.req.param('id')!))
+    })
+  )
+
   /** Whether Telegram is linked, and the bot to write to (absent when the bot does not run). */
   authApi.get('/telegram', appAuth, (c) => {
     const user = store.getUser(c.get('auth').user.id)
@@ -459,7 +531,21 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   // The desktop app hears its user's reminders here, as SSE `notify` events, while it runs.
   app.get('/api/notifications', notifyAuth, (c) =>
     streamSSE(c, async (stream) => {
-      const unlisten = desktop ? desktop.listen(c.get('auth').user.id, (n) => void stream.writeSSE({ event: 'notify', data: JSON.stringify(n) })) : () => {}
+      const user = c.get('auth').user
+      // Apps that can take the screen say so (desktop 0.10 and later); older ones only hear `notify`.
+      const takes = c.req.query('takeover') === '1'
+      const unlisten = desktop
+        ? desktop.listen(
+            user.id,
+            (n) => void stream.writeSSE({ event: 'notify', data: JSON.stringify(n) }),
+            takes
+              ? {
+                  takeover: (t) => void stream.writeSSE({ event: 'takeover', data: JSON.stringify(t) }),
+                  dismiss: (id) => void stream.writeSSE({ event: 'dismiss', data: JSON.stringify({ id }) }),
+                }
+              : {}
+          )
+        : () => {}
       stream.onAbort(unlisten)
       while (!stream.aborted) {
         await stream.write(': ping\n\n')
@@ -468,6 +554,30 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       unlisten()
     })
   )
+
+  // The desktop app says the user is at the computer (it came back from idle, the computer woke):
+  // insistent reminders waiting for that start. `away`: idle or asleep.
+  app.post('/api/notifications/presence', notifyAuth, async (c) => {
+    const body = await c.req.json<{ state?: string }>().catch(() => ({}) as { state?: string })
+    const user = c.get('auth').user
+    if (reminders) {
+      if (body.state === 'away') reminders.insistent.absent(user.id)
+      else await reminders.insistent.presence(user)
+    }
+    return c.body(null, 204)
+  })
+
+  // Buttons of ntfy and Web Push notifications: a link signed for one answer to one nag, no session.
+  app.post('/api/remind/:id/:answer', async (c) => {
+    if (!reminders) return c.json({ error: 'reminders are off on this server' }, 404)
+    try {
+      const nag = await reminders.insistent.signed(c.req.param('id'), c.req.param('answer'), c.req.query('s') ?? '')
+      return c.json({ outcome: nag.outcome ?? 'snoozed' })
+    } catch (error) {
+      if (error instanceof InsistentError) return c.json({ error: error.message }, 400)
+      throw error
+    }
+  })
 
   authApi.post('/telegram/code', appAuth, (c) => {
     const bot = telegram?.username()

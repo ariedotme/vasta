@@ -34,15 +34,37 @@ export interface DesktopNotification {
   url?: string
 }
 
+/** A reminder that takes the screen (desktop 0.10 and later): the app opens `path` of the web app full screen. */
+export interface DesktopTakeover {
+  /** The nag (server/src/insistent.ts). */
+  id: string
+  title: string
+  message: string
+  /** The page to show, e.g. "remind/<id>?takeover=1". */
+  path: string
+  /** Seconds before the way out shows. */
+  escapeAfter: number
+}
+
+interface DesktopListener {
+  notify: (notification: DesktopNotification) => void
+  /** Apps that can take the screen (they said so when connecting). */
+  takeover?: (takeover: DesktopTakeover) => void
+  /** A nag was answered (anywhere) or snoozed: its takeover closes. */
+  dismiss?: (id: string) => void
+}
+
 /**
- * The desktop apps listening for their user's reminders (`/api/events?desktop=1`, from desktop
- * 0.1.10), which show them as system notifications. A reminder reaches the apps open right then.
+ * The desktop apps listening for their user's reminders (`/api/notifications`, from desktop
+ * 0.1.11), which show them as system notifications, and from 0.10 take the screen for an
+ * insistent reminder's last steps. A reminder reaches the apps open right then.
  */
 export class DesktopListeners {
-  private byUser = new Map<Id, Set<(notification: DesktopNotification) => void>>()
+  private byUser = new Map<Id, Set<DesktopListener>>()
 
-  listen(userId: Id, listener: (notification: DesktopNotification) => void): () => void {
+  listen(userId: Id, notify: (notification: DesktopNotification) => void, more: Omit<DesktopListener, 'notify'> = {}): () => void {
     const set = this.byUser.get(userId) ?? new Set()
+    const listener = { notify, ...more }
     set.add(listener)
     this.byUser.set(userId, set)
     return () => {
@@ -55,10 +77,29 @@ export class DesktopListeners {
     return this.byUser.get(userId)?.size ?? 0
   }
 
+  /** The apps that can take the screen. */
+  takeovers(userId: Id): number {
+    return [...(this.byUser.get(userId) ?? [])].filter((l) => l.takeover).length
+  }
+
   /** How many apps it reached. */
   send(userId: Id, notification: DesktopNotification): number {
     const set = this.byUser.get(userId)
-    for (const listener of set ?? []) listener(notification)
+    for (const listener of set ?? []) listener.notify(notification)
     return set?.size ?? 0
+  }
+
+  /** Take the screen in the apps that can; the older ones get a notification. How many apps it reached. */
+  takeover(userId: Id, takeover: DesktopTakeover, fallback: DesktopNotification): number {
+    const set = this.byUser.get(userId)
+    for (const listener of set ?? []) {
+      if (listener.takeover) listener.takeover(takeover)
+      else listener.notify(fallback)
+    }
+    return set?.size ?? 0
+  }
+
+  dismiss(userId: Id, id: string) {
+    for (const listener of this.byUser.get(userId) ?? []) listener.dismiss?.(id)
   }
 }

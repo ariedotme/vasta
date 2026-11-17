@@ -18,6 +18,8 @@ export interface PushKinds {
   food: boolean
   /** Assigned, mentioned, comments (as chosen under Others' work). */
   work: boolean
+  /** Insistent reminders (insistent.ts), each of which says through which channels it goes. */
+  insistent: boolean
 }
 
 export type PushKind = keyof PushKinds
@@ -53,11 +55,15 @@ export interface PushMessage {
   url?: string
   /** One notification per tag on a device: a reminder sent again replaces itself. */
   tag?: string
+  /** Buttons (Android, Chrome and Firefox on computers; iOS shows none): a POST to `url` answers. */
+  actions?: { action: string; title: string; url: string; method?: 'POST' | 'GET' }[]
+  /** Stays on screen until answered, and alerts again when it replaces itself. */
+  insistent?: boolean
 }
 
 export class PushError extends Error {}
 
-const ALL_KINDS: PushKinds = { habits: true, events: true, food: true, work: true }
+const ALL_KINDS: PushKinds = { habits: true, events: true, food: true, work: true, insistent: true }
 const VAPID_KEY = 'push.vapid'
 /** The web app's https address devices subscribed from, when VASTA_WEB_URL is not set. */
 const SUBJECT_KEY = 'push.subject'

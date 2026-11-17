@@ -30,7 +30,8 @@ import WeblinkPanel from '../components/WeblinkPanel.vue'
 import WhiteboardCanvas from '../components/whiteboard/WhiteboardCanvas.vue'
 import DocEditor from '../editor/DocEditor.vue'
 import { addSelectOption, dayKey, deleteForeverFlow, deleteObjectFlow, isInSidebar, openDay, pinItems, restoreObjectFlow, tagFromPath } from '../lib/actions.ts'
-import { api, mediaUrl, serverApi } from '../lib/api.ts'
+import { api, authApi, mediaUrl, serverApi, type InsistentRule } from '../lib/api.ts'
+import { openReminderEditor } from '../lib/insistent.ts'
 import { onChange } from '../lib/events.ts'
 import { offline } from '../lib/network.ts'
 import { openText, useReplica, type TextSession } from '../lib/replica.ts'
@@ -104,6 +105,21 @@ const authorship = computed(() => {
 })
 /** Marked as agent context: what agents read first (Settings › Agents). */
 const agentContext = computed(() => !!object.value && (workspace.spaces.find((s) => s.id === object.value!.spaceId)?.agents?.context ?? []).includes(object.value.id))
+// Insistent reminders about this object (lib/insistent.ts): "Remind me…" opens the one it has, or a new one.
+const reminderRule = ref<InsistentRule | null>(null)
+async function loadReminder() {
+  try {
+    reminderRule.value = (await authApi.reminderRules(props.id))[0] ?? null
+  } catch {
+    reminderRule.value = null
+  }
+}
+onMounted(loadReminder)
+function remindMe() {
+  menuOpen.value = false
+  openReminderEditor({ objectId: props.id, ...(reminderRule.value ? { rule: reminderRule.value } : {}), saved: (rule) => (reminderRule.value = rule) })
+}
+
 async function toggleAgentContext() {
   const o = object.value
   if (!o) return
@@ -826,6 +842,10 @@ async function startFrom(template: ObjectRecord) {
             <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="pinFrom">
               <AppIcon fallback="ph:push-pin" /> {{ isInSidebar(object.id) ? 'Pinned in sidebar' : 'Pin to sidebar' }}
               <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
+            </button>
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="A reminder that keeps asking until you answer" data-remind-me @click="remindMe">
+              <AppIcon fallback="ph:bell-ringing" /> {{ reminderRule ? 'Reminder…' : 'Remind me…' }}
+              <AppIcon v-if="reminderRule" fallback="ph:check" :size="13" class="ml-auto text-accent" />
             </button>
             <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="What agents read first (the MCP's recall)" @click="toggleAgentContext">
               <AppIcon fallback="ph:robot" /> Agent context

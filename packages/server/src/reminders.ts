@@ -38,7 +38,8 @@ import { objectEntries } from '@vasta/core/calendar'
 import type { NodeStore } from '@vasta/core/node'
 import type { AccountService } from './accounts.ts'
 import type { CalendarService } from './calendars.ts'
-import type { DesktopListeners } from './events.ts'
+import type { ChangeFeed, DesktopListeners } from './events.ts'
+import { InsistentReminders, type Nag, type NagChannel, type NagDelivery } from './insistent.ts'
 import type { PushDevice, PushKind, PushService } from './push.ts'
 import { safeFetch } from './safe-fetch.ts'
 
@@ -71,6 +72,8 @@ export interface ReminderSettings {
   eventsBefore: number | null
   food: FoodReminders
   work: WorkNotifications
+  /** Quiet hours ("HH:MM", in the user's zone; may span midnight): insistent reminders wait them out. */
+  quiet: { from: string; to: string } | null
 }
 
 /** What the app sees: the token stays on the server. */
@@ -82,10 +85,13 @@ export interface ReminderView {
   eventsBefore: number | null
   food: FoodReminders
   work: WorkNotifications
+  quiet: { from: string; to: string } | null
   /** The bot runs and this user linked their Telegram account. */
   telegramReady: boolean
   /** Desktop apps of this user listening right now. */
   desktopApps: number
+  /** Of those, the ones that can take the screen (desktop 0.10 and later). */
+  takeoverApps: number
   /** Web Push (push.ts), when the server sends it: its key and the user's devices. */
   push?: { publicKey: string; devices: PushDevice[] }
 }
@@ -94,7 +100,7 @@ export const EVENT_LEADS = [0, 5, 10, 15, 30, 60]
 export const MEAL_LEADS = [30, 60, 90, 120]
 const DEFAULT_FOOD: FoodReminders = { dayLeft: '18:00', week: { day: 0, at: '20:00' }, mealsAfter: null }
 const DEFAULT_WORK: WorkNotifications = { assigned: true, mentioned: true, comments: true }
-const DEFAULTS: ReminderSettings = { habits: true, eventsBefore: 10, desktop: true, food: DEFAULT_FOOD, work: DEFAULT_WORK }
+const DEFAULTS: ReminderSettings = { habits: true, eventsBefore: 10, desktop: true, food: DEFAULT_FOOD, work: DEFAULT_WORK, quiet: null }
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export class ReminderError extends Error {}
@@ -117,8 +123,12 @@ export interface ReminderOptions {
   accounts: AccountService
   calendars?: CalendarService
   webUrl?: string
-  /** The Telegram bot's sender, when it runs. */
-  telegram?: (chatId: number, text: string) => Promise<void>
+  /** The Telegram bot's sender, when it runs: the message's id when it says. */
+  telegram?: (chatId: number, text: string, extra?: TelegramExtra) => Promise<number | void>
+  /** Take the buttons off a message the bot sent (an insistent reminder answered), saying how. */
+  telegramDone?: (chatId: number, messageId: number, note: string) => Promise<void>
+  /** Where writes are announced (an insistent reminder marking a habit done). */
+  feed?: ChangeFeed
   /** Desktop apps listening on /api/events?desktop=1. */
   desktop?: DesktopListeners
   /** Web Push to the devices each user turned it on in. */
@@ -126,6 +136,15 @@ export interface ReminderOptions {
   /** Defaults to safeFetch: an ntfy server on the local network needs VASTA_ALLOW_PRIVATE_FETCH. */
   fetch?: (url: string, init?: RequestInit) => Promise<Response>
   now?: () => number
+}
+
+/** Buttons under a Telegram message: callback data, or a link. */
+export interface TelegramExtra {
+  buttons?: ({ text: string; data: string } | { text: string; url: string })[][]
+  /** Ask for a reply (Telegram opens the reply box). */
+  forceReply?: boolean
+  /** Sent without a sound. */
+  silent?: boolean
 }
 
 const keyOf = (userId: Id) => `reminders.${userId}`
@@ -136,9 +155,21 @@ export class ReminderService {
   private timer: ReturnType<typeof setInterval> | undefined
   /** Reminders sent lately, so one never goes twice (kept two days). */
   private sent = new Map<string, number>()
+  /** Insistent reminders: rules, nags, their ladders and stats. */
+  readonly insistent: InsistentReminders
 
   constructor(options: ReminderOptions) {
     this.options = options
+    this.insistent = new InsistentReminders({
+      store: options.store,
+      accounts: options.accounts,
+      ...(options.feed ? { feed: options.feed } : {}),
+      ...(options.webUrl ? { webUrl: options.webUrl } : {}),
+      ...(options.now ? { now: options.now } : {}),
+      deliver: (user, delivery) => this.deliverNag(user, delivery),
+      resolved: (nag) => this.resolved(nag),
+      quiet: (userId) => this.settings(userId).quiet,
+    })
   }
 
   private get store() {
@@ -157,7 +188,7 @@ export class ReminderService {
   settings(userId: Id): ReminderSettings {
     try {
       const saved = JSON.parse(this.store.getMeta(keyOf(userId)) ?? '{}') as Partial<ReminderSettings>
-      return { ...DEFAULTS, ...saved, food: { ...DEFAULT_FOOD, ...saved.food }, work: { ...DEFAULT_WORK, ...saved.work } }
+      return { ...DEFAULTS, ...saved, food: { ...DEFAULT_FOOD, ...saved.food }, work: { ...DEFAULT_WORK, ...saved.work }, quiet: saved.quiet ?? null }
     } catch {
       return { ...DEFAULTS }
     }
@@ -173,8 +204,10 @@ export class ReminderService {
       eventsBefore: settings.eventsBefore,
       food: settings.food,
       work: settings.work,
+      quiet: settings.quiet,
       telegramReady: !!this.options.telegram && this.store.getUser(userId)?.telegramUserId !== undefined,
       desktopApps: this.options.desktop?.count(userId) ?? 0,
+      takeoverApps: this.options.desktop?.takeovers(userId) ?? 0,
       ...(this.options.push ? { push: { publicKey: this.options.push.publicKey(), devices: this.options.push.devices(userId) } } : {}),
     }
   }
@@ -190,6 +223,7 @@ export class ReminderService {
       eventsBefore?: number | null
       food?: Partial<FoodReminders>
       work?: Partial<WorkNotifications>
+      quiet?: { from: string; to: string } | null
     }
   ): ReminderView {
     const next = this.settings(userId)
@@ -225,6 +259,10 @@ export class ReminderService {
       }
     }
     if (input.work) for (const key of ['assigned', 'mentioned', 'comments'] as const) if (typeof input.work[key] === 'boolean') next.work[key] = input.work[key]
+    if (input.quiet !== undefined) {
+      if (input.quiet !== null && (!CLOCK.test(input.quiet.from ?? '') || !CLOCK.test(input.quiet.to ?? '') || input.quiet.from === input.quiet.to)) throw new ReminderError('quiet hours go from HH:MM to another HH:MM')
+      next.quiet = input.quiet && { from: input.quiet.from, to: input.quiet.to }
+    }
     this.store.setMeta(keyOf(userId), JSON.stringify(next))
     return this.view(userId)
   }
@@ -263,6 +301,11 @@ export class ReminderService {
     this.last = now
     for (const [key, at] of this.sent) if (at < now - 2 * 86_400_000) this.sent.delete(key)
     for (const user of this.store.listUsers()) {
+      try {
+        await this.insistent.tick(user, from, now)
+      } catch (error) {
+        console.error(`Insistent reminders of ${user.username}:`, error)
+      }
       const settings = this.settings(user.id)
       if (!settings.ntfy && !settings.telegram && !settings.desktop && !this.options.push?.devices(user.id).length) continue
       for (const reminder of this.due(user, settings, from, now)) {
@@ -280,6 +323,8 @@ export class ReminderService {
     const reminders: Reminder[] = []
     const days = [...new Set([dayIn(from, timeZone), dayIn(to, timeZone)])]
     const inWindow = (at: number) => at > from && at <= to
+    // Objects with an insistent reminder at their own time get that one instead.
+    const covered = this.insistent.covered(user.id)
     for (const space of this.options.accounts.spacesOf(user)) {
       if (settings.habits) {
         const type = this.store.getType(builtinTypeId(space.id, 'habit'))
@@ -287,7 +332,7 @@ export class ReminderService {
         const habits = type ? habitsWithFood(this.store, space.id, this.store.listObjects(type.id), days.at(-1)!) : []
         for (const habit of habits) {
           const time = habitRemindAt(habit)
-          if (!time || isHabitPaused(habit)) continue
+          if (!time || isHabitPaused(habit) || covered.has(habit.id)) continue
           const [hour, minute] = time.split(':').map(Number) as [number, number]
           for (const day of days) {
             const [year, month, date] = day.split('-').map(Number) as [number, number, number]
@@ -316,7 +361,7 @@ export class ReminderService {
         for (const entry of entries) {
           if (entry.allDay || entry.kind === 'daily-note' || !inWindow(Date.parse(entry.start) - lead)) continue
           const object = entry.objectId ? byId.get(entry.objectId) : undefined
-          if (object && isFinishedTask(object, types.get(object.typeId))) continue
+          if (object && (covered.has(object.id) || isFinishedTask(object, types.get(object.typeId)))) continue
           reminders.push(this.eventReminder(entry, object, settings.eventsBefore, timeZone))
         }
       }
@@ -381,6 +426,70 @@ export class ReminderService {
       kind: 'events',
       ...(object ? this.link(object.id) : entry.url ? { url: entry.url } : {}),
     }
+  }
+
+  /**
+   * An insistent reminder, through the channels its step of the ladder names and the user has set
+   * up: urgent steps at ntfy's highest priority and as Web Push notifications that stay; with
+   * buttons that answer it (ntfy, Web Push, Telegram).
+   */
+  private async deliverNag(user: User, delivery: NagDelivery) {
+    const settings = this.settings(user.id)
+    const { nag, rule } = delivery
+    const wants = (channel: NagChannel) => delivery.channels.includes(channel)
+    const failed: string[] = []
+    const answers = delivery.actions.filter((a) => a.action !== 'skip' || a.url)
+    if (wants('ntfy') && settings.ntfy) {
+      try {
+        const { server, topic, token } = settings.ntfy
+        // ntfy shows three buttons at most: the answer (or "Say it"), snooze, and "Not today" (a page).
+        const actions = answers.slice(0, 3).map((a) => (a.action === 'open' || a.action === 'skip' ? { action: 'view', label: a.label, url: a.url, clear: false } : { action: 'http', label: a.label, url: a.url, method: 'POST', clear: true }))
+        const response = await (this.options.fetch ?? safeFetch)(server, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ topic, title: delivery.title, message: delivery.message, tags: [delivery.urgent ? 'rotating_light' : 'alarm_clock'], priority: delivery.urgent ? 5 : 4, actions, ...(delivery.url ? { click: delivery.url } : {}) }),
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (!response.ok) throw new Error(`${server} answered ${response.status}`)
+      } catch (error) {
+        failed.push(`ntfy: ${(error as Error).message}`)
+      }
+    }
+    const chat = this.store.getUser(user.id)?.telegramUserId
+    if (wants('telegram') && settings.telegram && this.options.telegram && chat !== undefined) {
+      try {
+        const typed = rule.ack === 'type' || rule.ack === 'say'
+        type Button = NonNullable<TelegramExtra['buttons']>[number][number]
+        const button = (a: NagDelivery['actions'][number]): Button[] => (a.callback ? [{ text: a.label, data: a.callback }] : a.action === 'open' && /^https?:\/\//.test(a.url) ? [{ text: a.label, url: a.url }] : [])
+        const buttons = [answers.filter((a) => a.action !== 'skip').flatMap(button), answers.filter((a) => a.action === 'skip').flatMap(button)].filter((row) => row.length)
+        const text = `${delivery.urgent ? '🚨' : '⏰'} ${delivery.title}\n${delivery.message}${typed ? '\n\nReply to this message with the text to stop it.' : ''}`
+        const id = await this.options.telegram(chat, text, { buttons, silent: false })
+        if (typeof id === 'number') this.insistent.sentTelegram(nag.id, chat, id)
+      } catch (error) {
+        failed.push(`telegram: ${(error as Error).message}`)
+      }
+    }
+    const notification = { key: delivery.key, title: delivery.title, message: delivery.message, ...(delivery.url ? { url: delivery.url } : {}) }
+    if (wants('takeover') && this.options.desktop) {
+      const path = `remind/${nag.id}?takeover=1`
+      const reached = this.options.desktop.takeover(user.id, { id: nag.id, title: delivery.title, message: delivery.message, path, escapeAfter: rule.escapeAfter }, notification)
+      if (!reached && wants('takeover') && !wants('desktop')) failed.push('takeover: no desktop app open')
+    }
+    if (wants('desktop') && !wants('takeover') && settings.desktop && this.options.desktop) this.options.desktop.send(user.id, notification)
+    if (wants('push') && this.options.push) {
+      const actions = answers.filter((a) => a.action !== 'skip').slice(0, 2).map((a) => ({ action: a.action, title: a.label, url: a.url, method: a.action === 'open' ? ('GET' as const) : ('POST' as const) }))
+      const sent = await this.options.push.send(user.id, 'insistent', { title: delivery.title, body: delivery.message, tag: `nag:${nag.id}`, ...(delivery.url ? { url: delivery.url } : {}), actions, insistent: delivery.urgent })
+      for (const device of sent) if (!device.ok) failed.push(`push:${device.device}: ${device.error}`)
+    }
+    for (const failure of failed) console.warn(`Insistent reminder to ${user.username}: ${failure}`)
+  }
+
+  /** A nag answered or snoozed: the takeover closes; once answered, Telegram's buttons go too. */
+  private resolved(nag: Nag) {
+    this.options.desktop?.dismiss(nag.userId, nag.id)
+    if (!nag.outcome || !this.options.telegramDone) return
+    const how = { ok: '✓ Seen', done: '✓ Done', typed: '✓ Done', said: '✓ Said', skipped: `↷ Not today${nag.reason ? `: ${nag.reason}` : ''}`, escaped: '↷ Skipped', ignored: '· Missed' }[nag.outcome]
+    for (const message of nag.telegram ?? []) void this.options.telegramDone(message.chat, message.message, how).catch(() => {})
   }
 
   private async deliver(user: User, settings: ReminderSettings, reminder: Reminder) {

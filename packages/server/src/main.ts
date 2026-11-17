@@ -44,7 +44,7 @@ import { ChangeFeed, DesktopListeners } from './events.ts'
 import { createMediaStore, describeMediaStore } from './media.ts'
 import { ChannelSettings } from './channels.ts'
 import { PushService } from './push.ts'
-import { ReminderService } from './reminders.ts'
+import { ReminderService, type TelegramExtra } from './reminders.ts'
 import { TelegramBot, telegramAccess } from './telegram.ts'
 import { purgeNotifications } from './notifications.ts'
 import { purgeExpiredTrash } from './trash.ts'
@@ -103,16 +103,32 @@ purgeTrash()
 const purgeTimer = setInterval(purgeTrash, 6 * 3_600_000)
 
 let bot: TelegramBot | undefined
+let reminders: ReminderService | undefined
 const channels = new ChannelSettings(store)
 if (env.TELEGRAM_BOT_TOKEN) {
   const idList = (value: string | undefined) => (value ?? '').split(',').map((id) => Number(id.trim())).filter((id) => Number.isInteger(id) && id !== 0)
   const access = telegramAccess({ store, accounts, channels, allowedChatIds: idList(env.TELEGRAM_ALLOWED_CHAT_IDS), allowedUserIds: idList(env.TELEGRAM_ALLOWED_USER_IDS) })
   if (access.setupMode()) console.warn('Telegram: no linked users yet; the bot replies to every message with its ids and saves nothing')
+  // Insistent reminders answered in Telegram: buttons, a reply with the text, a reply with the reason.
+  const nagUser = (telegramUserId: number) => store.findUserByTelegram(telegramUserId)
   bot = new TelegramBot({
     token: env.TELEGRAM_BOT_TOKEN,
     ...access,
     store,
     ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}),
+    nags: {
+      callback: async (id, data) => {
+        const user = nagUser(id)
+        return user && reminders ? reminders.insistent.callback(user, data) : { text: '' }
+      },
+      reply: async (id, replyTo, text) => {
+        const user = nagUser(id)
+        return user && reminders ? reminders.insistent.telegramReply(user, replyTo, text) : undefined
+      },
+      askedWhy: (id, nagId, message, chat) => {
+        if (nagUser(id)) reminders?.insistent.askedWhy(nagId, message, chat)
+      },
+    },
   })
   void bot.start()
 }
@@ -120,10 +136,19 @@ if (env.TELEGRAM_BOT_TOKEN) {
 // Habit, event and food reminders through ntfy, the bot and the desktop app (Settings › Reminders).
 // VASTA_REMINDERS=0 turns them off.
 const desktop = new DesktopListeners()
-const reminders =
+reminders =
   env.VASTA_REMINDERS === '0'
     ? undefined
-    : new ReminderService({ store, accounts, calendars, desktop, push: new PushService({ store, ...(env.VASTA_WEB_URL ? { subject: env.VASTA_WEB_URL } : {}) }), ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(bot ? { telegram: (chat: number, text: string) => bot!.send(chat, text) } : {}) })
+    : new ReminderService({
+        store,
+        accounts,
+        calendars,
+        desktop,
+        feed,
+        push: new PushService({ store, ...(env.VASTA_WEB_URL ? { subject: env.VASTA_WEB_URL } : {}) }),
+        ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}),
+        ...(bot ? { telegram: (chat: number, text: string, extra?: TelegramExtra) => bot!.send(chat, text, extra), telegramDone: (chat: number, message: number, note: string) => bot!.settle(chat, message, note) } : {}),
+      })
 reminders?.start()
 
 const server = serve({ fetch: createApp({ store, media, feed, capture, accounts, calendars, weblinks, reminders, desktop, telegram: { username: () => bot?.username, running: !!bot, channels }, replica: process.env.VASTA_REPLICA !== '0', ...(env.VASTA_WEB_URL ? { webUrl: env.VASTA_WEB_URL } : {}), ...(webDir ? { webDir } : {}), ...(localKey ? { localKey } : {}) }).fetch, port, hostname }, () => {

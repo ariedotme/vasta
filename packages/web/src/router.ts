@@ -12,6 +12,7 @@ const pages = {
   trash: () => import('./views/TrashView.vue'),
   inbox: () => import('./views/InboxView.vue'),
   nutrition: () => import('./views/NutritionView.vue'),
+  remind: () => import('./views/RemindView.vue'),
 }
 
 export const router = createRouter({
@@ -37,6 +38,8 @@ export const router = createRouter({
     { path: '/trash', component: pages.trash },
     { path: '/inbox', component: pages.inbox },
     { path: '/nutrition', component: pages.nutrition },
+    // An insistent reminder, answered (also the desktop app's takeover, with ?takeover=1).
+    { path: '/remind/:id', component: pages.remind, props: true },
   ],
 })
 

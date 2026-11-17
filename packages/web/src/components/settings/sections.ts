@@ -15,6 +15,7 @@ export const SECTIONS = [
   { id: 'inbox', label: 'Inbox', icon: 'ph:tray' },
   { id: 'nutrition', label: 'Food tracking', icon: 'ph:bowl-food' },
   { id: 'reminders', label: 'Reminders', icon: 'ph:bell' },
+  { id: 'insistent', label: 'Insistent reminders', icon: 'ph:bell-ringing' },
   { id: 'channels', label: 'Capture channels', icon: 'ph:broadcast' },
   { id: 'tokens', label: 'Capture tokens', icon: 'ph:key' },
   { id: 'agents', label: 'Agents', icon: 'ph:robot' },
