@@ -86,10 +86,15 @@ const saying = computed(() => nag.value?.ack === 'say' && !typing.value && !whyN
 const current = computed(() => nag.value?.expected[index.value] ?? '')
 const progress = computed(() => (current.value ? textMatch(current.value, saying.value ? heard.value : input.value) : 0))
 
-watch(input, (text) => {
-  if (!current.value || matched.value || saying.value) return
-  if (textMatch(current.value, text) >= TYPED_MATCH) accept(text)
-})
+// Typed text is checked on Enter, not while typing: a phrase that is mostly there already would
+// pass before the user finished it.
+const typedError = ref('')
+watch(input, () => (typedError.value = ''))
+function submitTyped() {
+  if (!current.value || matched.value || saying.value || !input.value.trim()) return
+  if (textMatch(current.value, input.value) >= TYPED_MATCH) accept(input.value)
+  else typedError.value = 'Not quite yet: check it and press Enter again.'
+}
 
 function accept(text: string) {
   matched.value = true
@@ -282,7 +287,7 @@ watch(
           <p v-if="speechError" class="text-sm text-red-600 dark:text-red-400">{{ speechError }}</p>
           <button type="button" class="text-xs text-ink-faint hover:text-ink" @click="(typing = true), listening?.stop(), (listening = null)">Type it instead</button>
         </div>
-        <div v-else class="mt-6">
+        <form v-else class="mt-6" @submit.prevent="submitTyped">
           <input
             v-model="input"
             class="w-full rounded-xl border border-line bg-surface px-4 py-3 text-center text-lg outline-none focus:border-line-strong"
@@ -294,9 +299,10 @@ watch(
             autofocus
             data-type-it
           />
+          <p class="mt-2 text-center text-xs" :class="typedError ? 'text-amber-700 dark:text-amber-400' : 'text-ink-faint'" data-type-hint>{{ typedError || 'Press Enter when you are done.' }}</p>
           <p v-if="nag.ack === 'say' && whyNoSpeech" class="mt-2 text-center text-xs text-ink-faint">{{ whyNoSpeech }}</p>
           <button v-else-if="nag.ack === 'say' && typing" type="button" class="mt-2 block w-full text-center text-xs text-ink-faint hover:text-ink" @click="(typing = false), startListening()">Say it instead</button>
-        </div>
+        </form>
       </section>
 
       <!-- What it shows: the object's text, random picks, today's tasks. -->

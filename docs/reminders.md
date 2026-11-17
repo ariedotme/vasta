@@ -40,7 +40,7 @@ reminders, and the channels everything goes through, are Settings › Reminder c
   word for word, or saying it out loud (the page listens with the browser's speech recognition; typing
   works where it cannot). Typing or saying it on a habit also marks the habit done. Text is compared
   loosely (`core/text-match.ts`): case, accents and punctuation do not count, nor one slip in a long
-  word; said text needs 70 % of the words in order, typed text 90 %. Swiping a notification away
+  word; said text needs 70 % of the words in order, typed text 90 % (checked when Enter is pressed, never while typing). Swiping a notification away
   answers nothing.
 - **How it reaches the user**, its *style*: **Pop-up** (a window of the desktop app floating over
   everything, in the middle of the screen with the pointer, until answered), **Full screen** (the

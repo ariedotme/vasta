@@ -27,6 +27,8 @@ GitHub release page.
 
 ### Fixed
 
+- **A reminder answered by typing waits for Enter.** It took the phrase as soon as most of it was
+  typed, before you finished.
 - **Edit** and **New reminder…** in Settings did nothing once a reminder had been opened for
   editing.
 - **Desktop (macOS): clicking a reminder's notification opens it.** The app now sends
