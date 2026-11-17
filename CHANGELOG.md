@@ -20,9 +20,10 @@ GitHub release page.
 - **See what agents wrote.** What an agent creates or changes is marked with its token's name:
   "Edited by arie via Claude Code" on the object and in its activity. Queries can filter on
   "Created by agent" and "Last edited by agent".
-- **Type rules.** In a type's settings, require a property, a cover or at least one tag. Agents
-  and API scripts can't save an object without them (the error says what is missing); in the app
-  the object shows a warning instead, so you are never stopped mid-edit.
+- **Required properties, covers and tags.** Make any property of a type required (in its
+  settings, next to "Hide when empty"), and ask for a cover or at least one tag in the type's
+  Rules. Agents and API scripts can't save an object without them (the error says what is
+  missing); in the app the object shows a warning instead, so you are never stopped mid-edit.
 - **Agents can move objects to the trash** (`trash_object`, `restore_object`; `vasta trash` and
   `vasta restore`), never delete them for good: you can restore them for 30 days.
 - **"Copy link to page" in object menus**: the right-click menu of an object in the sidebar, a

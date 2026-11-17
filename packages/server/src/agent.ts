@@ -396,12 +396,9 @@ export class AgentTools {
       }))
   }
 
-  /** A type's rules in words (what every object of it must have), if it has any. */
+  /** What every object of a type must have besides its required properties (marked on them), if anything. */
   private rulesOf(type: ObjectType) {
-    const rules = type.rules
-    if (!rules) return undefined
-    const required = (rules.required ?? []).map((id) => type.properties.find((p) => p.id === id)?.name).filter((name): name is string => !!name)
-    const out = { ...(required.length ? { required } : {}), ...(rules.cover ? { cover: true } : {}), ...(rules.tags ? { tags: true } : {}) }
+    const out = { ...(type.rules?.cover ? { cover: true } : {}), ...(type.rules?.tags ? { tags: true } : {}) }
     return Object.keys(out).length ? out : undefined
   }
 
@@ -1435,7 +1432,7 @@ function selectValue(def: PropertyDef, value: AgentFilter['value']) {
 }
 
 function describeProperty(def: PropertyDef, typeNames: Map<Id, string>, type: ObjectType, types: ObjectType[]) {
-  const base = { id: def.id, name: def.name, kind: def.kind }
+  const base = { id: def.id, name: def.name, kind: def.kind, ...(def.required && def.kind !== 'formula' ? { required: true } : {}) }
   if (def.kind === 'formula') return { ...base, formula: formulaToNames(def.expression, type, types) }
   if (def.kind === 'select') return { ...base, multiple: def.multiple, options: def.options.map((o) => o.label) }
   if (def.kind === 'relation') return { ...base, multiple: def.multiple, ...(def.targetTypeIds.length ? { targets: def.targetTypeIds.map((id) => typeNames.get(id) ?? id) } : {}), ...(def.reverseName?.trim() ? { reverseName: def.reverseName.trim() } : {}) }

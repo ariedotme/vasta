@@ -27,8 +27,8 @@ or the one named by "template", with its questions answered by "answers". Whiteb
 "Whiteboard") hold cards of objects, text, sticky notes, shapes, frames and arrows: read one with
 get_board, change it with edit_board (a Mermaid flowchart becomes a board there too).
 Types may have a description the user wrote (list_types; typeDescription in get_object): follow it
-when writing objects of that type. Types may also have rules (a property, a cover or a tag every
-object must have): a write without them is refused with what is missing. Start a session with
+when writing objects of that type. Properties may be required, and types may ask for a cover or a tag
+(every object must have them): a write without them is refused with what is missing. Start a session with
 recall: the user's instructions for agents, the objects they marked as agent context, and what
 matches a topic. Objects are never deleted for good: trash_object moves one to the trash, where
 the user can restore it. What an agent writes is recorded as made through its token
@@ -113,7 +113,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
 
   server.registerTool(
     'list_types',
-    { title: 'List types', description: "The types of objects in a space: the user's description of each (how they want its objects written), its rules (required properties, cover, tags), its properties (and select options) and how many objects each has.", inputSchema: { space }, annotations: READ },
+    { title: 'List types', description: "The types of objects in a space: the user's description of each (how they want its objects written), whether its objects need a cover or a tag (rules), its properties (required ones marked, select options) and how many objects each has.", inputSchema: { space }, annotations: READ },
     ({ space }) => run(() => tools.types(space))
   )
 

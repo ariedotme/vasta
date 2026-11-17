@@ -1245,7 +1245,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     if (!existing) return c.json({ error: 'not found' }, 404)
     const body = await c.req.json<ObjectType>()
     const { rules: _rules, ...rest } = body
-    const rules = normalizeTypeRules(body.rules, body.properties ? body : existing)
+    const rules = normalizeTypeRules(body.rules)
     const type: ObjectType = { ...rest, ...(rules ? { rules } : {}), id: existing.id, spaceId: existing.spaceId, createdAt: existing.createdAt, updatedAt: now() }
     if (existing.system) type.system = existing.system
     store.putType(type)

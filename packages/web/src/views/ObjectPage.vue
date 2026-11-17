@@ -88,7 +88,7 @@ const valueFields = computed(() => (type.value?.properties ?? []).filter((p) => 
 const hasValue = (def: PropertyDef) => (def.kind === 'formula' ? !!object.value && formulaValue(object.value, def).kind !== 'empty' : !!object.value?.props[def.id])
 /** Fields shown only once they have a value: marked so, or a person field in a space nobody else is in. */
 const quiet = (def: PropertyDef) => def.hideWhenEmpty || (def.kind === 'person' && !sharedSpace.value)
-const required = (def: PropertyDef) => !!type.value?.rules?.required?.includes(def.id)
+const required = (def: PropertyDef) => !!def.required && def.kind !== 'formula'
 const visibleFields = computed(() => valueFields.value.filter((p) => !quiet(p) || hasValue(p) || required(p) || showAllFields.value))
 /** What the type's rules ask for that the object lacks: a warning here, a refusal for agents and scripts. */
 const ruleProblems = computed(() => (object.value && !info.value ? typeRuleProblems(type.value, object.value) : []))

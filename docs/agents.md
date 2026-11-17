@@ -102,8 +102,9 @@ Settings › Agents (owners of the space change it) holds, per space:
   there is no such object.
 
 A type's **description** (its settings) is the user's own note on how its objects are written;
-agents get it in `list_types` and as `typeDescription` in `get_object`. A type's **rules** (a
-property, a cover or at least one tag every object must have) are generic: agent writes and API
+agents get it in `list_types` and as `typeDescription` in `get_object`. Any property, built-in
+or custom, can be **required** (its settings in the type; `required: true` in `list_types`), and
+a type can ask for a **cover** or **at least one tag** (`rules` in `list_types`): agent writes and API
 writes with a token that leave them out are refused, saying what is missing (`Book rules:
 Author is required; a cover is required`), so the agent can fix the object and retry. The app
 only shows a warning on the object, so nobody typing is stopped mid-edit.

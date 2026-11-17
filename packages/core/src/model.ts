@@ -172,7 +172,7 @@ export interface ObjectType {
   views: ViewDef[]
   /** Where a click on one of its objects in a view or query opens it, unless the view says; unset: its page. */
   openIn?: ViewOpenIn
-  /** What each of its objects must have; agents and API writes are refused without it, the app warns. */
+  /** A cover or a tag each of its objects must have; agents and API writes are refused without it, the app warns. */
   rules?: TypeRules
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
@@ -180,10 +180,11 @@ export interface ObjectType {
   deletedAt?: IsoDateTime
 }
 
-/** A type's rules (agents.ts typeRuleProblems): generic, set by whoever made the type. */
+/**
+ * What every object of a type must have besides its required properties (PropertyDef.required),
+ * which are not properties: a cover, a tag (agents.ts typeRuleProblems).
+ */
 export interface TypeRules {
-  /** Property ids that must have a value. */
-  required?: Id[]
   cover?: boolean
   /** At least one tag. */
   tags?: boolean
@@ -207,6 +208,8 @@ interface PropertyDefBase {
   description?: string
   icon?: Icon
   hideWhenEmpty?: boolean
+  /** Every object of the type must have a value (agents.ts): agent and API writes without one are refused, the app warns. */
+  required?: boolean
 }
 
 export interface TextPropertyDef extends PropertyDefBase { kind: 'text' }

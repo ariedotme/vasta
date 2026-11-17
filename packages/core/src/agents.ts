@@ -45,29 +45,28 @@ export function hiddenTagSet(settings: AgentSettings | undefined, tags: Iterable
 /** Whether agents must not see an object: it is a hidden tag, or carries one. */
 export const hiddenByTags = (object: Pick<ObjectRecord, 'id' | 'tagIds'>, hidden: Set<Id>) => hidden.size > 0 && (hidden.has(object.id) || object.tagIds.some((id) => hidden.has(id)))
 
-/** Rules cleaned against the type's properties; undefined when there are none. */
-export function normalizeTypeRules(rules: unknown, type: Pick<ObjectType, 'properties'>): TypeRules | undefined {
+/** A type's rules as sent by a client, cleaned; undefined when there are none. */
+export function normalizeTypeRules(rules: unknown): TypeRules | undefined {
   if (!rules || typeof rules !== 'object') return undefined
   const raw = rules as Record<string, unknown>
-  const known = new Set(type.properties.filter((p) => p.kind !== 'formula').map((p) => p.id))
-  const required = Array.isArray(raw.required) ? [...new Set(raw.required.filter((id): id is string => typeof id === 'string' && known.has(id)))] : []
-  const out: TypeRules = { ...(required.length ? { required } : {}), ...(raw.cover === true ? { cover: true } : {}), ...(raw.tags === true ? { tags: true } : {}) }
+  const out: TypeRules = { ...(raw.cover === true ? { cover: true } : {}), ...(raw.tags === true ? { tags: true } : {}) }
   return Object.keys(out).length ? out : undefined
 }
 
-/** What an object lacks of its type's rules, in words ("Author is required"); empty when it follows them. */
+/**
+ * What an object lacks of what its type requires (its required properties, a cover, a tag), in
+ * words ("Author is required"); empty when it has it all. Formulas are computed, never required.
+ */
 export function typeRuleProblems(type: Pick<ObjectType, 'name' | 'properties' | 'rules'> | undefined, object: Pick<ObjectRecord, 'props' | 'content' | 'coverUrl' | 'tagIds' | 'template'>): string[] {
-  const rules = type?.rules
-  if (!rules || object.template) return []
+  if (!type || object.template) return []
   const problems: string[] = []
-  for (const id of rules.required ?? []) {
-    const def = type.properties.find((p) => p.id === id)
-    if (!def || def.kind === 'formula') continue
-    const empty = def.kind === 'rich-text' ? !object.content[id]?.content?.some((node) => node.type !== 'paragraph' || node.content?.length) : isEmptyValue(object.props[id]?.value)
+  for (const def of type.properties) {
+    if (!def.required || def.kind === 'formula') continue
+    const empty = def.kind === 'rich-text' ? !object.content[def.id]?.content?.some((node) => node.type !== 'paragraph' || node.content?.length) : isEmptyValue(object.props[def.id]?.value)
     if (empty) problems.push(`${def.name} is required`)
   }
-  if (rules.cover && !object.coverUrl) problems.push('a cover is required')
-  if (rules.tags && !object.tagIds.length) problems.push('at least one tag is required')
+  if (type.rules?.cover && !object.coverUrl) problems.push('a cover is required')
+  if (type.rules?.tags && !object.tagIds.length) problems.push('at least one tag is required')
   return problems
 }
 
