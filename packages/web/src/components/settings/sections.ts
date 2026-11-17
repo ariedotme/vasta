@@ -17,6 +17,7 @@ export const SECTIONS = [
   { id: 'reminders', label: 'Reminders', icon: 'ph:bell' },
   { id: 'channels', label: 'Capture channels', icon: 'ph:broadcast' },
   { id: 'tokens', label: 'Capture tokens', icon: 'ph:key' },
+  { id: 'agents', label: 'Agents', icon: 'ph:robot' },
   { id: 'telegram', label: 'Telegram', icon: 'ph:telegram-logo' },
   { id: 'sessions', label: 'Sessions', icon: 'ph:devices' },
 ]

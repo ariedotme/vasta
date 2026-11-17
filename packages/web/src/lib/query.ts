@@ -27,6 +27,8 @@ const BUILTIN_OPTIONS: FieldOption[] = [
   { field: 'updatedAt', label: 'Last edited', kind: 'date', icon: 'ph:clock-counter-clockwise' },
   { field: 'createdBy', label: 'Created by', kind: 'ids', icon: 'ph:user-plus' },
   { field: 'updatedBy', label: 'Last edited by', kind: 'ids', icon: 'ph:user-gear' },
+  { field: 'createdVia', label: 'Created by agent', kind: 'text', icon: 'ph:robot' },
+  { field: 'updatedVia', label: 'Last edited by agent', kind: 'text', icon: 'ph:robot' },
   { field: 'date', label: 'Date', kind: 'date', icon: 'ph:calendar-blank' },
   { field: 'host', label: 'Website', kind: 'text', icon: 'ph:globe-hemisphere-west' },
 ]

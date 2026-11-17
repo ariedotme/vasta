@@ -19,6 +19,7 @@ import SessionSettings from '../components/settings/SessionSettings.vue'
 import SpaceSettings from '../components/settings/SpaceSettings.vue'
 import TelegramSettings from '../components/settings/TelegramSettings.vue'
 import TokenSettings from '../components/settings/TokenSettings.vue'
+import AgentSettings from '../components/settings/AgentSettings.vue'
 import { SECTIONS } from '../components/settings/sections.ts'
 import { isDesktop } from '../lib/platform.ts'
 
@@ -94,6 +95,7 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
       <ReminderSettings />
       <ChannelSettings />
       <TokenSettings />
+      <AgentSettings />
       <TelegramSettings />
       <SessionSettings />
     </div>

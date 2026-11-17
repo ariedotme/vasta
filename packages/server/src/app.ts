@@ -13,6 +13,9 @@ import { streamSSE } from 'hono/streaming'
 import type { CalendarSource, ColorName, Icon, Id, InboxPreferences, ObjectRecord, ObjectType, QueryDef, Space, SpaceRole, StoredFile, TokenScope } from '@vasta/core'
 import {
   ACTIVITY_RETENTION_CHOICES,
+  normalizeAgentSettings,
+  normalizeTypeRules,
+  typeRuleProblems,
   addDays,
   dayIn,
   flowMetrics,
@@ -48,7 +51,7 @@ import { checkMediaKey, mediaKey, RangeNotSatisfiableError, type MediaStore } fr
 import { mapExport } from '@vasta/importer-capacities/export'
 import type { NodeStore } from '@vasta/core/node'
 import { AccountError, AccountService, type Auth } from './accounts.ts'
-import { currentActor, outsideActor, runAs } from './actor.ts'
+import { currentActor, currentVia, outsideActor, runAs } from './actor.ts'
 import { AgentTools } from './agent.ts'
 import { CalendarService, CalendarSyncError, normalizeCalendarUrl } from './calendars.ts'
 import { CaptureError, CaptureService, mergeCaptures, type CaptureResult } from './capture.ts'
@@ -170,6 +173,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   app.use('/api/*', compress({ contentTypeFilter: /^application\/json/ }))
   const api = new Hono<Env>()
   store.actor = currentActor
+  store.via = currentVia
   const notifications = new NotificationService({ store, ...(reminders ? { reminders } : {}), now })
   const links = weblinks ?? new WeblinkService({ store, media, feed, now })
   const baseCapture = capture ?? new CaptureService({ store, media, feed, now, weblinks: links, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })
@@ -194,13 +198,14 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     return session
   }
 
-  const requireAuth = (accept: (auth: Auth) => boolean, error: string) =>
+  /** `via`: the agent the request's writes are recorded as made through. */
+  const requireAuth = (accept: (auth: Auth) => boolean, error: string, via?: (auth: Auth) => string | undefined) =>
     createMiddleware<Env>(async (c, next) => {
       const auth = identify(c)
       if (!auth || !accept(auth)) return c.json({ error }, 401)
       if (auth.sessionId && !SAFE_METHODS.has(c.req.method) && !fromApp(c)) return c.json({ error: `send the ${CLIENT_HEADER}: ${CLIENT_VALUE} header` }, 403)
       c.set('auth', auth)
-      await runAs(auth.user.id, next)
+      await runAs(auth.user.id, next, via?.(auth))
     })
   /** The web app (session) or a token for the whole API. */
   const appAuth = requireAuth((auth) => !!auth.sessionId || auth.scope === 'api', 'log in first')
@@ -209,7 +214,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   /** The desktop app's notifications: its own token, or the web app. */
   const notifyAuth = requireAuth((auth) => auth.scope === 'notify' || !!auth.sessionId, 'invalid notification token')
   /** Agents (MCP): a token for the whole API. */
-  const agentAuth = requireAuth((auth) => auth.scope === 'api', 'send a token with scope api: Authorization: Bearer <token> (Settings › Capture tokens)')
+  const agentAuth = requireAuth((auth) => auth.scope === 'api', 'send a token with scope api: Authorization: Bearer <token> (Settings › Capture tokens)', (auth) => auth.tokenName)
 
   const authApi = new Hono<Env>()
 
@@ -766,6 +771,39 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     return c.json(space)
   })
 
+  /**
+   * What agents (the MCP) may see and do in the space, and its instructions for them (core
+   * agents.ts): owners only. The objects marked as agent context are kept unless `context` is sent.
+   */
+  api.put('/spaces/:id/agents', ownerOnly, async (c) => {
+    const body = await c.req.json<Record<string, unknown>>().catch(() => ({}) as Record<string, unknown>)
+    const existing = store.getSpace(c.req.param('id'))
+    if (!existing) return c.json({ error: 'not found' }, 404)
+    const agents = normalizeAgentSettings({ ...body, context: 'context' in body ? body.context : existing.agents?.context })
+    const { agents: _agents, ...rest } = existing
+    const space: Space = agents ? { ...rest, agents } : rest
+    store.putSpace(space)
+    feed.emit({ kind: 'space', id: space.id, spaceId: space.id })
+    return c.json(space)
+  })
+
+  /** Mark an object of the space as agent context (`{ id, on }`); any member, like pinning. */
+  api.post('/spaces/:id/agent-context', async (c) => {
+    const body = await c.req.json<{ id?: unknown; on?: unknown }>().catch(() => ({}) as { id?: unknown; on?: unknown })
+    const existing = store.getSpace(c.req.param('id'))
+    if (!existing) return c.json({ error: 'not found' }, 404)
+    const object = typeof body.id === 'string' ? store.getObject(body.id) : undefined
+    if (!object || object.spaceId !== existing.id) return c.json({ error: 'id must be an object of the space' }, 400)
+    const context = existing.agents?.context ?? []
+    const next = body.on === false ? context.filter((id) => id !== object.id) : context.includes(object.id) ? context : [...context, object.id]
+    const agents = normalizeAgentSettings({ ...existing.agents, context: next })
+    const { agents: _agents, ...rest } = existing
+    const space: Space = agents ? { ...rest, agents } : rest
+    store.putSpace(space)
+    feed.emit({ kind: 'space', id: space.id, spaceId: space.id })
+    return c.json(space)
+  })
+
   /** Turn food tracking on (making its types) or off (hiding it; nothing is deleted). */
   api.post('/spaces/:id/nutrition', async (c) => {
     const body = await c.req.json<{ enabled?: boolean }>().catch(() => ({}) as { enabled?: boolean })
@@ -1206,7 +1244,9 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     const existing = store.getType(c.req.param('id'))
     if (!existing) return c.json({ error: 'not found' }, 404)
     const body = await c.req.json<ObjectType>()
-    const type: ObjectType = { ...body, id: existing.id, spaceId: existing.spaceId, createdAt: existing.createdAt, updatedAt: now() }
+    const { rules: _rules, ...rest } = body
+    const rules = normalizeTypeRules(body.rules, body.properties ? body : existing)
+    const type: ObjectType = { ...rest, ...(rules ? { rules } : {}), id: existing.id, spaceId: existing.spaceId, createdAt: existing.createdAt, updatedAt: now() }
     if (existing.system) type.system = existing.system
     store.putType(type)
     return c.json(type)
@@ -1338,6 +1378,17 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     return c.json(store.backlinks(c.req.param('id')).filter((b) => spaces.has(b.object.spaceId)))
   })
 
+  /**
+   * A type's rules (core agents.ts) hold scripts and agents, which send whole objects: a write by
+   * a token that leaves what they ask for out is refused. The app only warns, so nobody typing is
+   * stopped mid-edit.
+   */
+  const ruleProblems = (c: Context<Env>, type: ObjectType | undefined, object: ObjectRecord) => {
+    if (c.get('auth').sessionId) return undefined
+    const problems = typeRuleProblems(type, object)
+    return problems.length ? c.json({ error: `${type!.name} rules: ${problems.join('; ')}`, problems }, 422) : undefined
+  }
+
   // With `line`, the title and properties are read from it as captures read theirs (capture-line.ts).
   api.post('/objects', async (c) => {
     const { line, ...body } = await c.req.json<Partial<ObjectRecord> & { line?: string }>()
@@ -1356,6 +1407,8 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
       return c.json(store.getObject(made.object.id), 201)
     }
     const object = newObject(type, body, randomUUID(), now())
+    const broken = ruleProblems(c, type, object)
+    if (broken) return broken
     const stored = store.putObject(object)
     changed(stored)
     return c.json(stored, 201)
@@ -1394,6 +1447,8 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
         updatedAt: now(),
       }
     }
+    const broken = ruleProblems(c, store.getType(object.typeId), object)
+    if (broken) return broken
     const stored = store.putObject(completeRepeat(object, existing, store.getType(object.typeId), userOf(c).timeZone ?? 'UTC', base && typeof base === 'object' ? base : existing))
     changed(stored)
     return c.json(stored)

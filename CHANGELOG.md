@@ -8,10 +8,32 @@ GitHub release page.
 
 ### Added
 
+- **Instructions for agents.** Settings › Agents has a text box per space ("read the page About
+  me first; save quotes as Echo with an Author") that every agent connecting through the MCP
+  receives, so you no longer set up a CLAUDE.md or AGENTS.md on each machine.
+- **Agent context and recall.** Mark any object as agent context from its ⋯ menu (a profile, your
+  preferences, a project page). The new MCP tool `recall` gives an agent, in one call, the space's
+  instructions, those objects with their text, and what matches a topic (`vasta recall` in the CLI).
+- **Keep things from agents.** Per space, in Settings › Agents: make the space read-only for
+  agents, hide it from them entirely, or hide every object with certain tags (and the tags nested
+  under them) from search, queries, backlinks and recall.
+- **See what agents wrote.** What an agent creates or changes is marked with its token's name:
+  "Edited by arie via Claude Code" on the object and in its activity. Queries can filter on
+  "Created by agent" and "Last edited by agent".
+- **Type rules.** In a type's settings, require a property, a cover or at least one tag. Agents
+  and API scripts can't save an object without them (the error says what is missing); in the app
+  the object shows a warning instead, so you are never stopped mid-edit.
+- **Agents can move objects to the trash** (`trash_object`, `restore_object`; `vasta trash` and
+  `vasta restore`), never delete them for good: you can restore them for 30 days.
 - **"Copy link to page" in object menus**: the right-click menu of an object in the sidebar, a
   type view or query results, and the ⋯ More menu of an object's page and side pane now have a
   "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
   in the desktop app, matching existing block-link behaviour.
+
+### Changed
+
+- **Type descriptions reach agents**: an agent reading or creating an object gets its type's
+  description with it, and follows the conventions you wrote there.
 
 ### Fixed
 

@@ -146,8 +146,8 @@ export type FieldClock = Record<string, Hlc>
  * it is a Yjs document that merges edit by edit (see `object_docs`).
  */
 export const PLAIN_FIELDS: Record<SyncTable, readonly string[]> = {
-  spaces: ['name', 'icon', 'sidebar', 'nutrition', 'sprints', 'deletedAt'],
-  types: ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'views', 'openIn', 'deletedAt'],
+  spaces: ['name', 'icon', 'sidebar', 'nutrition', 'sprints', 'agents', 'deletedAt'],
+  types: ['name', 'pluralName', 'description', 'icon', 'color', 'properties', 'views', 'openIn', 'rules', 'deletedAt'],
   objects: ['typeId', 'title', 'description', 'icon', 'coverUrl', 'color', 'parentId', 'aliases', 'tagIds', 'collectionIds', 'date', 'query', 'media', 'template', 'deletedAt'],
   calendar_sources: ['name', 'url', 'color', 'username', 'enabled'],
 }
@@ -157,8 +157,8 @@ export const MAP_FIELDS: Partial<Record<SyncTable, readonly string[]>> = { objec
 
 /**
  * What a client may change. Media (files, a weblink's page data) is written by the server only;
- * a space's trash and a calendar's address and login go through their HTTP routes, which check
- * ownership or fetch the feed.
+ * a space's trash, its agent settings and a calendar's address and login go through their HTTP
+ * routes, which check ownership or fetch the feed.
  */
 export function isPushable(table: SyncTable, name: string): boolean {
   if (table === 'spaces') return ['name', 'icon', 'sidebar', 'nutrition', 'sprints'].includes(name)

@@ -25,7 +25,14 @@ goal) and tasks a Sprint field: set it by the sprint's title, or "current" for t
 Types may have templates (list_templates): create_object starts from a type's default template,
 or the one named by "template", with its questions answered by "answers". Whiteboards (type
 "Whiteboard") hold cards of objects, text, sticky notes, shapes, frames and arrows: read one with
-get_board, change it with edit_board (a Mermaid flowchart becomes a board there too).`
+get_board, change it with edit_board (a Mermaid flowchart becomes a board there too).
+Types may have a description the user wrote (list_types; typeDescription in get_object): follow it
+when writing objects of that type. Types may also have rules (a property, a cover or a tag every
+object must have): a write without them is refused with what is missing. Start a session with
+recall: the user's instructions for agents, the objects they marked as agent context, and what
+matches a topic. Objects are never deleted for good: trash_object moves one to the trash, where
+the user can restore it. What an agent writes is recorded as made through its token
+(createdVia, updatedVia: query "createdVia is-not-empty" finds what agents wrote).`
 
 const space = z.string().optional().describe('Space id or name; the default space when omitted')
 const properties = z
@@ -53,13 +60,60 @@ const READ = { readOnlyHint: true, openWorldHint: false }
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
 
 export function mcpServer(tools: AgentTools, version: string): McpServer {
-  const server = new McpServer({ name: 'vasta', version }, { instructions: INSTRUCTIONS })
+  // The user's own instructions (each space's, Settings › Agents) come after Vasta's.
+  const own = tools.instructions()
+  const server = new McpServer({ name: 'vasta', version }, { instructions: own ? `${INSTRUCTIONS}\n\n${own}` : INSTRUCTIONS })
 
-  server.registerTool('list_spaces', { title: 'List spaces', description: "The user's spaces; the default one is marked.", annotations: READ }, () => run(() => tools.spaces()))
+  server.registerTool(
+    'recall',
+    {
+      title: 'Recall',
+      description:
+        "Get your bearings in a space in one call: the user's instructions for agents, the objects they marked as agent context (with their properties and text), and with a topic, the objects that match it. Call it first in a session, and with a topic before working on one.",
+      inputSchema: { topic: z.string().optional().describe('Words to find related objects by'), space, limit: z.number().int().min(1).max(50).optional().describe('How many related objects (10 by default)') },
+      annotations: READ,
+    },
+    (input) => run(() => tools.recall(strip(input)))
+  )
+
+  server.registerTool(
+    'set_agent_context',
+    {
+      title: 'Set agent context',
+      description: 'Mark an object as agent context (recall returns it to every agent first: a profile, preferences, a project page), or unmark it. Ask the user before marking.',
+      inputSchema: { id: z.string(), on: z.boolean() },
+      annotations: WRITE,
+    },
+    ({ id, on }) => run(() => tools.setAgentContext(id, on))
+  )
+
+  server.registerTool(
+    'trash_object',
+    {
+      title: 'Move to trash',
+      description: 'Move an object to the trash (e.g. after turning it into another object). The user can restore it for 30 days; nothing is deleted for good.',
+      inputSchema: { id: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    ({ id }) => run(() => tools.trash(id))
+  )
+
+  server.registerTool(
+    'restore_object',
+    {
+      title: 'Restore from trash',
+      description: 'Take an object out of the trash (its id from trash_object).',
+      inputSchema: { id: z.string() },
+      annotations: WRITE,
+    },
+    ({ id }) => run(() => tools.restore(id))
+  )
+
+  server.registerTool('list_spaces', { title: 'List spaces', description: "The user's spaces; the default one is marked, and those read-only for agents. Each space's instructions for agents come with it.", annotations: READ }, () => run(() => tools.spaces()))
 
   server.registerTool(
     'list_types',
-    { title: 'List types', description: 'The types of objects in a space, with their properties (and select options) and how many objects each has.', inputSchema: { space }, annotations: READ },
+    { title: 'List types', description: "The types of objects in a space: the user's description of each (how they want its objects written), its rules (required properties, cover, tags), its properties (and select options) and how many objects each has.", inputSchema: { space }, annotations: READ },
     ({ space }) => run(() => tools.types(space))
   )
 
@@ -180,7 +234,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'get_object',
     {
       title: 'Get object',
-      description: "An object: type, icon, color, properties, tags (nested ones as paths, \"recipe/breakfast\"), its text fields as Markdown, and what links to it (backlinks). The id is in vasta://o/<id> links and in other tools' results.",
+      description: "An object: type (and the user's description of it), icon, color, properties, tags (nested ones as paths, \"recipe/breakfast\"), its text fields as Markdown, what links to it (backlinks: id, title, kind), who wrote it and through which agent (createdVia, updatedVia), and what its type's rules say it lacks (missing). The id is in vasta://o/<id> links and in other tools' results.",
       inputSchema: { id: z.string() },
       annotations: READ,
     },
@@ -214,7 +268,7 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     {
       title: 'Query objects',
       description:
-        'Objects of some types, filtered and sorted, like a query in the app. Fields are property names, "Relation.Field" through a relation, or title, tags, createdAt, updatedAt, createdBy, updatedBy, date, type. People by username or name, "me" for the user ("Assignee contains me"). Operators: is, is-not, contains, not-contains, starts-with, is-empty, is-not-empty, is-checked, is-not-checked, gt, gte, lt, lte, before, after. Dates as YYYY-MM-DD.',
+        'Objects of some types, filtered and sorted, like a query in the app. Fields are property names, "Relation.Field" through a relation, or title, tags, createdAt, updatedAt, createdBy, updatedBy, createdVia, updatedVia (the agent an object was written through: "createdVia is-not-empty" finds what agents wrote), date, type. People by username or name, "me" for the user ("Assignee contains me"). Operators: is, is-not, contains, not-contains, starts-with, is-empty, is-not-empty, is-checked, is-not-checked, gt, gte, lt, lte, before, after. Dates as YYYY-MM-DD.',
       inputSchema: {
         space,
         types: z.array(z.string()).optional().describe('Type names or ids; all types when omitted'),

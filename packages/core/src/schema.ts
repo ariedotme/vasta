@@ -38,6 +38,13 @@ export const ADDED_COLUMNS: { table: string; column: string; definition: string 
   { table: 'objects', column: 'template', definition: 'TEXT' },
   // Where a type's objects open from views: 'pane' (the side pane) or 'page' (ObjectType.openIn).
   { table: 'types', column: 'open_in', definition: 'TEXT' },
+  // Agents (core agents.ts): a space's AgentSettings and a type's TypeRules (JSON), and the agent
+  // an object was made or last changed through, also on its activity.
+  { table: 'spaces', column: 'agents', definition: 'TEXT' },
+  { table: 'types', column: 'rules', definition: 'TEXT' },
+  { table: 'objects', column: 'created_via', definition: 'TEXT' },
+  { table: 'objects', column: 'updated_via', definition: 'TEXT' },
+  { table: 'activity', column: 'via', definition: 'TEXT' },
 ]
 
 /** Indexes on added columns; run after ADDED_COLUMNS, since an older table may lack them before. */

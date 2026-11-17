@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
+import { ARTICLE_PROPERTY_ID, HABIT_REMIND_PROPERTY_ID, afterSave, typeRuleProblems, canonicalJson, formulaFromNames, formulaToNames, habitRemindAt, type ColorName, type DateValue, type Doc, type Icon, type ObjectRecord, type ObjectSummary, type PropertyDef, type PropertyValue, type QueryDef, type SelectOption } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import BacklinksPanel from '../components/BacklinksPanel.vue'
 import ObjectActivity from '../components/ObjectActivity.vue'
@@ -88,15 +88,35 @@ const valueFields = computed(() => (type.value?.properties ?? []).filter((p) => 
 const hasValue = (def: PropertyDef) => (def.kind === 'formula' ? !!object.value && formulaValue(object.value, def).kind !== 'empty' : !!object.value?.props[def.id])
 /** Fields shown only once they have a value: marked so, or a person field in a space nobody else is in. */
 const quiet = (def: PropertyDef) => def.hideWhenEmpty || (def.kind === 'person' && !sharedSpace.value)
-const visibleFields = computed(() => valueFields.value.filter((p) => !quiet(p) || hasValue(p) || showAllFields.value))
-/** Who made it and who changed it last, in a shared space. */
+const required = (def: PropertyDef) => !!type.value?.rules?.required?.includes(def.id)
+const visibleFields = computed(() => valueFields.value.filter((p) => !quiet(p) || hasValue(p) || required(p) || showAllFields.value))
+/** What the type's rules ask for that the object lacks: a warning here, a refusal for agents and scripts. */
+const ruleProblems = computed(() => (object.value && !info.value ? typeRuleProblems(type.value, object.value) : []))
+/** Who made it and who changed it last (in a shared space), and the agent it was written through. */
 const authorship = computed(() => {
   const o = object.value
-  if (!o || !sharedSpace.value) return { by: '', title: '' }
-  const by = o.updatedBy ? ` by ${personName(o.updatedBy)}` : ''
-  const created = `Created ${formatRelative(o.createdAt)}${o.createdBy ? ` by ${personName(o.createdBy)}` : ''}`
-  return { by, title: created }
+  if (!o) return { by: '', title: '' }
+  const shared = sharedSpace.value
+  const via = (agent: string | undefined) => (agent ? ` via ${agent}` : '')
+  const by = `${shared && o.updatedBy ? ` by ${personName(o.updatedBy)}` : ''}${via(o.updatedVia)}`
+  const created = `Created ${formatRelative(o.createdAt)}${shared && o.createdBy ? ` by ${personName(o.createdBy)}` : ''}${via(o.createdVia)}`
+  return { by, title: shared || o.createdVia || o.updatedVia ? created : '' }
 })
+/** Marked as agent context: what agents read first (Settings › Agents). */
+const agentContext = computed(() => !!object.value && (workspace.spaces.find((s) => s.id === object.value!.spaceId)?.agents?.context ?? []).includes(object.value.id))
+async function toggleAgentContext() {
+  const o = object.value
+  if (!o) return
+  menuOpen.value = false
+  try {
+    const saved = await api.setAgentContext(o.spaceId, o.id, !agentContext.value)
+    const index = workspace.spaces.findIndex((s) => s.id === saved.id)
+    if (index >= 0) workspace.spaces[index] = saved
+    if (workspace.space?.id === saved.id) workspace.space = saved
+  } catch (failure) {
+    lastError.value = (failure as Error).message
+  }
+}
 const showAllFields = ref(false)
 const hiddenCount = computed(() => valueFields.value.length - visibleFields.value.length)
 /** Dashboards built with columns need room; everything else reads better at text width. */
@@ -807,6 +827,10 @@ async function startFrom(template: ObjectRecord) {
               <AppIcon fallback="ph:push-pin" /> {{ isInSidebar(object.id) ? 'Pinned in sidebar' : 'Pin to sidebar' }}
               <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
             </button>
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="What agents read first (the MCP's recall)" @click="toggleAgentContext">
+              <AppIcon fallback="ph:robot" /> Agent context
+              <AppIcon v-if="agentContext" fallback="ph:check" :size="13" class="ml-auto text-accent" />
+            </button>
             <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="coverMenuFrom">
               <AppIcon fallback="ph:image" /> {{ coverUploading ? 'Uploading cover…' : object.coverUrl ? 'Change cover…' : 'Add cover…' }}
             </button>
@@ -934,6 +958,9 @@ async function startFrom(template: ObjectRecord) {
           <PropertyValueEditor v-else :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
         </div>
         <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" />
+        <p v-if="ruleProblems.length" class="mt-1 flex items-center gap-1.5 px-1 text-xs text-amber-600 dark:text-amber-400" :title="`Agents and scripts can't save a ${type?.name ?? 'object'} like this`">
+          <AppIcon fallback="ph:warning" :size="13" /> {{ type?.name }}: {{ ruleProblems.join('; ') }}
+        </p>
         <div class="mt-1 flex gap-3 text-xs text-ink-faint">
           <button v-if="hiddenCount" class="rounded px-1 py-1 hover:text-ink" @click="showAllFields = true">Show {{ hiddenCount }} empty properties</button>
           <button ref="addAnchor" class="flex items-center gap-1 rounded px-1 py-1 hover:text-ink" @click="addOpen = !addOpen">

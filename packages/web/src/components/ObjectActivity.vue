@@ -73,7 +73,7 @@ const visible = computed(() => entries.value.slice(0, shown.value))
         <li v-for="entry in visible" :key="entry.id" class="flex items-start gap-2 text-sm">
           <PersonAvatar v-if="entry.actor" :id="entry.actor" :size="18" class="mt-0.5" />
           <div class="min-w-0 flex-1 text-ink-soft">
-            <span class="font-medium text-ink">{{ entry.actor ? personName(entry.actor) : 'Someone' }}</span>
+            <span class="font-medium text-ink">{{ entry.actor ? personName(entry.actor) : 'Someone' }}</span><span v-if="entry.via" class="text-ink-faint"> via {{ entry.via }}</span>
             {{ VERBS[entry.kind] }}
             <template v-if="entry.kind === 'changed'">
               <span class="text-ink">{{ fieldName(entry) }}</span>

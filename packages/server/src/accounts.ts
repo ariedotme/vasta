@@ -15,6 +15,8 @@ export interface Auth {
   sessionId?: string
   /** Set for bearer tokens. */
   scope?: TokenScope
+  /** A bearer token's name: on the MCP, the agent writes are recorded as made through. */
+  tokenName?: string
 }
 
 export interface AccountOptions {
@@ -525,7 +527,7 @@ export class AccountService {
     // Recording every use would write on each capture; once a minute is plenty.
     const at = this.now()
     if (!token.lastUsedAt || Date.parse(at) - Date.parse(token.lastUsedAt) > 60_000) this.store.touchToken(token.id, at)
-    return { user, scope: token.scope }
+    return { user, scope: token.scope, tokenName: token.name }
   }
 
   /** The space a user's captures go to when a channel names none. */

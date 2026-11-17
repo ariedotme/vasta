@@ -373,7 +373,7 @@ export class ClientStore extends Store {
       if (typeof remote.createdAt === 'string') target.createdAt = remote.createdAt
       if (typeof remote.updatedAt === 'string' && remote.updatedAt > String(target.updatedAt ?? '')) target.updatedAt = remote.updatedAt
       // Who made and last changed an object are the server's to say (it knows who pushed).
-      if (table === 'objects') for (const key of ['createdBy', 'updatedBy']) if (typeof remote[key] === 'string') target[key] = remote[key]
+      if (table === 'objects') for (const key of ['createdBy', 'updatedBy', 'createdVia', 'updatedVia']) if (typeof remote[key] === 'string') target[key] = remote[key]
       if (table === 'calendar_sources') for (const key of ['hasPassword', 'syncedAt', 'error', 'eventCount', 'dataVersion']) target[key] = remote[key]
     }
     if (table === 'spaces') {

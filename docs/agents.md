@@ -39,11 +39,12 @@ Code and Codex).
 
 | Tool | What it does |
 | --- | --- |
-| `list_spaces` | The user's spaces; the default (capture) space is marked |
+| `recall` | Get one's bearings in a space in one call: the user's instructions for agents, the objects marked as agent context (properties and text), and with `topic`, the objects that match it |
+| `list_spaces` | The user's spaces; the default (capture) space is marked, and those read-only for agents; each with its instructions for agents |
 | `add_comment` | A comment on an object, as the user (@username mentions a member) |
-| `list_types` | A space's types with their properties, select options and object counts |
+| `list_types` | A space's types with the user's description of each, its rules, its properties, select options and object counts |
 | `search` | Full-text search over titles and text |
-| `get_object` | An object: type, properties in words, tags (nested ones as paths), text fields as Markdown, backlinks, `coverUrl`, `icon`, `color` and `pinned` |
+| `get_object` | An object: type (and `typeDescription`), properties in words, tags (nested ones as paths), text fields as Markdown, backlinks (`id`, `title`, `kind`), `coverUrl`, `icon`, `color`, `pinned`, `agentContext`, who wrote it and through which agent, and what its type's rules say it lacks (`missing`) |
 | `get_daily_note` | A day's note (today by default, in the user's time zone), or `id: null` when it does not exist |
 | `write_daily_note` | Append Markdown to a day’s note, creating it with that text if needed |
 | `query` | Objects of some types, filtered and sorted like a query in the app |
@@ -52,6 +53,9 @@ Code and Codex).
 | `create_object` | A new object of a type, with properties and Markdown text; it starts from the type's default template, or `template` by name (`"blank"`: none), its questions answered by `answers`; `tags`, `icon` and `color` too |
 | `update_object` | Title, properties (null clears one), tags (`tagsMode` add, remove or replace), icon, color and text: append (default), prepend or replace |
 | `set_pinned` | Pin an object in the first sidebar section or unpin it from every section |
+| `set_agent_context` | Mark an object as agent context (what `recall` returns first) or unmark it |
+| `trash_object` | Move an object to the trash, where the user can restore it for 30 days; agents never delete for good |
+| `restore_object` | Take an object out of the trash |
 | `capture` | Add a capture to today’s daily note and the inbox (channel "agent") |
 | `list_habits` | The habits: done on a day (today by default; the amount for daily goals), weekdays, streaks, rates, the last days |
 | `log_habit` | Mark a habit done or not on a day, or set or add to its amount toward a daily goal |
@@ -80,6 +84,35 @@ JSON; objects carry a `url` to open them in the app (`VASTA_WEB_URL`, else the r
 A whiteboard is made with `create_object` (type "Whiteboard"); its elements are not in
 `get_object`'s text but in `get_board` ([whiteboards.md](whiteboards.md)). A card names its
 object by id, link or exact title in the board's space.
+
+### What the user tells and keeps from agents
+
+Settings › Agents (owners of the space change it) holds, per space:
+
+- **Instructions for agents**: free text ("read the page About me first; save quotes as Echo
+  with Author"). The endpoint sends each space's instructions with its own `instructions` when
+  an agent connects (after Vasta's), so no CLAUDE.md or AGENTS.md is needed on each machine;
+  `recall` and `list_spaces` return them too.
+- **Agent context**: objects marked from their ⋯ menu ("Agent context") or with
+  `set_agent_context`, like pinned objects. `recall` returns them first, with their text.
+- **Read-only**: agents read the space, and every write there is refused.
+- **Hide this space**: agents do not see it at all (for every member's tokens).
+- **Hidden tags**: objects with one of these tags, or a tag nested under one, never show up for
+  agents: not in `search`, `query`, backlinks, the inbox, boards or `recall`, and `get_object` says
+  there is no such object.
+
+A type's **description** (its settings) is the user's own note on how its objects are written;
+agents get it in `list_types` and as `typeDescription` in `get_object`. A type's **rules** (a
+property, a cover or at least one tag every object must have) are generic: agent writes and API
+writes with a token that leave them out are refused, saying what is missing (`Book rules:
+Author is required; a cover is required`), so the agent can fix the object and retry. The app
+only shows a warning on the object, so nobody typing is stopped mid-edit.
+
+**Who wrote what.** A write through the MCP is recorded with the token's name as the agent
+(`createdVia`, `updatedVia` on the object, `via` on its activity): the app shows "by arie via
+Claude Code", and `query` (or a query in the app, "Created by agent") filters on it:
+`createdVia is-not-empty` is what agents wrote. Name each agent's token after it (Settings ›
+Capture tokens).
 
 Writes go through the store like the app's own saves: the change feed tells open pages, and the
 rich text is written to the object's Yjs document, so devices merge it with their own edits.

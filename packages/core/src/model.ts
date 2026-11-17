@@ -26,7 +26,26 @@ export interface Space {
   nutrition?: NutritionSettings
   /** Sprints in this space (sprints.ts); absent until they are turned on. */
   sprints?: SprintSettings
+  /** What agents (the MCP) may see and do here, and what they are told (agents.ts); absent: everything, no instructions. */
+  agents?: AgentSettings
   createdAt: IsoDateTime
+}
+
+/**
+ * A space as agents meet it through the MCP. Set by the space's owners; the server applies it to
+ * every agent of every member.
+ */
+export interface AgentSettings {
+  /** Written by the user, sent to agents when they connect ("read About me first…"). */
+  instructions?: string
+  /** Agents do not see the space at all. */
+  hidden?: boolean
+  /** Agents may read the space but not change anything in it. */
+  readOnly?: boolean
+  /** Objects with these tags (or tags nested under them) are hidden from agents, and the tags too. */
+  hiddenTagIds?: Id[]
+  /** Objects marked as agent context: what agents read first (the MCP's recall), like pinned objects. */
+  context?: Id[]
 }
 
 /** A space's food tracking: on or off (turning it off hides it and keeps the data) and its meals. */
@@ -153,10 +172,21 @@ export interface ObjectType {
   views: ViewDef[]
   /** Where a click on one of its objects in a view or query opens it, unless the view says; unset: its page. */
   openIn?: ViewOpenIn
+  /** What each of its objects must have; agents and API writes are refused without it, the app warns. */
+  rules?: TypeRules
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
   /** Set when the type is in the trash; its objects are trashed with it. */
   deletedAt?: IsoDateTime
+}
+
+/** A type's rules (agents.ts typeRuleProblems): generic, set by whoever made the type. */
+export interface TypeRules {
+  /** Property ids that must have a value. */
+  required?: Id[]
+  cover?: boolean
+  /** At least one tag. */
+  tags?: boolean
 }
 
 export type PropertyDef =
@@ -354,6 +384,9 @@ export interface ObjectRecord {
    */
   createdBy?: Id
   updatedBy?: Id
+  /** The agent the write was made through (an MCP token's name, "Claude Code"), when it was one. */
+  createdVia?: string
+  updatedVia?: string
 }
 
 /**

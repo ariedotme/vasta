@@ -90,7 +90,7 @@ describe('MCP endpoint', () => {
   it('offers the tools, limited to the token user’s spaces', async () => {
     const { client, call } = await setup()
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['add_comment', 'capture', 'create_object', 'delete_food_entry', 'edit_board', 'get_board', 'get_daily_note', 'get_object', 'list_habits', 'list_inbox', 'list_spaces', 'list_templates', 'list_types', 'log_food', 'log_habit', 'nutrition_day', 'query', 'save_food', 'search', 'set_pinned', 'update_object', 'write_daily_note'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['add_comment', 'capture', 'create_object', 'delete_food_entry', 'edit_board', 'get_board', 'get_daily_note', 'get_object', 'list_habits', 'list_inbox', 'list_spaces', 'list_templates', 'list_types', 'log_food', 'log_habit', 'nutrition_day', 'query', 'recall', 'restore_object', 'save_food', 'search', 'set_agent_context', 'set_pinned', 'trash_object', 'update_object', 'write_daily_note'])
     expect(await call('list_spaces')).toEqual([{ id: 's', name: 'Notes', default: true }])
     const types = await call('list_types')
     expect(types.find((t: { name: string }) => t.name === 'Book').properties.find((p: { name: string }) => p.name === 'Genre')).toEqual({ id: 'genre', name: 'Genre', kind: 'select', multiple: false, options: ['Sci-fi'] })
@@ -385,5 +385,117 @@ describe('MCP endpoint', () => {
     await expect(call('update_object', { id: book.id, icon: 'bookz' })).rejects.toThrow(/unknown icon/)
     await expect(call('update_object', { id: book.id, icon: 'My books' })).rejects.toThrow(/is not an icon/)
     await expect(call('update_object', { id: book.id, color: 'mauve' })).rejects.toThrow(/color/)
+  })
+
+  it('sends each space’s instructions on connect, and recall gives them with the context objects', async () => {
+    const { store, connect, call, app } = await setup()
+    const space = store.getSpace('s')!
+    const about = await call('create_object', { type: 'Page', title: 'About me', markdown: 'I read sci-fi in Portuguese.' })
+    await call('create_object', { type: 'Book', title: 'Dune', markdown: 'Spice and sand.' })
+    // Instructions are set by owners over HTTP; marking context is open to members.
+    const owner = asUser(app, store, { username: 'owner', spaces: ['s'] })
+    const put = await owner.request('/api/spaces/s/agents', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ instructions: 'Save quotes as Echo.' }) })
+    expect(put.status).toBe(200)
+    expect(store.getSpace('s')!.agents).toEqual({ instructions: 'Save quotes as Echo.' })
+    await call('set_agent_context', { id: about.id, on: true })
+    expect(store.getSpace('s')!.agents).toEqual({ instructions: 'Save quotes as Echo.', context: [about.id] })
+    expect(store.getSpace('s')!.sidebar).toEqual(space.sidebar)
+
+    const fresh = await connect((asUser(app, store, { username: 'later', spaces: ['s'] })).secret)
+    expect(fresh.getInstructions()).toMatch(/## Notes \(the default space\)\nSave quotes as Echo\./)
+    const recall = await call('recall', { topic: 'spice' })
+    expect(recall).toMatchObject({ space: 'Notes', instructions: 'Save quotes as Echo.', context: [{ id: about.id, title: 'About me', text: 'I read sci-fi in Portuguese.' }], related: [{ title: 'Dune' }] })
+    expect((await call('get_object', { id: about.id })).agentContext).toBe(true)
+    // Settings sent again keep the context unless they name it.
+    await owner.request('/api/spaces/s/agents', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ instructions: '' }) })
+    expect(store.getSpace('s')!.agents).toEqual({ context: [about.id] })
+  })
+
+  it('records the agent behind each write, and queries find what agents wrote', async () => {
+    const { store, call, app } = await setup()
+    const made = await call('create_object', { type: 'Page', title: 'Agent notes' })
+    expect(made).toMatchObject({ createdBy: 'arie (arie)', createdVia: 'test', updatedVia: 'test' })
+    expect(store.objectActivity(made.id)).toEqual([expect.objectContaining({ kind: 'created', via: 'test' })])
+    // The user editing it in the app clears updatedVia; createdVia stays.
+    const arie = store.listUsers().find((u) => u.username === 'arie')!
+    const { runAs } = await import('../src/actor.ts')
+    runAs(arie.id, () => store.putObject({ ...store.getObject(made.id)!, title: 'My notes' }))
+    expect(store.getObject(made.id)).toMatchObject({ createdVia: 'test', updatedBy: arie.id })
+    expect(store.getObject(made.id)!.updatedVia).toBeUndefined()
+    const page = store.listTypes('s').find((t) => t.system === 'page')!
+    runAs(arie.id, () => store.putObject(newObject(page, { title: 'By hand' }, 'by-hand', AT)))
+    const byAgents = await call('query', { types: ['Page'], where: [{ field: 'createdVia', operator: 'is-not-empty' }] })
+    expect(byAgents.objects.map((o: { title: string }) => o.title)).toEqual(['My notes'])
+    void app
+  })
+
+  it('moves objects to the trash and back, never deleting them', async () => {
+    const { store, call } = await setup()
+    const made = await call('create_object', { type: 'Page', title: 'Echo' })
+    expect(await call('trash_object', { id: made.id })).toMatchObject({ trashed: true })
+    expect(store.getObject(made.id)!.deletedAt).toBe(AT)
+    await expect(call('get_object', { id: made.id })).rejects.toThrow('no object')
+    expect(store.objectActivity(made.id)[0]).toMatchObject({ kind: 'trashed', via: 'test' })
+    expect(await call('restore_object', { id: made.id })).toMatchObject({ title: 'Echo' })
+    expect(store.getObject(made.id)!.deletedAt).toBeUndefined()
+  })
+
+  it('enforces type rules on agent writes, with what is missing', async () => {
+    const { store, call, app } = await setup()
+    const book = store.listTypes('s').find((t) => t.name === 'Book')!
+    const owner = asUser(app, store, { username: 'owner', spaces: ['s'] })
+    await owner.request(`/api/types/${book.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...book, description: 'Always with a cover.', rules: { required: ['author', 'nope'], cover: true, tags: true } }) })
+    expect(store.getType(book.id)!.rules).toEqual({ required: ['author'], cover: true, tags: true })
+    const types = await call('list_types')
+    expect(types.find((t: { name: string }) => t.name === 'Book')).toMatchObject({ description: 'Always with a cover.', rules: { required: ['Author'], cover: true, tags: true } })
+    await expect(call('create_object', { type: 'Book', title: 'Dune' })).rejects.toThrow('Book rules: Author is required; a cover is required; at least one tag is required')
+    expect(store.listObjects(book.id)).toEqual([])
+    const dune = await call('create_object', { type: 'Book', title: 'Dune', properties: { Author: 'Frank Herbert' }, coverUrl: 'https://example.com/dune.jpg', tags: ['sci-fi'] })
+    expect(dune.typeDescription).toBe('Always with a cover.')
+    await expect(call('update_object', { id: dune.id, coverUrl: null })).rejects.toThrow('a cover is required')
+    // A token's HTTP write is held to them too; the app (a session) is not.
+    const bad = await owner.request('/api/objects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ typeId: book.id, title: 'Nope' }) })
+    expect(bad.status).toBe(422)
+  })
+
+  it('hides spaces and tagged objects from agents, and keeps read-only spaces unchanged', async () => {
+    const { store, call, app, connect } = await setup()
+    const owner = asUser(app, store, { username: 'owner', spaces: ['s', 'x'] })
+    const agent = await connect(owner.secret)
+    const callAs = async (name: string, args: Record<string, unknown> = {}) => {
+      const result = (await agent.callTool({ name, arguments: args })) as { content: { text: string }[]; isError?: boolean }
+      if (result.isError) throw new Error(result.content[0]!.text)
+      return JSON.parse(result.content[0]!.text)
+    }
+    const health = await call('create_object', { type: 'Page', title: 'Blood test', tags: ['health/exams'] })
+    const plain = await call('create_object', { type: 'Page', title: 'Blood moon', markdown: `See [@Blood test](vasta://o/${health.id})` })
+    const healthTag = store.listObjects(store.listTypes('s').find((t) => t.system === 'tag')!.id).find((t) => t.title === 'health')!
+    const settings = (body: unknown, space = 's') => owner.request(`/api/spaces/${space}/agents`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    expect((await settings({ hiddenTagIds: [healthTag.id] })).status).toBe(200)
+    // The tag hides what carries it, and its nested tags'.
+    expect((await call('search', { query: 'blood' })).map((o: { title: string }) => o.title)).toEqual(['Blood moon'])
+    await expect(call('get_object', { id: health.id })).rejects.toThrow('no object')
+    await expect(call('get_object', { id: healthTag.id })).rejects.toThrow('no object')
+    expect((await call('query', { types: ['Page'] })).objects.map((o: { title: string }) => o.title)).toEqual(['Blood moon'])
+    expect((await call('get_object', { id: plain.id })).backlinks).toBeUndefined()
+    await expect(call('update_object', { id: health.id, title: 'x' })).rejects.toThrow('no object')
+
+    // Read-only: reads work, writes are refused.
+    await settings({ readOnly: true })
+    expect(await call('list_spaces')).toEqual([{ id: 's', name: 'Notes', default: true, readOnly: true }])
+    await expect(call('create_object', { type: 'Page', title: 'No' })).rejects.toThrow('read-only for agents')
+    await expect(call('update_object', { id: plain.id, title: 'No' })).rejects.toThrow('read-only for agents')
+    await expect(call('trash_object', { id: plain.id })).rejects.toThrow('read-only for agents')
+    expect((await call('get_object', { id: plain.id })).title).toBe('Blood moon')
+
+    // A hidden space is gone for agents; the default falls to another space.
+    await settings({ hidden: true }, 's')
+    expect(await callAs('list_spaces')).toEqual([{ id: 'x', name: 'Not mine', default: true }])
+    await expect(callAs('get_object', { id: plain.id })).rejects.toThrow('no object')
+    await expect(callAs('search', { query: 'blood', space: 'Notes' })).rejects.toThrow('unknown space')
+    // Only owners change these.
+    const member = asUser(app, store, { username: 'member', spaces: [] })
+    store.putMember({ spaceId: 's', userId: member.user.id, role: 'editor', createdAt: AT })
+    expect((await member.request('/api/spaces/s/agents', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(403)
   })
 })

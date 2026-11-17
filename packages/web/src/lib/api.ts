@@ -2,7 +2,7 @@
 // it runs, and by the server over HTTP otherwise. What only the server can do (fetch a page, store
 // a file, delete for good, members, subscriptions) always goes to it, with the replica synced
 // before and after.
-import type { ActivityEntry, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
+import type { ActivityEntry, AgentSettings, ApiToken, FlowMetrics, Backlink, CalendarEntry, CalendarSource, ColorName, DocNode, FoodEntry, FoodLineAnswer, Icon, Id, InboxPreferences, Invite, LogFoodInput, NutritionSettings, ObjectRecord, ObjectSummary, ObjectType, QueryDef, Space, SpaceRole, TokenScope, User } from '@vasta/core'
 import { SYNC_PROTOCOL, dayIn, type CaptureDestinations } from '@vasta/core'
 import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
@@ -397,6 +397,10 @@ const http = {
   /** Days a space keeps activity (0: everything); only owners change it. */
   activitySettings: (spaceId: Id) => request<{ retentionDays: number }>('GET', `/api/spaces/${spaceId}/activity-settings`),
   setActivitySettings: (spaceId: Id, retentionDays: number) => request<{ retentionDays: number }>('PUT', `/api/spaces/${spaceId}/activity-settings`, { retentionDays }),
+  /** What agents see and do in a space, and its instructions for them; only owners change it. */
+  setAgentSettings: (spaceId: Id, settings: AgentSettings) => request<Space>('PUT', `/api/spaces/${spaceId}/agents`, settings),
+  /** Mark an object as agent context (what agents read first), or unmark it. */
+  setAgentContext: (spaceId: Id, id: Id, on: boolean) => request<Space>('POST', `/api/spaces/${spaceId}/agent-context`, { id, on }),
   /** Add a member by their exact username. */
   addMember: (spaceId: Id, username: string, role: SpaceRole) => request<Member[]>('POST', `/api/spaces/${spaceId}/members`, { username, role }),
   setMemberRole: (spaceId: Id, userId: Id, role: SpaceRole) => request<Member[]>('PUT', `/api/spaces/${spaceId}/members/${userId}`, { role }),

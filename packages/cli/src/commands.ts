@@ -34,6 +34,10 @@ export const USAGE = `vasta — your Vasta notes from the terminal (for you, scr
                                     replaces them all; --icon, --color (none removes either)
   vasta pin <id|link>              pin an object in the sidebar
   vasta unpin <id|link>            remove an object from all sidebar sections
+  vasta recall [topic…]             the space's instructions for agents, its agent context objects, and what
+                                    matches the topic
+  vasta trash <id|link>             move an object to the trash (restorable for 30 days)
+  vasta restore <id|link>           take an object out of the trash
   vasta board <id|link>             a whiteboard's elements and arrows; --canvas prints it as a JSON Canvas;
                                     --mermaid adds a Mermaid flowchart read from stdin (or given after the id);
                                     --import adds a JSON Canvas read from stdin; --flowchart prints it as a Mermaid
@@ -304,6 +308,24 @@ export async function runCommand(argv: string[], call: Call, stdin: () => Promis
     case 'unpin': {
       if (!rest[0]) throw new UsageError(`vasta ${command} <id|link>`)
       return out(await call('set_pinned', { id: idOf(rest[0]), pinned: command === 'pin' }), show)
+    }
+    case 'recall': {
+      type Recalled = { space: string; instructions?: string; context: { title: string; type: string; url: string }[]; related?: { title: string; type: string; url: string }[] }
+      const line = (o: { title: string; type: string; url: string }) => `  ${o.title || '(untitled)'} · ${o.type} · ${o.url}`
+      return out(await call('recall', { ...space, ...(rest.length ? { topic: rest.join(' ') } : {}), ...(values.limit ? { limit: Number(values.limit) } : {}) }), (r: Recalled) =>
+        [
+          `Space: ${r.space}`,
+          r.instructions ? `Instructions for agents:\n${r.instructions}` : 'No instructions for agents.',
+          r.context.length ? `Agent context:\n${r.context.map(line).join('\n')}` : 'No objects marked as agent context.',
+          ...(r.related ? [r.related.length ? `Related:\n${r.related.map(line).join('\n')}` : 'Nothing related found.'] : []),
+        ].join('\n\n')
+      )
+    }
+    case 'trash':
+    case 'restore': {
+      if (!rest[0]) throw new UsageError(`vasta ${command} <id|link>`)
+      if (command === 'trash') return out(await call('trash_object', { id: idOf(rest[0]) }), (r: { title: string }) => `Moved ${r.title || 'it'} to the trash (restore it within 30 days with vasta restore).`)
+      return out(await call('restore_object', { id: idOf(rest[0]) }), show)
     }
     case 'capture': {
       const captured = rest.length ? rest.join(' ') : (values.text ?? (await stdin()))

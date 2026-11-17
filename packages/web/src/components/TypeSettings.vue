@@ -48,6 +48,20 @@ function setOpenIn(pane: boolean) {
   else delete draft.value.openIn
 }
 
+// Rules (core agents.ts): what every object of the type must have. Agents and scripts are refused
+// without it; the app only warns on the object.
+const ruleProperties = computed(() => draft.value.properties.filter((p) => p.kind !== 'formula'))
+function setRules(change: (rules: NonNullable<ObjectType['rules']>) => void) {
+  const rules = { ...draft.value.rules }
+  change(rules)
+  if (!rules.required?.length) delete rules.required
+  if (!rules.cover) delete rules.cover
+  if (!rules.tags) delete rules.tags
+  if (Object.keys(rules).length) draft.value.rules = rules
+  else delete draft.value.rules
+}
+const setRequired = (id: string, on: boolean) => setRules((rules) => (rules.required = on ? [...(rules.required ?? []), id] : (rules.required ?? []).filter((r) => r !== id)))
+
 const richTextCount = computed(() => draft.value.properties.filter((p) => p.kind === 'rich-text').length)
 
 function move(index: number, delta: number) {
@@ -227,8 +241,9 @@ async function leave(path: string) {
             v-model="draft.description"
             rows="2"
             class="mt-1 w-full resize-none rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-line-strong"
-            placeholder="What objects of this type are for"
+            placeholder="What objects of this type are for, and how you want them written"
           />
+          <span class="mt-0.5 block">Agents read it too, and follow it when they write {{ (draft.pluralName || 'objects').toLowerCase() }}.</span>
         </label>
       </div>
     </section>
@@ -242,6 +257,25 @@ async function leave(path: string) {
         Open in side pane
       </label>
       <p class="mt-0.5 pl-6 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it next to the page. A view can choose otherwise.</p>
+    </section>
+
+    <section class="mt-4">
+      <div class="mb-1 text-xs text-ink-faint">Rules</div>
+      <p class="mb-2 text-xs text-ink-faint">What every {{ (draft.name || 'object').toLowerCase() }} must have. Agents and API scripts can't save one without it; here you see a warning instead.</p>
+      <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!!draft.rules?.cover" @change="setRules((r) => (r.cover = ($event.target as HTMLInputElement).checked))" />
+          A cover
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!!draft.rules?.tags" @change="setRules((r) => (r.tags = ($event.target as HTMLInputElement).checked))" />
+          At least one tag
+        </label>
+        <label v-for="def in ruleProperties" :key="def.id" class="flex items-center gap-2">
+          <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!!draft.rules?.required?.includes(def.id)" @change="setRequired(def.id, ($event.target as HTMLInputElement).checked)" />
+          {{ def.name }}
+        </label>
+      </div>
     </section>
 
     <TypeTemplates :type="type" @leave="leave" />

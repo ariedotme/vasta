@@ -17,7 +17,7 @@ import type { Bounds } from './store.ts'
 import { addDays, dayIn } from './time.ts'
 
 /** Fields every object has, usable in filters, sorting and grouping next to property ids. */
-export const BUILTIN_FIELDS = ['title', 'tags', 'collections', 'type', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'date', 'host'] as const
+export const BUILTIN_FIELDS = ['title', 'tags', 'collections', 'type', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'createdVia', 'updatedVia', 'date', 'host'] as const
 export type BuiltinField = (typeof BUILTIN_FIELDS)[number]
 
 /** How a field compares: the filter operators and value editor depend on it. */
@@ -123,6 +123,8 @@ export function fieldKind(field: string, def?: PropertyDef, types: Iterable<Obje
   switch (field) {
     case 'title':
     case 'host':
+    case 'createdVia':
+    case 'updatedVia':
       return 'text'
     case 'tags':
     case 'collections':
@@ -202,6 +204,10 @@ function readField(object: ObjectSummary, field: string, context: QueryContext):
     case 'createdBy':
     case 'updatedBy':
       return object[field] ? { kind: 'ids', value: [object[field]] } : EMPTY
+    case 'createdVia':
+    case 'updatedVia':
+      // The agent an object was written through ("Claude Code"); empty for what people wrote.
+      return object[field] ? { kind: 'text', value: object[field] } : EMPTY
     case 'date':
       return object.date ? dateValue(object.date.start, object.date.resolution, context.timeZone) : EMPTY
     case 'host':

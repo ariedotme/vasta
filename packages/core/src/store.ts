@@ -51,6 +51,7 @@ export function rowToSpace(row: Row): Space {
     sidebar: parse(row.sidebar) ?? [],
     ...(row.nutrition ? { nutrition: parse(row.nutrition) } : {}),
     ...(row.sprints ? { sprints: parse(row.sprints) } : {}),
+    ...(row.agents ? { agents: parse(row.agents) } : {}),
     createdAt: row.created_at as string,
   }
 }
@@ -68,6 +69,7 @@ function rowToType(row: Row): ObjectType {
     properties: parse(row.properties) ?? [],
     views: parse(row.views) ?? [],
     ...(row.open_in ? { openIn: row.open_in as ObjectType['openIn'] } : {}),
+    ...(row.rules ? { rules: parse(row.rules) } : {}),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     ...(row.deleted_at ? { deletedAt: row.deleted_at as string } : {}),
@@ -108,9 +110,19 @@ function rowToSummary(row: Row): ObjectSummary {
     ...(row.deleted_at ? { deletedAt: row.deleted_at as string } : {}),
     ...(row.created_by ? { createdBy: row.created_by as string } : {}),
     ...(row.updated_by ? { updatedBy: row.updated_by as string } : {}),
+    ...(row.created_via ? { createdVia: row.created_via as string } : {}),
+    ...(row.updated_via ? { updatedVia: row.updated_via as string } : {}),
     preview: (row.preview as string | null) ?? '',
   }
 }
+
+/** The authorship fields an object carries. */
+const pick = (object: ObjectRecord) => ({
+  ...(object.createdBy ? { createdBy: object.createdBy } : {}),
+  ...(object.updatedBy ? { updatedBy: object.updatedBy } : {}),
+  ...(object.createdVia ? { createdVia: object.createdVia } : {}),
+  ...(object.updatedVia ? { updatedVia: object.updatedVia } : {}),
+})
 
 function rowToActivity(row: Row): ActivityEntry {
   return {
@@ -119,6 +131,7 @@ function rowToActivity(row: Row): ActivityEntry {
     objectId: row.object_id as string,
     at: row.at as string,
     ...(row.actor ? { actor: row.actor as string } : {}),
+    ...(row.via ? { via: row.via as string } : {}),
     kind: row.kind as ActivityEntry['kind'],
     ...(row.field ? { field: row.field as string } : {}),
     ...(row.before != null ? { before: parse(row.before) } : {}),
@@ -145,7 +158,7 @@ function rowToCalendarSource(row: Row): CalendarSource {
 }
 
 const SUMMARY_COLUMNS = `o.id, o.space_id, o.type_id, o.title, o.description, o.icon, o.cover_url, o.color, o.parent_id, o.aliases, o.tag_ids,
-  o.collection_ids, o.props, o.date_start, o.date_end, o.date_res, o.date_rrule, o.date_tz, o.date_exceptions, o.query, o.media, o.template, o.created_at, o.updated_at, o.deleted_at, o.created_by, o.updated_by,
+  o.collection_ids, o.props, o.date_start, o.date_end, o.date_res, o.date_rrule, o.date_tz, o.date_exceptions, o.query, o.media, o.template, o.created_at, o.updated_at, o.deleted_at, o.created_by, o.updated_by, o.created_via, o.updated_via,
   substr(f.body, 1, 280) AS preview`
 const SUMMARY_FROM = 'objects o LEFT JOIN search_rows r ON r.object_id = o.id LEFT JOIN objects_fts f ON f.rowid = r.id'
 
@@ -510,11 +523,11 @@ export class Store {
       // An upsert, not INSERT OR REPLACE: replacing deletes the row, which would cascade to its members.
       this.db
         .prepare(
-          `INSERT INTO spaces (id, name, icon, sidebar, nutrition, sprints, created_at, rev, clock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO spaces (id, name, icon, sidebar, nutrition, sprints, agents, created_at, rev, clock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET name = excluded.name, icon = excluded.icon, sidebar = excluded.sidebar, nutrition = excluded.nutrition, sprints = excluded.sprints,
-             created_at = excluded.created_at, rev = excluded.rev, clock = excluded.clock`
+             agents = excluded.agents, created_at = excluded.created_at, rev = excluded.rev, clock = excluded.clock`
         )
-        .run(space.id, space.name, json(space.icon), json(space.sidebar), json(space.nutrition), json(space.sprints), space.createdAt, stamp.rev, stamp.clock)
+        .run(space.id, space.name, json(space.icon), json(space.sidebar), json(space.nutrition), json(space.sprints), json(space.agents), space.createdAt, stamp.rev, stamp.clock)
     })
   }
 
@@ -524,12 +537,12 @@ export class Store {
       const stamp = this.syncStamp('types', type.spaceId, this.syncRow('types', type.id), type, clock)
       this.db
         .prepare(
-          `INSERT OR REPLACE INTO types (id, space_id, system, name, plural_name, description, icon, color, properties, views, open_in, created_at, updated_at, deleted_at, rev, clock)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT OR REPLACE INTO types (id, space_id, system, name, plural_name, description, icon, color, properties, views, open_in, rules, created_at, updated_at, deleted_at, rev, clock)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           type.id, type.spaceId, type.system ?? null, type.name, type.pluralName, type.description ?? null,
-          json(type.icon), type.color ?? null, json(type.properties), json(type.views), type.openIn ?? null, type.createdAt, type.updatedAt,
+          json(type.icon), type.color ?? null, json(type.properties), json(type.views), type.openIn ?? null, json(type.rules), type.createdAt, type.updatedAt,
           type.deletedAt ?? null, stamp.rev, stamp.clock
         )
       this.db.prepare("DELETE FROM sync_tombstones WHERE kind = 'types' AND id = ?").run(type.id)
@@ -584,22 +597,32 @@ export class Store {
    */
   actor?: () => Id | undefined
 
+  /** The agent the actor's write comes through (an MCP token's name), recorded beside who made it. */
+  via?: () => string | undefined
+
   /**
    * Who made `object` and who changed it last, after a write over `before`: those stay as stored
    * unless the actor changed something (`textChanged`: its rich text). Writes nobody made keep them.
    */
   private withAuthors(object: ObjectRecord, before: ObjectRecord | undefined, textChanged: boolean): ObjectRecord {
-    const { createdBy: _c, updatedBy: _u, ...rest } = object
+    const { createdBy: _c, updatedBy: _u, createdVia: _cv, updatedVia: _uv, ...rest } = object
     const actor = this.actor?.()
     // A write nobody made (a replica applying the server's rows) keeps the authors it carries.
-    const createdBy = before && actor ? before.createdBy : (object.createdBy ?? before?.createdBy)
-    let updatedBy = before && actor ? before.updatedBy : (object.updatedBy ?? before?.updatedBy)
+    const kept = before && actor ? before : { ...before, ...pick(object) }
+    const createdBy = kept.createdBy
+    const createdVia = kept.createdVia
+    let updatedBy = kept.updatedBy
+    let updatedVia = kept.updatedVia
     if (actor) {
       const changed = !before || textChanged || canonicalJson(recordFields('objects', before)) !== canonicalJson(recordFields('objects', object))
-      if (changed) updatedBy = actor
-      if (!before) return { ...rest, createdBy: actor, updatedBy }
+      const via = this.via?.()
+      if (changed) {
+        updatedBy = actor
+        updatedVia = via
+      }
+      if (!before) return { ...rest, createdBy: actor, updatedBy, ...(via ? { createdVia: via, updatedVia: via } : {}) }
     }
-    return { ...rest, ...(createdBy ? { createdBy } : {}), ...(updatedBy ? { updatedBy } : {}) }
+    return { ...rest, ...(createdBy ? { createdBy } : {}), ...(updatedBy ? { updatedBy } : {}), ...(createdVia ? { createdVia } : {}), ...(updatedVia ? { updatedVia } : {}) }
   }
 
   /**
@@ -634,10 +657,11 @@ export class Store {
       return time ? new Date(Math.min(time, Date.parse(now))).toISOString() : now
     }
     const changes = activityChanges(before, after, this.getType(after.typeId), timeOf)
-    const insert = this.db.prepare('INSERT INTO activity (space_id, object_id, at, actor, kind, field, before, after) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    const via = this.via?.() ?? null
+    const insert = this.db.prepare('INSERT INTO activity (space_id, object_id, at, actor, via, kind, field, before, after) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
     for (const change of changes) {
-      if (change.kind === 'changed' && this.mergeActivity(after.id, actor, change)) continue
-      insert.run(after.spaceId, after.id, change.at, actor, change.kind, change.field ?? null, json(change.before), json(change.after))
+      if (change.kind === 'changed' && this.mergeActivity(after.id, actor, via, change)) continue
+      insert.run(after.spaceId, after.id, change.at, actor, via, change.kind, change.field ?? null, json(change.before), json(change.after))
     }
   }
 
@@ -646,11 +670,11 @@ export class Store {
    * (typing a title saves it several times): it keeps its first value and takes the new one, and
    * goes away when the value is back where it started. Whether it was folded.
    */
-  private mergeActivity(objectId: Id, actor: Id, change: { at: string; field?: string; before?: unknown; after?: unknown }): boolean {
+  private mergeActivity(objectId: Id, actor: Id, via: string | null, change: { at: string; field?: string; before?: unknown; after?: unknown }): boolean {
     const last = this.db
-      .prepare("SELECT id, at, actor, field, before FROM activity WHERE object_id = ? ORDER BY at DESC, id DESC LIMIT 1")
+      .prepare("SELECT id, at, actor, via, field, before FROM activity WHERE object_id = ? ORDER BY at DESC, id DESC LIMIT 1")
       .get(objectId) as Row | undefined
-    if (!last || last.actor !== actor || last.field !== change.field) return false
+    if (!last || last.actor !== actor || (last.via ?? null) !== via || last.field !== change.field) return false
     if (Date.parse(change.at) - Date.parse(last.at as string) > ACTIVITY_MERGE_MS || Date.parse(change.at) < Date.parse(last.at as string)) return false
     if (canonicalJson(parse(last.before) ?? null) === canonicalJson(change.after ?? null)) this.db.prepare('DELETE FROM activity WHERE id = ?').run(last.id as number)
     else this.db.prepare('UPDATE activity SET at = ?, after = ? WHERE id = ?').run(change.at, json(change.after), last.id as number)
@@ -720,8 +744,8 @@ export class Store {
       .prepare(
         `INSERT OR REPLACE INTO objects (id, space_id, type_id, title, description, icon, cover_url, color, parent_id, aliases, tag_ids,
            collection_ids, props, content, date_start, date_end, date_res, date_rrule, date_tz, date_exceptions, query, media, template, created_at, updated_at, deleted_at,
-           created_by, updated_by, rev, clock)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           created_by, updated_by, created_via, updated_via, rev, clock)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         object.id, object.spaceId, object.typeId, object.title, object.description ?? null, json(object.icon),
@@ -730,7 +754,7 @@ export class Store {
         object.date?.rrule ?? null, object.date?.timeZone ?? null,
         object.date?.exceptions && Object.keys(object.date.exceptions).length ? JSON.stringify(object.date.exceptions) : null,
         json(object.query), json(object.media), json(object.template), object.createdAt, object.updatedAt, object.deletedAt ?? null,
-        object.createdBy ?? null, object.updatedBy ?? null, stamp.rev, stamp.clock
+        object.createdBy ?? null, object.updatedBy ?? null, object.createdVia ?? null, object.updatedVia ?? null, stamp.rev, stamp.clock
       )
     this.db.prepare("DELETE FROM sync_tombstones WHERE kind = 'objects' AND id = ?").run(object.id)
   }

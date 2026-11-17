@@ -6,6 +6,10 @@ import { randomUUID } from 'node:crypto'
 import type { ColorName, DateValue, Doc, Filter, FilterOperator, FormulaValue, Icon, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, PropertyValue, QueryDef, User } from '@vasta/core'
 import {
   BODY_PROPERTY_ID,
+  SOURCE_PROPERTY_ID,
+  hiddenByTags,
+  hiddenTagSet,
+  typeRuleProblems,
   COLOR_NAMES,
   childTag,
   isColorName,
@@ -253,18 +257,57 @@ export class AgentTools {
     this.options.feed.emit({ kind: 'object', id: object.id, spaceId: object.spaceId, typeId: object.typeId, updatedAt: object.updatedAt })
   }
 
-  /** A space of the user by id or name; their capture space when not given. */
-  private space(query?: string) {
-    const spaces = this.options.accounts.spacesOf(this.options.user)
+  /** The user's spaces agents may see (a space's owners can hide it from them). */
+  private visibleSpaces() {
+    return this.options.accounts.spacesOf(this.options.user).filter((s) => !s.agents?.hidden)
+  }
+
+  /**
+   * A space of the user by id or name; their capture space when not given. `write`: the change
+   * about to be made there is refused when the space is read-only for agents.
+   */
+  private space(query?: string, write = false) {
+    const spaces = this.visibleSpaces()
+    let space: (typeof spaces)[number] | undefined
     if (!query) {
       const id = this.options.accounts.captureSpaceId(this.options.user)
-      const space = spaces.find((s) => s.id === id) ?? spaces[0]
+      space = spaces.find((s) => s.id === id) ?? spaces[0]
       if (!space) throw new AgentError('you have no spaces')
-      return space
+    } else {
+      space = spaces.find((s) => s.id === query) ?? spaces.find((s) => fold(s.name) === fold(query))
+      if (!space) throw new AgentError(`unknown space "${query}" (list_spaces shows yours)`)
     }
-    const space = spaces.find((s) => s.id === query) ?? spaces.find((s) => fold(s.name) === fold(query))
-    if (!space) throw new AgentError(`unknown space "${query}" (list_spaces shows yours)`)
+    if (write) this.writable(space.id)
     return space
+  }
+
+  /** Refuse a change in a space that is read-only for agents. */
+  private writable(spaceId: Id) {
+    const space = this.store.getSpace(spaceId)
+    if (space?.agents?.readOnly) throw new AgentError(`the space "${space.name}" is read-only for agents (the user set it so in Settings › Agents); nothing was changed`)
+  }
+
+  private readonly hiddenTagCache = new Map<Id, Set<Id>>()
+  /** A space's tags hidden from agents, with the ones nested under them. */
+  private hiddenTags(spaceId: Id): Set<Id> {
+    let hidden = this.hiddenTagCache.get(spaceId)
+    if (!hidden) {
+      const settings = this.store.getSpace(spaceId)?.agents
+      hidden = settings?.hiddenTagIds?.length ? hiddenTagSet(settings, this.store.listObjects(builtinTypeId(spaceId, 'tag'))) : new Set()
+      this.hiddenTagCache.set(spaceId, hidden)
+    }
+    return hidden
+  }
+
+  /** Whether agents may see an object: not in a hidden space, without a hidden tag. */
+  private visible(object: Pick<ObjectSummary, 'id' | 'spaceId' | 'tagIds'>) {
+    const space = this.store.getSpace(object.spaceId)
+    return !!space && !space.agents?.hidden && !hiddenByTags(object, this.hiddenTags(object.spaceId))
+  }
+
+  private visibleId = (id: Id) => {
+    const summary = this.store.getObjectSummaries([id])[0]
+    return !!summary && this.visible(summary)
   }
 
   private type(spaceId: Id, query: string): ObjectType {
@@ -273,10 +316,11 @@ export class AgentTools {
     return type
   }
 
-  /** An object the user can reach (not in the trash). */
-  private object(id: Id): ObjectRecord {
+  /** An object the user can reach (not in the trash) and agents may see; `write`: and change. */
+  private object(id: Id, write = false): ObjectRecord {
     const object = this.store.getObject(id)
-    if (!object || object.deletedAt || !this.options.accounts.canUse(this.options.user.id, object.spaceId)) throw new AgentError(`no object ${id}`)
+    if (!object || object.deletedAt || !this.options.accounts.canUse(this.options.user.id, object.spaceId) || !this.visible(object)) throw new AgentError(`no object ${id}`)
+    if (write) this.writable(object.spaceId)
     return object
   }
 
@@ -310,7 +354,26 @@ export class AgentTools {
 
   spaces() {
     const captureSpace = this.options.accounts.captureSpaceId(this.options.user)
-    return this.options.accounts.spacesOf(this.options.user).map((s) => ({ id: s.id, name: s.name, ...(s.id === captureSpace ? { default: true } : {}) }))
+    const spaces = this.visibleSpaces()
+    const fallback = spaces.some((s) => s.id === captureSpace) ? captureSpace : spaces[0]?.id
+    return spaces.map((s) => ({
+      id: s.id,
+      name: s.name,
+      ...(s.id === fallback ? { default: true } : {}),
+      ...(s.agents?.readOnly ? { readOnly: true } : {}),
+      ...(s.agents?.instructions ? { instructions: s.agents.instructions } : {}),
+    }))
+  }
+
+  /**
+   * The user's instructions for agents, from each space they can see (Settings › Agents), as the
+   * MCP sends them when an agent connects; empty when no space has any.
+   */
+  instructions(): string {
+    const spaces = this.spaces().filter((s) => s.instructions)
+    if (!spaces.length) return ''
+    const parts = spaces.map((s) => `## ${s.name}${s.default ? ' (the default space)' : ''}${s.readOnly ? ' (read-only for agents)' : ''}\n${s.instructions}`)
+    return `The user's own instructions for agents, by space. Follow them:\n\n${parts.join('\n\n')}`
   }
 
   types(spaceQuery?: string) {
@@ -327,9 +390,25 @@ export class AgentTools {
         plural: t.pluralName,
         ...(t.system ? { builtIn: t.system } : {}),
         ...(t.description ? { description: t.description } : {}),
+        ...(this.rulesOf(t) ? { rules: this.rulesOf(t) } : {}),
         objects: counts[t.id] ?? 0,
         properties: t.properties.map((p) => describeProperty(p, typeNames, t, all)),
       }))
+  }
+
+  /** A type's rules in words (what every object of it must have), if it has any. */
+  private rulesOf(type: ObjectType) {
+    const rules = type.rules
+    if (!rules) return undefined
+    const required = (rules.required ?? []).map((id) => type.properties.find((p) => p.id === id)?.name).filter((name): name is string => !!name)
+    const out = { ...(required.length ? { required } : {}), ...(rules.cover ? { cover: true } : {}), ...(rules.tags ? { tags: true } : {}) }
+    return Object.keys(out).length ? out : undefined
+  }
+
+  /** Refuse a write that leaves an object without what its type's rules ask for. */
+  private followRules(type: ObjectType, object: ObjectRecord) {
+    const problems = typeRuleProblems(type, object)
+    if (problems.length) throw new AgentError(`${type.name} rules: ${problems.join('; ')}. Nothing was saved: give them and try again (list_types shows each type's rules).`)
   }
 
   private summary(object: ObjectSummary) {
@@ -347,7 +426,10 @@ export class AgentTools {
 
   search(text: string, options: { space?: string; limit?: number } = {}) {
     const space = this.space(options.space)
-    return this.store.search(space.id, text, Math.min(Math.max(options.limit ?? 20, 1), 100)).map((o) => this.summary(o))
+    const limit = Math.min(Math.max(options.limit ?? 20, 1), 100)
+    // Some matches may be hidden from agents: ask for more, then keep what they may see.
+    const extra = this.hiddenTags(space.id).size ? limit * 3 : limit
+    return this.store.search(space.id, text, extra).filter((o) => this.visible(o)).slice(0, limit).map((o) => this.summary(o))
   }
 
   /** An object with its properties in words and its text as Markdown. */
@@ -418,7 +500,7 @@ export class AgentTools {
   }
 
   setPinned(id: Id, pinned: boolean) {
-    const object = this.object(id)
+    const object = this.object(id, true)
     const space = this.store.getSpace(object.spaceId)!
     const alreadyPinned = space.sidebar.some((section) => section.items.includes(id))
     if (pinned && !alreadyPinned) {
@@ -438,7 +520,7 @@ export class AgentTools {
   getObject(id: Id) {
     const object = this.object(id)
     const type = this.store.getType(object.typeId)
-    const titles = (ids: Id[]) => ids.map((i) => ({ id: i, title: this.titleOf(i) ?? '' }))
+    const titles = (ids: Id[]) => ids.filter(this.visibleId).map((i) => ({ id: i, title: this.titleOf(i) ?? '' }))
     const properties: Record<string, unknown> = {}
     const text: Record<string, string> = {}
     const types = new Map(this.store.listTypes(object.spaceId).map((t) => [t.id, t]))
@@ -459,18 +541,22 @@ export class AgentTools {
     }
     const backlinks = this.store
       .backlinks(object.id)
-      .filter((b) => this.options.accounts.canUse(this.options.user.id, b.object.spaceId) && !b.object.deletedAt)
+      .filter((b) => this.options.accounts.canUse(this.options.user.id, b.object.spaceId) && !b.object.deletedAt && this.visible(b.object))
       .map((b) => {
         // A relation pointing here, under the name its type gives this side ("Wrote").
         const def = b.kind === 'relation' ? this.store.getType(b.object.typeId)?.properties.find((p) => p.id === b.via) : undefined
         const as = def?.kind === 'relation' ? def.reverseName?.trim() : undefined
         return { id: b.object.id, title: b.object.title, kind: b.kind, ...(as ? { as } : {}) }
       })
+    const space = this.store.getSpace(object.spaceId)
+    const missing = type ? typeRuleProblems(type, object) : []
     return {
       id: object.id,
       title: object.title,
       type: type?.name ?? '',
-      space: this.store.getSpace(object.spaceId)?.name ?? '',
+      // The user's own description of the type: how they want its objects written.
+      ...(type?.description ? { typeDescription: type.description } : {}),
+      space: space?.name ?? '',
       url: this.url(object.id),
       coverUrl: object.coverUrl ?? null,
       icon: object.icon?.value ?? null,
@@ -480,6 +566,10 @@ export class AgentTools {
       updatedAt: object.updatedAt,
       ...(object.createdBy ? { createdBy: this.personName(object.createdBy) } : {}),
       ...(object.updatedBy ? { updatedBy: this.personName(object.updatedBy) } : {}),
+      ...(object.createdVia ? { createdVia: object.createdVia } : {}),
+      ...(object.updatedVia ? { updatedVia: object.updatedVia } : {}),
+      ...(space?.agents?.context?.includes(object.id) ? { agentContext: true } : {}),
+      ...(missing.length ? { missing } : {}),
       ...(object.date ? { date: dateText(object.date) } : {}),
       ...(object.tagIds.length ? { tags: object.tagIds.map((id) => tagPath(id, (at) => this.store.getObjectSummaries([at])[0])) } : {}),
       ...(object.media?.url ? { link: object.media.url } : {}),
@@ -506,8 +596,8 @@ export class AgentTools {
   private boardObject(spaceId: Id, query: string): Id {
     const link = /\/o\/([^/?#\s]+)/.exec(query)?.[1]
     const byId = this.store.getObject(link ? decodeURIComponent(link) : query)
-    if (byId && !byId.deletedAt && byId.spaceId === spaceId) return byId.id
-    const found = this.store.search(spaceId, query, 20).find((o) => fold(o.title) === fold(query))
+    if (byId && !byId.deletedAt && byId.spaceId === spaceId && this.visible(byId)) return byId.id
+    const found = this.store.search(spaceId, query, 20).find((o) => fold(o.title) === fold(query) && this.visible(o))
     if (!found) throw new AgentError(`no object "${query}" in the board's space (search finds objects; use its id)`)
     return found.id
   }
@@ -536,7 +626,8 @@ export class AgentTools {
     switch (element.kind) {
       case 'card': {
         const fields = element.fields?.length ? { fields: element.fields.map((f) => this.propertyName(element.objectId, f) ?? f) } : {}
-        return { ...base, object: { id: element.objectId, title: this.titleOf(element.objectId) ?? '(deleted)' }, ...(element.view ? { view: element.view } : {}), ...fields }
+        const title = this.titleOf(element.objectId) === undefined ? '(deleted)' : this.visibleId(element.objectId) ? this.titleOf(element.objectId)! : '(hidden)'
+        return { ...base, object: { id: element.objectId, title }, ...(element.view ? { view: element.view } : {}), ...fields }
       }
       case 'text':
         return { ...base, text: element.text }
@@ -597,6 +688,7 @@ export class AgentTools {
     layout?: Direction | 'grid'
   }) {
     const object = this.whiteboard(input.id)
+    this.writable(object.spaceId)
     const doc = this.store.loadText(object.id) ?? new Y.Doc()
     const existing = readBoard(doc)
     const known = new Map(existing.map((e) => [e.id, e]))
@@ -739,14 +831,17 @@ export class AgentTools {
     const day = options.day ?? this.captures.today()
     if (!isValidDay(day)) throw new AgentError('day must be YYYY-MM-DD')
     const note = this.store.findObjectOnDay(builtinTypeId(space.id, 'daily-note'), day)
-    return note ? { day, ...this.getObject(note.id) } : { day, id: null }
+    return note && this.visible(note) ? { day, ...this.getObject(note.id) } : { day, id: null }
   }
 
   writeDailyNote(markdown: string, spaceQuery?: string, day = this.captures.today()) {
     if (!isValidDay(day)) throw new AgentError('day must be YYYY-MM-DD')
     const blocks = this.doc(markdown).content
     if (!blocks.some((block) => block.type !== 'paragraph' || block.content?.length)) throw new AgentError('daily note text is required')
-    const note = writeDailyText(this.store, this.space(spaceQuery).id, day, this.options.now(), blocks)
+    const space = this.space(spaceQuery, true)
+    const existing = this.store.findObjectOnDay(builtinTypeId(space.id, 'daily-note'), day)
+    if (existing && !this.visible(existing)) throw new AgentError(`the daily note of ${day} is hidden from agents`)
+    const note = writeDailyText(this.store, space.id, day, this.options.now(), blocks)
     this.changed(note)
     return { day, ...this.getObject(note.id) }
   }
@@ -782,7 +877,8 @@ export class AgentTools {
     }
     const rows = querySpace(this.store, space.id, { query, today: this.captures.today(), timeZone: this.captures.timeZone, me: this.options.user.id, people: this.store.people(space.id) }, this.options.now())
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 500)
-    return { total: rows.length, objects: rows.slice(0, limit).map((o) => this.summary(o)) }
+    const seen = rows.filter((o) => this.visible(o))
+    return { total: seen.length, objects: seen.slice(0, limit).map((o) => this.summary(o)) }
   }
 
   /** Usernames or names (or "me") as the user ids a person filter compares; unknown ones stay as given. */
@@ -805,7 +901,7 @@ export class AgentTools {
       done: item.done,
       dailyNoteId: item.noteId,
       text: docToMarkdown({ type: 'doc', content: item.content }, { titleOf: this.titleOf }),
-      objects: item.objectIds.map((id) => ({ id, title: this.titleOf(id) ?? '' })),
+      objects: item.objectIds.filter(this.visibleId).map((id) => ({ id, title: this.titleOf(id) ?? '' })),
     }))
   }
 
@@ -861,7 +957,7 @@ export class AgentTools {
    * Markdown win over the template's (the Markdown goes after its text).
    */
   createObject(input: { type: string; coverUrl?: string; title?: string; space?: string; properties?: Record<string, unknown>; markdown?: string; template?: string; answers?: Record<string, string>; tags?: string[]; icon?: string | null; color?: string | null }) {
-    const space = this.space(input.space)
+    const space = this.space(input.space, true)
     const type = this.type(space.id, input.type)
     if (type.system === 'daily-note') throw new AgentError('daily notes are written by write_daily_note')
     const { props: given, related } = this.props(type, input.properties ?? {})
@@ -894,6 +990,7 @@ export class AgentTools {
     this.looks(object, input)
     const tags: ObjectRecord[] = []
     if (input.tags?.length) object.tagIds = this.retag(object, input.tags, 'add', tags)
+    this.followRules(type, object)
     const stored = this.store.transaction(() => {
       for (const other of [...tags, ...related]) this.store.putObject(other)
       return this.store.putObject(object)
@@ -909,7 +1006,7 @@ export class AgentTools {
    */
   /** A comment on an object, as the user (@username mentions a member). */
   addComment(input: { id: Id; text: string }) {
-    const existing = this.object(input.id)
+    const existing = this.object(input.id, true)
     const object: ObjectRecord = { ...existing, props: { ...existing.props }, updatedAt: this.options.now() }
     try {
       addComment(object, this.options.user.id, input.text, this.options.now())
@@ -935,7 +1032,7 @@ export class AgentTools {
     icon?: string | null
     color?: string | null
   }) {
-    const existing = this.object(input.id)
+    const existing = this.object(input.id, true)
     const type = this.store.getType(existing.typeId)
     if (!type) throw new AgentError(`no type for ${input.id}`)
     const object: ObjectRecord = { ...existing, props: { ...existing.props }, content: { ...existing.content } }
@@ -969,6 +1066,7 @@ export class AgentTools {
       }
     }
     object.updatedAt = this.options.now()
+    this.followRules(type, object)
     related = [...tags, ...related]
     const stored = this.store.transaction(() => {
       for (const other of related) this.store.putObject(other)
@@ -1031,7 +1129,7 @@ export class AgentTools {
     const type = this.store.getType(builtinTypeId(space.id, 'habit'))
     if (!type) return []
     const recent = Math.min(Math.max(options.recent ?? 7, 0), 60)
-    const habits = habitsWithFood(this.store, space.id, this.store.listObjects(type.id), this.captures.today())
+    const habits = habitsWithFood(this.store, space.id, this.store.listObjects(type.id).filter((h) => this.visible(h)), this.captures.today())
     return habits.sort((a, b) => a.title.localeCompare(b.title)).map((habit) => this.habitInfo(habit, day, recent))
   }
 
@@ -1040,7 +1138,7 @@ export class AgentTools {
    * amount (set it, or `add` to what is there).
    */
   logHabit(input: { habit: string; space?: string; day?: string; done?: boolean; amount?: number; add?: number }) {
-    const space = this.space(input.space)
+    const space = this.space(input.space, true)
     const day = input.day ?? this.captures.today()
     if (!isValidDay(day)) throw new AgentError('day must be YYYY-MM-DD')
     const habit = this.habit(input.habit, space.id)
@@ -1083,8 +1181,8 @@ export class AgentTools {
     }
   }
 
-  private nutritionSpace(query?: string) {
-    const space = this.space(query)
+  private nutritionSpace(query?: string, write = false) {
+    const space = this.space(query, write)
     if (!isNutritionOn(space)) throw new AgentError(`${space.name} does not track food (Settings › Food tracking in the app turns it on)`)
     return space
   }
@@ -1102,7 +1200,7 @@ export class AgentTools {
    * or one food or recipe with an amount. Today by default.
    */
   logFood(input: { text?: string; food?: string; amount?: string; meal?: string; day?: string; space?: string }) {
-    const space = this.nutritionSpace(input.space)
+    const space = this.nutritionSpace(input.space, true)
     const today = this.captures.today()
     const day = input.day ?? today
     if (!isValidDay(day)) throw new AgentError('day must be YYYY-MM-DD')
@@ -1162,7 +1260,7 @@ export class AgentTools {
 
   /** Take an entry off a day (its id from nutrition_day). */
   deleteFoodEntry(input: { day?: string; entry: string; space?: string }) {
-    const space = this.nutritionSpace(input.space)
+    const space = this.nutritionSpace(input.space, true)
     const day = input.day ?? this.captures.today()
     const note = this.store.findObjectOnDay(builtinTypeId(space.id, 'daily-note'), day)
     const stored = note ? deleteFoodEntry(this.store, note.id, input.entry, this.options.now()) : undefined
@@ -1176,7 +1274,7 @@ export class AgentTools {
    * default; kept per 100 g), its brand and portions. Portions given replace the ones it had.
    */
   saveFood(input: { food: string; space?: string; per?: number; nutrients?: Partial<Nutrients>; brand?: string; portions?: FoodPortion[] }) {
-    const space = this.nutritionSpace(input.space)
+    const space = this.nutritionSpace(input.space, true)
     const type = this.store.getType(builtinTypeId(space.id, 'food'))!
     let existing: ObjectSummary | undefined
     try {
@@ -1208,11 +1306,95 @@ export class AgentTools {
 
   /** A note into today's daily note, like the quick capture (links in it are saved as weblinks). */
   async capture(input: { text: string; space?: string }) {
-    const space = this.space(input.space)
+    const space = this.space(input.space, true)
     const result = await this.captures.note({ text: input.text, spaceId: space.id, channel: 'agent' })
     return { dailyNoteId: result.dailyNote!.id, url: this.url(result.dailyNote!.id), objects: result.objects.map((o) => ({ id: o.id, title: o.title })) }
   }
+
+  // Agent context, recall and the trash ---------------------------------------------------------
+
+  /** Mark an object as agent context (what recall returns first), or unmark it. */
+  setAgentContext(id: Id, on: boolean) {
+    const object = this.object(id, true)
+    const space = this.store.getSpace(object.spaceId)!
+    const context = space.agents?.context ?? []
+    if (on !== context.includes(id)) {
+      const next = on ? [...context, id] : context.filter((item) => item !== id)
+      const { context: _old, ...rest } = space.agents ?? {}
+      const agents = { ...rest, ...(next.length ? { context: next } : {}) }
+      const { agents: _agents, ...base } = space
+      this.store.putSpace(Object.keys(agents).length ? { ...base, agents } : base)
+      this.options.feed.emit({ kind: 'space', id: space.id, spaceId: space.id })
+    }
+    return this.getObject(id)
+  }
+
+  /**
+   * What an agent needs to get its bearings in a space, in one call: the user's instructions for
+   * agents, the objects marked as agent context (with their text), and with a topic, the objects
+   * that match it.
+   */
+  recall(input: { topic?: string; space?: string; limit?: number } = {}) {
+    const space = this.space(input.space)
+    const settings = this.store.getSpace(space.id)?.agents
+    const context = (settings?.context ?? [])
+      .map((id) => this.store.getObject(id))
+      .filter((o): o is ObjectRecord => !!o && !o.deletedAt && o.spaceId === space.id && this.visible(o))
+      .map((o) => {
+        const full = this.getObject(o.id)
+        const text = Object.entries(full.text).map(([name, markdown]) => (Object.keys(full.text).length > 1 ? `### ${name}\n${markdown}` : markdown)).join('\n\n')
+        return {
+          id: full.id,
+          title: full.title,
+          type: full.type,
+          url: full.url,
+          ...(full.properties ? { properties: full.properties } : {}),
+          ...(full.tags ? { tags: full.tags } : {}),
+          ...(text ? { text: text.length > RECALL_TEXT ? `${text.slice(0, RECALL_TEXT)}… (get_object has the rest)` : text } : {}),
+        }
+      })
+    const topic = input.topic?.trim()
+    const related = topic ? this.search(topic, { space: space.id, limit: input.limit ?? 10 }).filter((o) => !context.some((c) => c.id === o.id)) : undefined
+    return {
+      space: space.name,
+      ...(settings?.readOnly ? { readOnly: true } : {}),
+      ...(settings?.instructions ? { instructions: settings.instructions } : {}),
+      context,
+      ...(related ? { related } : {}),
+    }
+  }
+
+  /** Move an object to the trash, where the user can restore it for TRASH_DAYS; never a deletion for good. */
+  trash(id: Id) {
+    const object = this.object(id, true)
+    const at = this.options.now()
+    this.store.deleteObject(object.id, at)
+    const trashed = this.store.getObject(object.id)
+    if (trashed) this.changed(trashed)
+    // A quote's source lost its highlight.
+    const source = trashed?.props[SOURCE_PROPERTY_ID]
+    if (source?.kind === 'relation') for (const sourceId of source.value) {
+      const record = this.store.getObject(sourceId)
+      if (record) this.changed(record)
+    }
+    return { id: object.id, title: object.title, trashed: true, note: 'In the trash: the user can restore it there for 30 days (or restore_object can).' }
+  }
+
+  /** Take an object out of the trash. */
+  restore(id: Id) {
+    const object = this.store.getObject(id)
+    if (!object || !object.deletedAt || !this.options.accounts.canUse(this.options.user.id, object.spaceId) || !this.visible(object)) throw new AgentError(`no object ${id} in the trash`)
+    this.writable(object.spaceId)
+    const result = this.store.restoreObject(id, this.options.now())
+    if (!result) throw new AgentError(`no object ${id} in the trash`)
+    if (result.type) this.options.feed.emit({ kind: 'type', id: result.type.id, spaceId: result.type.spaceId })
+    this.changed(result.object)
+    return this.getObject(id)
+  }
 }
+
+/** How much of each context object's text recall returns. */
+const RECALL_TEXT = 4000
 
 export interface AgentFilter {
   field: string
@@ -1220,7 +1402,7 @@ export interface AgentFilter {
   value?: string | number | boolean | string[]
 }
 
-const BUILT_IN_FIELDS = ['title', 'tags', 'collections', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'date', 'type']
+const BUILT_IN_FIELDS = ['title', 'tags', 'collections', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy', 'createdVia', 'updatedVia', 'date', 'type']
 
 /** A query field path from names: a property of `types`, or "Relation.Field" through a relation. */
 function resolveField(name: string, types: ObjectType[], all: ObjectType[]): { path: string; def?: PropertyDef } {

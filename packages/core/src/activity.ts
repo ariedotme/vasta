@@ -15,6 +15,8 @@ export interface ActivityEntry {
   at: IsoDateTime
   /** The user who did it. */
   actor?: Id
+  /** The agent the user did it through (an MCP token's name), when it was one. */
+  via?: string
   kind: ActivityKind
   /** For `changed`: "title", "typeId", "date", or a property id. */
   field?: string
@@ -24,7 +26,7 @@ export interface ActivityEntry {
 }
 
 /** An entry about to be recorded: no id yet, and `at` is when the field was written. */
-export type ActivityChange = Omit<ActivityEntry, 'id' | 'spaceId' | 'objectId' | 'actor'>
+export type ActivityChange = Omit<ActivityEntry, 'id' | 'spaceId' | 'objectId' | 'actor' | 'via'>
 
 /** How long a space keeps activity unless it says otherwise. */
 export const DEFAULT_ACTIVITY_RETENTION_DAYS = 90
