@@ -12,3 +12,12 @@
 - Ideas, bugs and tech debt for later are issues on the [roadmap project](https://github.com/users/ariedotme/projects/1): `gh issue create
   -R ariedotme/vasta`, then `gh project item-add 1 --owner ariedotme --url <issue url>` and set its
   Status, Priority and Area (`gh project item-edit`). Not in a `TODO.md`.
+
+## Dependencies (pnpm)
+
+Package manager is **pnpm** (`packageManager: pnpm@10.14.0`) — never `npm install` or `yarn`. `pnpm-lock.yaml` is the source of truth.
+
+- Install: `pnpm install`. **`node_modules` is disposable**: delete it freely, the global store refills it in seconds without touching the network. Never commit it, never treat it as state.
+- Add / remove / upgrade: `pnpm add <pkg>`, `pnpm remove <pkg>`, `pnpm up`. Scripts: `pnpm run <script>`.
+- pnpm stores one copy of each package version (`~/Library/pnpm/store`) and hard-links it into each project, so several checkouts do not multiply disk usage. `pnpm store prune` occasionally clears entries nothing references.
+- If installs start behaving oddly, `rm -rf node_modules && pnpm install` before anything more drastic.
