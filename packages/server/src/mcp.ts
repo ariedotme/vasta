@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { z } from 'zod'
 import { COLOR_NAMES } from '@vasta/core'
-import { AgentError, type AgentReminderInput, type AgentTools } from './agent.ts'
+import { AGENT_PROPERTY_KINDS, AgentError, type AgentReminderInput, type AgentTools } from './agent.ts'
 import { NAG_CHANNELS } from './insistent.ts'
 import { ICON_HELP } from './icons.ts'
 
@@ -28,7 +28,7 @@ or the one named by "template", with its questions answered by "answers". Whiteb
 "Whiteboard") hold cards of objects, text, sticky notes, shapes, frames and arrows: read one with
 get_board, change it with edit_board (a Mermaid flowchart becomes a board there too).
 Types may have a description the user wrote (list_types; typeDescription in get_object): follow it
-when writing objects of that type. Properties may be required, and types may ask for a cover or a tag
+when writing objects of that type. create_type and update_type make and change types (ask first). Properties may be required, and types may ask for a cover or a tag
 (every object must have them): a write without them is refused with what is missing. Start a session with
 recall: the user's instructions for agents, the objects they marked as agent context, and what
 matches a topic. Objects are never deleted for good: trash_object moves one to the trash, where
@@ -121,6 +121,47 @@ export function mcpServer(tools: AgentTools, version: string): McpServer {
     'list_types',
     { title: 'List types', description: "The types of objects in a space: the user's description of each (how they want its objects written), whether its objects need a cover or a tag (rules), its properties (required ones marked, select options) and how many objects each has.", inputSchema: { space }, annotations: READ },
     ({ space }) => run(() => tools.types(space))
+  )
+
+  const propertyInput = z.object({
+    name: z.string(),
+    kind: z.enum(AGENT_PROPERTY_KINDS),
+    description: z.string().optional(),
+    required: z.boolean().optional().describe('Every object of the type must have a value (agent writes without one are refused)'),
+    options: z.array(z.string()).optional().describe('A select’s options, by label'),
+    multiple: z.boolean().optional().describe('A select, person or relation holding several'),
+    to: z.array(z.string()).optional().describe('A relation’s target types by name; any type when omitted'),
+    withTime: z.boolean().optional().describe('A date with a time of day'),
+  })
+  const typeShape = {
+    plural: z.string().optional(),
+    description: z.string().nullable().optional().describe('How the user wants its objects written: agents follow it (list_types, typeDescription in get_object). Write it the user’s way, in their language'),
+    icon,
+    color,
+    rules: z.object({ cover: z.boolean().optional(), tags: z.boolean().optional() }).optional().describe('Every object needs a cover, at least one tag'),
+    properties: z.array(propertyInput).optional().describe('Properties to add (a Notes text field comes with every type)'),
+  }
+
+  server.registerTool(
+    'create_type',
+    {
+      title: 'Create a type',
+      description: 'A new type of object in a space (like Capacities): its name, a description of how its objects are written, properties and rules. Ask the user before making one, and check list_types for one that already fits.',
+      inputSchema: { name: z.string(), space, ...typeShape },
+      annotations: WRITE,
+    },
+    (input) => run(() => tools.createType(strip(input) as never))
+  )
+
+  server.registerTool(
+    'update_type',
+    {
+      title: 'Change a type',
+      description: 'Change a type: its name, plural, description, icon, color, rules, and add properties (properties are never removed or changed here: that is the user’s, in the type’s settings). Ask the user first.',
+      inputSchema: { type: z.string().describe('The type, by name or id'), space, name: z.string().optional(), ...typeShape },
+      annotations: WRITE,
+    },
+    (input) => run(() => tools.updateType(strip(input) as never))
   )
 
   server.registerTool(

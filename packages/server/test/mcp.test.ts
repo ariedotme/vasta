@@ -90,7 +90,7 @@ describe('MCP endpoint', () => {
   it('offers the tools, limited to the token user’s spaces', async () => {
     const { client, call } = await setup()
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['add_comment', 'capture', 'create_object', 'delete_food_entry', 'edit_board', 'get_board', 'get_daily_note', 'get_object', 'list_habits', 'list_inbox', 'list_spaces', 'list_templates', 'list_types', 'log_food', 'log_habit', 'nutrition_day', 'query', 'recall', 'restore_object', 'save_food', 'search', 'set_agent_context', 'set_pinned', 'trash_object', 'update_object', 'write_daily_note'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['add_comment', 'capture', 'create_object', 'create_type', 'delete_food_entry', 'edit_board', 'get_board', 'get_daily_note', 'get_object', 'list_habits', 'list_inbox', 'list_spaces', 'list_templates', 'list_types', 'log_food', 'log_habit', 'nutrition_day', 'query', 'recall', 'restore_object', 'save_food', 'search', 'set_agent_context', 'set_pinned', 'trash_object', 'update_object', 'update_type', 'write_daily_note'])
     expect(await call('list_spaces')).toEqual([{ id: 's', name: 'Notes', default: true }])
     const types = await call('list_types')
     expect(types.find((t: { name: string }) => t.name === 'Book').properties.find((p: { name: string }) => p.name === 'Genre')).toEqual({ id: 'genre', name: 'Genre', kind: 'select', multiple: false, options: ['Sci-fi'] })
@@ -438,6 +438,36 @@ describe('MCP endpoint', () => {
     expect(store.objectActivity(made.id)[0]).toMatchObject({ kind: 'trashed', via: 'test' })
     expect(await call('restore_object', { id: made.id })).toMatchObject({ title: 'Echo' })
     expect(store.getObject(made.id)!.deletedAt).toBeUndefined()
+  })
+
+  it('creates and changes types: description, properties, rules', async () => {
+    const { call } = await setup()
+    const made = await call('create_type', {
+      name: 'Craft',
+      plural: 'Crafts',
+      description: 'Practical how-tos.',
+      icon: 'ph:magic-wand',
+      color: 'purple',
+      rules: { tags: true },
+      properties: [
+        { name: 'Time', kind: 'select', options: ['1 min', '5 min', '1 min'] },
+        { name: 'Source', kind: 'url' },
+        { name: 'Inspired by', kind: 'relation', to: ['Book'], multiple: true },
+        { name: 'Steps', kind: 'text', required: true },
+      ],
+    })
+    expect(made).toMatchObject({ name: 'Craft', plural: 'Crafts', description: 'Practical how-tos.', rules: { tags: true }, objects: 0 })
+    expect(made.properties.map((p: { name: string; kind: string }) => `${p.name}:${p.kind}`)).toEqual(['Notes:rich-text', 'Time:select', 'Source:url', 'Inspired by:relation', 'Steps:text'])
+    expect(made.properties.find((p: { name: string }) => p.name === 'Time').options).toEqual(['1 min', '5 min'])
+    expect(made.properties.find((p: { name: string }) => p.name === 'Steps').required).toBe(true)
+    await expect(call('create_object', { type: 'Craft', title: 'No tag', properties: { Steps: 'x' } })).rejects.toThrow('Craft rules')
+    expect(await call('create_object', { type: 'Craft', title: 'Glamour', tags: ['spell'], properties: { Steps: 'x', Time: '1 min' } })).toMatchObject({ properties: { Time: '1 min' } })
+    await expect(call('create_type', { name: 'craft' })).rejects.toThrow('already has a type')
+    await expect(call('create_type', { name: 'X', properties: [{ name: 'Y', kind: 'relation', to: ['Nope'] }] })).rejects.toThrow('unknown type')
+    const changed = await call('update_type', { type: 'Craft', description: 'How-tos.', rules: { tags: false, cover: true }, properties: [{ name: 'Level', kind: 'number' }] })
+    expect(changed).toMatchObject({ description: 'How-tos.', rules: { cover: true } })
+    expect(changed.properties.map((p: { name: string }) => p.name)).toContain('Level')
+    await expect(call('update_type', { type: 'Craft', properties: [{ name: 'level', kind: 'text' }] })).rejects.toThrow('already has a property')
   })
 
   it('enforces type rules on agent writes, with what is missing', async () => {

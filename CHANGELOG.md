@@ -8,6 +8,9 @@ GitHub release page.
 
 ### Added
 
+- **Agents can make types.** Through the MCP, Claude Code or Codex can create a type (its
+  description, properties and rules) and change one: rename it, describe it, set its rules and add
+  properties. Removing or changing properties stays yours.
 - **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
   view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
   of Tasks, in the sidebar; its row opens the type on that view.

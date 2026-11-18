@@ -43,6 +43,8 @@ Code and Codex).
 | `list_spaces` | The user's spaces; the default (capture) space is marked, and those read-only for agents; each with its instructions for agents |
 | `add_comment` | A comment on an object, as the user (@username mentions a member) |
 | `list_types` | A space's types with the user's description of each, its rules, its properties, select options and object counts |
+| `create_type` | A new type in a space: `name`, `plural`, `description` (how its objects are written, which agents follow), `icon`, `color`, `rules` (`cover`, `tags`) and `properties` to add, each described in words: `name`, `kind` (`text`, `rich-text`, `number`, `checkbox`, `url`, `date`, `select` with `options`, `person`, `relation` with `to`, type names), `required`, `multiple`, `withTime`. A name the space already has is refused |
+| `update_type` | Change a type (`type` by name or id): name, plural, description, icon, color, rules, and properties to add. Properties are never removed or changed by agents: that is the user's, in the type's settings |
 | `search` | Full-text search over titles and text |
 | `get_object` | An object: type (and `typeDescription`), properties in words, tags (nested ones as paths), text fields as Markdown, backlinks (`id`, `title`, `kind`), `coverUrl`, `icon`, `color`, `pinned`, `agentContext`, who wrote it and through which agent, and what its type's rules say it lacks (`missing`) |
 | `get_daily_note` | A day's note (today by default, in the user's time zone), or `id: null` when it does not exist |
