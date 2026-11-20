@@ -1,9 +1,10 @@
 // Query helpers for the UI: field menus, operator labels, grouping, and moving an object between
 // groups (kanban drops). Filtering and sorting themselves live in @vasta/core (query.ts).
 import type { FilterOperator, Id, ObjectRecord, ObjectSummary, ObjectType, PropertyDef, QueryDef } from '@vasta/core'
-import { fieldKind, type FieldKind, type QueryContext } from '@vasta/core'
+import { DAY_BUCKETS, dayBucket, dayIn, fieldKind, type DayBucket, type FieldKind, type QueryContext } from '@vasta/core'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
+import { startOfWeek } from './calendar.ts'
 import { meId, personName, sharedSpace } from './people.ts'
 import { current as currentSprint } from './sprints.ts'
 import { primeFromObject, summaryOf, typesById, workspace } from './state.ts'
@@ -123,8 +124,36 @@ export interface Group {
 
 export const NO_VALUE = '__none'
 
+const BUCKET_LABELS: Record<DayBucket, string> = { past: 'Earlier', today: 'Today', tomorrow: 'Tomorrow', 'this-week': 'This week', 'next-week': 'Next week', later: 'Later' }
+
+function groupByDay(objects: ObjectSummary[], field: string, keepEmpty: boolean): Group[] {
+  const today = dayKey()
+  const weekStart = startOfWeek(today)
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const buckets = new Map<string, ObjectSummary[]>()
+  for (const object of objects) {
+    const value = object.props[field]
+    // Day-resolution dates are stored at midnight UTC, so their day is the UTC date.
+    const day = value?.kind === 'date' ? (value.value.resolution === 'day' ? value.value.start.slice(0, 10) : dayIn(value.value.start, timeZone)) : undefined
+    const key = day ? dayBucket(day, today, weekStart) : NO_VALUE
+    buckets.set(key, [...(buckets.get(key) ?? []), object])
+  }
+  const result: Group[] = DAY_BUCKETS.map((key) => ({
+    key,
+    label: BUCKET_LABELS[key],
+    ...(key === 'today' ? { color: 'sky' } : {}),
+    items: buckets.get(key) ?? [],
+  }))
+  result.push({ key: NO_VALUE, label: 'No date', items: buckets.get(NO_VALUE) ?? [] })
+  return result.filter((g) => keepEmpty || g.items.length)
+}
+
+/** Whether `field` is a date property of one of these types. */
+export const isDateField = (field: string, types: ObjectType[]) => types.some((t) => t.properties.some((p) => p.id === field && p.kind === 'date'))
+
 export function groupObjects(objects: ObjectSummary[], field: string, types: ObjectType[], keepEmpty = false): Group[] {
   if (!field) return [{ key: 'all', label: '', items: objects }]
+  if (isDateField(field, types)) return groupByDay(objects, field, keepEmpty)
   const def = types.flatMap((t) => t.properties).find((p) => p.id === field)
   const buckets = new Map<string, ObjectSummary[]>()
   const keysOf = (o: ObjectSummary): string[] => {
@@ -160,11 +189,12 @@ export function groupObjects(objects: ObjectSummary[], field: string, types: Obj
 
 /** Fields a collection can be grouped by. */
 export function groupOptions(typeIds: Id[]): FieldOption[] {
-  return fieldOptions(typeIds).filter((f) => ['tags', 'type', 'createdBy', 'updatedBy'].includes(f.field) || f.def?.kind === 'select' || f.def?.kind === 'relation' || f.def?.kind === 'person')
+  return fieldOptions(typeIds).filter((f) => ['tags', 'type', 'createdBy', 'updatedBy'].includes(f.field) || f.def?.kind === 'select' || f.def?.kind === 'relation' || f.def?.kind === 'person' || f.def?.kind === 'date')
 }
 
-/** Whether objects can be moved between the groups of `field` (its value is not computed or recorded). */
-export const movableField = (field: string) => !!field && field !== 'type' && field !== 'createdBy' && field !== 'updatedBy'
+/** Whether objects can be moved between the groups of `field` (not a recorded value or a date's place in time). */
+export const movableField = (field: string, types: ObjectType[] = []) =>
+  !!field && field !== 'type' && field !== 'createdBy' && field !== 'updatedBy' && !isDateField(field, types)
 
 /**
  * Give `object` the value of a group of `field` (a board column or lane): a tag among the groups'

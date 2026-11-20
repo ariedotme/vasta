@@ -6,6 +6,12 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Group by a date.** Views and queries can group by a date field: Earlier, Today, Tomorrow,
+  This week, Next week, Later and No date. Boards show the date groups as columns or swimlanes,
+  without moving or adding cards between them.
+
 ## 0.11.0 (2026-11-17)
 
 ### Added

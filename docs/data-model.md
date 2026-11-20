@@ -205,7 +205,11 @@ The engine is [`packages/core/src/query.ts`](../packages/core/src/query.ts): `ru
 sorts object summaries, and is used by the server (`POST /api/spaces/:id/query`) and by type views.
 
 A query selects objects by type (`typeIds`, empty = all), filters them with nested and/or groups,
-and sorts and groups the result. Filter values are literals or variables resolved when rendering:
+and sorts and groups the result. Date properties group by their start: Earlier, Today, Tomorrow,
+This week, Next week, Later and No date (`dayBucket` in `core/time.ts`). Day-resolution dates keep
+their stored day; timed values use the viewer's time zone, and weeks start as the locale says.
+Date groups on a board are read-only for moving and adding cards. Filter values are literals or
+variables resolved when rendering:
 `parent` is the object the query is embedded in (optionally one of its fields), `today` is the
 current date (shifted by `offsetDays`). Dates compare by day in the viewer's time zone; a daily
 note's `createdAt` resolves to its date, as Capacities dates daily notes that way. Filters without

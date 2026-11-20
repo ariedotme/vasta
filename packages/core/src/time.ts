@@ -30,6 +30,20 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86_400_000)
 }
 
+export type DayBucket = 'past' | 'today' | 'tomorrow' | 'this-week' | 'next-week' | 'later'
+
+export const DAY_BUCKETS: DayBucket[] = ['past', 'today', 'tomorrow', 'this-week', 'next-week', 'later']
+
+/** The bucket of a day; `weekStart` is the first day of today's week (it depends on the locale). */
+export function dayBucket(day: string, today: string, weekStart: string): DayBucket {
+  const ahead = daysBetween(today, day)
+  if (ahead < 0) return 'past'
+  if (ahead === 0) return 'today'
+  if (ahead === 1) return 'tomorrow'
+  const week = Math.floor(daysBetween(weekStart, day) / 7)
+  return week === 0 ? 'this-week' : week === 1 ? 'next-week' : 'later'
+}
+
 export function isValidDay(day: string): boolean {
   if (!DAY_PATTERN.test(day)) return false
   const date = new Date(`${day}T00:00:00.000Z`)
