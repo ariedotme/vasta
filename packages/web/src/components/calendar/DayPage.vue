@@ -7,6 +7,7 @@ import { ENTRY_DRAGGING } from '../../lib/calendar-drag.ts'
 import { formatClock, isToday, isoWeek } from '../../lib/calendar.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { systemType, typesById } from '../../lib/state.ts'
+import { pageWidthClass } from '../../lib/page-width.ts'
 import { templatesOf } from '../../lib/templates.ts'
 import ObjectPage from '../../views/ObjectPage.vue'
 import AppIcon from '../AppIcon.vue'
@@ -31,7 +32,12 @@ const props = defineProps<{
 const emit = defineEmits<{ details: [entry: CalendarEntry, element: HTMLElement]; create: [element: HTMLElement]; 'start-note': [text?: string] }>()
 
 const draft = ref('')
-watch(() => [props.day, props.noteId], () => { draft.value = '' })
+/** The daily note is built with columns, which need room. */
+const noteColumns = ref(false)
+watch(() => [props.day, props.noteId], () => {
+  draft.value = ''
+  noteColumns.value = false
+}, { flush: 'sync' })
 /** The Daily note type has a default template: the note starts from it, not from what is typed here. */
 const hasTemplate = computed(() => {
   const type = systemType('daily-note')
@@ -51,7 +57,7 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-6 pb-32 pt-8 md:px-10 md:pt-12">
+  <div class="mx-auto px-6 pb-32 pt-8 md:px-10 md:pt-12" :class="pageWidthClass(noteColumns)">
     <div class="flex items-center gap-2 text-sm font-medium">
       <span class="text-accent first-letter:uppercase">{{ weekday }}</span>
       <span v-if="isToday(day)" class="rounded-md bg-accent/10 px-1.5 py-0.5 text-xs text-accent">Today</span>
@@ -90,7 +96,7 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
           Open <AppIcon fallback="ph:arrow-up-right" :size="12" />
         </ObjectLink>
       </div>
-      <ObjectPage v-if="noteId" :id="noteId" :key="noteId" variant="embedded" backlinks-title="References to this day" />
+      <ObjectPage v-if="noteId" :id="noteId" :key="noteId" variant="embedded" backlinks-title="References to this day" @columns="noteColumns = $event" />
       <button v-else-if="hasTemplate" class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink" :disabled="starting" @click="emit('start-note')">
         <AppIcon fallback="ph:plus" /> {{ starting ? 'Starting…' : 'Start the daily note' }}
       </button>
