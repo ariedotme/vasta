@@ -1,15 +1,16 @@
 <script setup lang="ts">
-// Opens the first pinned item, like a start page; falls back to a short welcome.
+// Opens the first pinned item that still opens, like a start page; falls back to a short welcome.
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { openToday, sidebarItemPath } from '../lib/actions.ts'
-import { ui, workspace } from '../lib/state.ts'
+import { typesById, ui, workspace } from '../lib/state.ts'
+import { firstOpenItem } from '../lib/view-pins.ts'
 import AppIcon from '../components/AppIcon.vue'
 
 const router = useRouter()
 
 onMounted(() => {
-  const first = workspace.space?.sidebar[0]?.items[0]
+  const first = firstOpenItem(typesById.value, workspace.space?.sidebar[0]?.items ?? [])
   if (first) void router.replace(sidebarItemPath(first))
 })
 </script>

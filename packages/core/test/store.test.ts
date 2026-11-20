@@ -159,6 +159,22 @@ describe.each(backends)('shared store on %s', (_name, open) => {
     store.close()
   })
 
+  it('unpins a deleted type with the views of it pinned in the sidebar', () => {
+    const store = setUp()
+    const page = builtinTypeId('s', 'page')
+    store.putType({ ...store.getType(page)!, id: 'recipes', name: 'Recipe', pluralName: 'Recipes', system: undefined })
+    store.putSpace({
+      ...store.getSpace('s')!,
+      sidebar: [
+        { id: 'pinned', name: 'Pinned', items: ['recipes?view=today', page, 'recipes', `${page}?view=all`] },
+        { id: 'more', name: 'More', items: ['recipes?view=week'] },
+      ],
+    })
+    store.deleteType('recipes', later)
+    expect(store.getSpace('s')!.sidebar.map((section) => section.items)).toEqual([[page, `${page}?view=all`], []])
+    store.close()
+  })
+
   it('keeps where a type\'s objects open, and clears it', () => {
     const store = setUp()
     const task = store.getType(builtinTypeId('s', 'task'))!

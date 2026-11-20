@@ -2,7 +2,9 @@
 // that view even from another view of Tasks, only it is the raised row, picking another view drops
 // the link, deleting the view takes the row away, a view's tab drags into a section, and Tasks
 // itself pinned shows in its section too. A type reopens on the view last picked, not on one opened
-// by default.
+// by default. Deleting a type takes the pins of its views too (Undo brings them back) and Home opens
+// something that exists, also past a pin left behind; a link to a deleted view, followed with the
+// type's page open, opens its first view.
 //   node viewpin.mjs [chromium|webkit] [base]
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -41,6 +43,7 @@ async function until(check, what, timeout = 10000) {
 const headers = { 'x-requested-with': 'vasta' }
 const get = async (url) => (await page.request.get(`${base}${url}`)).json()
 const post = async (url, data) => (await page.request.post(`${base}${url}`, { headers, data })).json()
+const put = async (url, data) => (await page.request.put(`${base}${url}`, { headers, data })).json()
 
 await page.goto(base)
 await page.fill('#login-username', 'tester')
@@ -132,6 +135,55 @@ await page.reload()
 await until(async () => (await page.locator('main [role=button].font-medium', { hasText: 'Later' }).count()) > 0, 'reopens on Later')
 await page.locator('main [role=button]', { hasText: firstView.name }).first().click()
 await until(async () => (await remembered()) === firstView.id, 'picked view remembered')
+
+step('a link to a deleted view, followed with the type page open, opens the first view')
+await page.locator('main [role=button]', { hasText: 'Later' }).first().click()
+await until(async () => (await page.locator('main [role=button].font-medium', { hasText: 'Later' }).count()) > 0, 'Later open')
+const follow = (to) => page.evaluate((to) => { history.pushState({}, '', to); dispatchEvent(new PopStateEvent('popstate')) }, to)
+await follow(`/t/${tasks.id}?view=gone`)
+await until(async () => (await page.locator('main [role=button].font-medium', { hasText: firstView.name }).count()) > 0, 'first view open, not All')
+await until(async () => !new URL(page.url()).searchParams.get('view'), 'dead view link dropped')
+if ((await remembered()) === 'gone') throw new Error('the deleted view was remembered')
+await follow(`/t/${tasks.id}?view=${encodeURIComponent(firstView.id)}`)
+await page.locator('main [role=button]', { hasText: 'Later' }).first().click()
+await follow(`/t/${tasks.id}?view=gone`)
+await until(async () => (await page.locator('main [role=button].font-medium', { hasText: firstView.name }).count()) > 0, 'first view open again')
+
+step('deleting a type takes the pins of its views, and Home opens something that exists')
+const book = await post('/api/types', { spaceId: space.id, name: 'Livro', pluralName: 'Livros' })
+const bookItem = `${book.id}?view=${encodeURIComponent(`${book.id}:all`)}`
+const pinned = (await sidebar())[0]
+await put(`/api/spaces/${space.id}`, { sidebar: [{ ...pinned, items: [bookItem, ...pinned.items] }] })
+await page.goto(base)
+await until(() => page.locator(`nav a[href^="/t/${book.id}"]`).count(), 'its view pinned')
+await follow('/')
+await until(async () => new URL(page.url()).pathname === `/t/${book.id}`, 'Home opens the pinned view of the type')
+await page.locator('button[title="More"]').click()
+await page.getByRole('button', { name: /Delete type/ }).click()
+await page.locator('form button[type=submit]', { hasText: 'Delete type' }).click()
+await until(async () => !(await sidebar()).some((s) => s.items.some((i) => i.startsWith(book.id))), 'its pins removed')
+await until(async () => (await page.locator(`nav a[href^="/t/${book.id}"]`).count()) === 0, 'its row gone')
+const next = (await sidebar())[0].items[0].split('?view=')[0]
+await until(async () => new URL(page.url()).pathname === `/t/${next}`, 'Home opens the next pinned item')
+await until(async () => (await page.locator('main h1').count()) > 0, 'a page, not a blank one')
+await page.getByRole('button', { name: 'Undo' }).click()
+await until(async () => (await sidebar())[0].items[0] === bookItem, 'Undo pins the view again')
+await until(() => page.locator(`nav a[href^="/t/${book.id}"]`).count(), 'its row back')
+
+step('Home skips a pin whose type is gone, as another client may have left it')
+await page.goto(`${base}/t/${book.id}`)
+await page.locator('button[title="More"]').click()
+await page.getByRole('button', { name: /Delete type/ }).click()
+await page.locator('form button[type=submit]', { hasText: 'Delete type' }).click()
+await until(async () => !(await sidebar()).some((s) => s.items.some((i) => i.startsWith(book.id))), 'pins removed again')
+const left = (await sidebar())[0]
+await put(`/api/spaces/${space.id}`, { sidebar: [{ ...left, name: `Pinned ${tag}`, items: [bookItem, ...left.items] }] })
+await page.goto(base)
+await until(() => page.locator('nav', { hasText: `Pinned ${tag}` }).count(), 'the pin with its section synced')
+await follow('/')
+await until(async () => new URL(page.url()).pathname === `/t/${next}`, 'Home passes the stale pin')
+await until(async () => (await page.locator('main h1').count()) > 0, 'a page, not a blank one')
+if (await page.locator(`nav a[href^="/t/${book.id}"]`).count()) throw new Error('a stale pin shows in the sidebar')
 
 if (problems.length) throw new Error(problems.join('\n'))
 console.log('ok')

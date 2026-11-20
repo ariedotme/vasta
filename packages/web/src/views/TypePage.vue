@@ -2,7 +2,7 @@
 import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
+import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, ObjectType, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { RANK_PROPERTY_ID, matchesFilter, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -14,7 +14,7 @@ import HabitBoard from '../components/HabitBoard.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
-import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar, viewItem } from '../lib/actions.ts'
+import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
@@ -27,6 +27,7 @@ import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
 import { copyObjectLink, openObject } from '../lib/open.ts'
+import { METRICS_VIEW, resolveView, viewItem } from '../lib/view-pins.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -67,7 +68,6 @@ const FIXED_VIEWS: Partial<Record<string, { id: string; label: string; icon: str
 }
 const fixedView = computed(() => FIXED_VIEWS[type.value?.system ?? ''])
 // A type with a status (tasks) also has its flow metrics, after its views.
-const METRICS_VIEW = '__metrics'
 const hasMetrics = computed(() => !!statusProperty(type.value))
 const metricsActive = computed(() => hasMetrics.value && activeViewId.value === METRICS_VIEW)
 const fixedActive = computed(() => metricsActive.value || (!!fixedView.value && activeViewId.value === fixedView.value.id))
@@ -93,21 +93,27 @@ watch(activeViewId, (id) => {
   if (route.query.view && route.query.view !== id) void router.replace({ query: { ...route.query, view: undefined } })
 })
 
-// A pinned view opens its view, also when this type's page is already open.
+// A pinned view opens its view, also when this type's page is already open. A link to a view that
+// is gone opens the first one, and goes.
 const queryView = () => (typeof route.query.view === 'string' ? route.query.view : '')
+function openLinkedView(t: ObjectType, id: string) {
+  const open = resolveView(t, id, FIXED_VIEWS[t.system ?? '']?.id)
+  if (open === id) return pickView(id)
+  activeViewId.value = open
+  void router.replace({ query: { ...route.query, view: undefined } })
+}
 watch(queryView, (id) => {
-  if (id) pickView(id)
+  if (id && type.value) openLinkedView(type.value, id)
 })
 
 watch(type, (t) => {
   if (!t) return
   const fixed = FIXED_VIEWS[t.system ?? '']
   if (!activeViewId.value) {
-    if (queryView()) pickView(queryView())
+    if (queryView()) openLinkedView(t, queryView())
     else activeViewId.value = lastView() || fixed?.id || ''
   }
-  const metrics = activeViewId.value === METRICS_VIEW && !!statusProperty(t)
-  if (activeViewId.value !== fixed?.id && !metrics && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
+  activeViewId.value = resolveView(t, activeViewId.value, fixed?.id)
 }, { immediate: true })
 
 const view = computed<ViewDef>(() => type.value?.views.find((v) => v.id === activeViewId.value) ?? { id: 'default', name: 'All', layout: 'list' })

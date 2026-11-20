@@ -12,16 +12,15 @@ import {
   moveSection,
   newSectionFlow,
   newTypeFlow,
-  parseViewItem,
   pinMenu,
   placeInSection,
   placeSection,
   removeFromSection,
   renameSectionFlow,
   setSectionIcon,
-  viewItem,
 } from '../lib/actions.ts'
 import { displayTitle } from '../lib/format.ts'
+import { parseViewItem, pinnedView as pinnedViewOf, viewItem } from '../lib/view-pins.ts'
 import { api } from '../lib/api.ts'
 import { openContextMenu, openMenuAt, promptDialog, type MenuItem } from '../lib/overlays.ts'
 import { logOut, session } from '../lib/session.ts'
@@ -94,12 +93,7 @@ function isActive(to: string) {
   return route.path === path && (route.query.view ?? undefined) === (view === undefined ? undefined : decodeURIComponent(view))
 }
 
-function pinnedView(item: string) {
-  const parsed = parseViewItem(item)
-  const type = parsed && typesById.value.get(parsed.typeId)
-  const view = type?.views.find((v) => v.id === parsed!.viewId)
-  return type && view ? { type, view } : null
-}
+const pinnedView = (item: string) => pinnedViewOf(typesById.value, item)
 
 // ---------------------------------------------------------------------------
 // Right-click menus
