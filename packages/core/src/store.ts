@@ -559,7 +559,8 @@ export class Store {
       for (const template of this.listTemplates(type.spaceId)) if (template.typeId === id) this.deleteObject(template.id, at)
       this.putType({ ...type, deletedAt: at, updatedAt: at })
       const space = this.getSpace(type.spaceId)
-      if (space) this.putSpace({ ...space, sidebar: space.sidebar.map((s) => ({ ...s, items: s.items.filter((i) => i !== id) })) })
+      // Unpinned with the views of it pinned there (the items `<typeId>?view=<viewId>`).
+      if (space) this.putSpace({ ...space, sidebar: space.sidebar.map((s) => ({ ...s, items: s.items.filter((i) => i !== id && !i.startsWith(`${id}?view=`)) })) })
     })
     return true
   }
