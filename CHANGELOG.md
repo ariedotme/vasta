@@ -6,6 +6,12 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Page width, on this device.** Settings › Appearance offers **Standard**, **Wide** or **Full
+  width** for object pages and daily notes. Standard keeps text at its usual width and gives
+  notes built with columns more room; side panes and whiteboards keep their own layout.
+
 ## 0.11.0 (2026-11-17)
 
 ### Added
