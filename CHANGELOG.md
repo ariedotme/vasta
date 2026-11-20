@@ -6,6 +6,13 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Choose the fields on a list's rows.** In a list view or query (also one embedded in a page),
+  the new **Fields** menu picks what follows each title, a due date, a status or any property, puts
+  them in order by dragging, and can wrap long titles. Only fields with a value show; without a
+  choice, rows keep their tags and last-edited time.
+
 ## 0.11.0 (2026-11-17)
 
 ### Added

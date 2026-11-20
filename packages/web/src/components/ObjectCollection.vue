@@ -2,10 +2,10 @@
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
+import type { BoardSettings, Id, ListSettings, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
-import { columnWidth, MIN_COLUMN_WIDTH, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
+import { columnWidth, listFields, MIN_COLUMN_WIDTH, rowFields, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
@@ -30,6 +30,8 @@ const props = defineProps<{
   typeIds: Id[]
   /** Columns of the table layout, as saved on the view or query. */
   table?: TableSettings
+  /** Fields after the title in the list layout. */
+  list?: ListSettings
   /** The board layout's settings, and whether its cards keep their manual order (no sort chosen). */
   board?: BoardSettings
   manual?: boolean
@@ -53,6 +55,8 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
 // view's choice, else the type's of the object linked, else its page.
 provide(VIEW_OPENS, (id) => props.openIn ?? typesById.value.get(summaryOf(id)?.typeId ?? '')?.openIn)
 const groups = computed<Group[]>(() => groupObjects(props.objects, props.groupField, types.value))
+const fields = computed(() => listFields(props.list, props.typeIds))
+const fieldsOf = (object: ObjectSummary) => rowFields(object, typeOf(object), fields.value)
 
 // A group shows its first STEP objects, and more as the page scrolls to its end: drawing a type's
 // thousands of objects at once takes seconds. Sorting, grouping and filters still see them all.
@@ -196,14 +200,36 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
 
       <!-- List -->
       <div v-if="layout === 'list'" class="divide-y divide-line/70">
-        <ObjectLink v-for="object in shown(group)" :key="object.id" :id="object.id" class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
-          <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
-          <span class="min-w-0 flex-1 truncate font-medium">{{ displayTitle(object, typeOf(object)) }}</span>
-          <span class="hidden gap-1 md:flex" @click.prevent>
-            <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
-          </span>
-          <span class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
-        </ObjectLink>
+        <template v-for="object in shown(group)" :key="object.id">
+          <div v-if="list?.fields" data-list-row class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 hover:bg-hover @lg:flex-nowrap" @contextmenu="emit('menu', $event, object)">
+            <ObjectLink :id="object.id" class="flex min-w-0 flex-1 basis-full items-center gap-3 @lg:basis-0">
+              <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
+              <span class="min-w-0 flex-1 font-medium" :class="list.wrap ? 'break-words' : 'truncate'">{{ displayTitle(object, typeOf(object)) }}</span>
+            </ObjectLink>
+            <div v-if="fieldsOf(object).length" class="flex w-full min-w-0 items-center gap-3 overflow-hidden pl-9 @lg:w-auto @lg:max-w-[60%] @lg:pl-0" @click.stop @mousedown.stop>
+              <span v-for="field in fieldsOf(object)" :key="field.field" :data-row-field="field.field" class="inline-flex min-w-0 items-center gap-1 overflow-hidden text-xs text-ink-soft [&_span]:min-w-0 [&_span]:truncate" :title="field.label">
+                <AppIcon :fallback="field.icon" :size="12" class="shrink-0 text-ink-faint" />
+                <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1 overflow-hidden">
+                  <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
+                </span>
+                <span v-else-if="field.field === 'type'" class="truncate">{{ typeOf(object)?.name }}</span>
+                <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="truncate">{{ formatRelative(object[field.field]) }}</span>
+                <span v-else-if="field.field === 'createdVia' || field.field === 'updatedVia'" class="truncate">{{ object[field.field] }}</span>
+                <span v-else-if="field.field === 'date'" class="truncate">{{ object.date ? formatDate(object.date) : '' }}</span>
+                <span v-else-if="field.field === 'host'" class="truncate">{{ object.media?.host?.replace(/^www\./, '') }}</span>
+                <PropertyDisplay v-else-if="field.def" :def="field.def" :value="object.props[field.field]" :object="object" :wrap="false" />
+              </span>
+            </div>
+          </div>
+          <ObjectLink v-else :id="object.id" data-list-row class="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-hover" @contextmenu="emit('menu', $event, object)">
+            <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
+            <span class="min-w-0 flex-1 font-medium" :class="list?.wrap ? 'break-words' : 'truncate'">{{ displayTitle(object, typeOf(object)) }}</span>
+            <span class="hidden gap-1 md:flex" @click.prevent>
+              <ObjectChip v-for="id in object.tagIds.slice(0, 3)" :key="id" :id="id" tag />
+            </span>
+            <span class="w-24 shrink-0 text-right text-xs text-ink-faint">{{ formatRelative(object.updatedAt) }}</span>
+          </ObjectLink>
+        </template>
       </div>
 
       <!-- Table: fixed column widths; the last, empty column takes the space left. -->
