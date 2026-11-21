@@ -1,7 +1,8 @@
 // Table columns of a view or query: which fields show, in what order, how wide, and whether long
 // values wrap. Saved as `TableSettings` on the view (or the query); missing settings give the
 // default table (title, tags, the types' properties, last edited).
-import type { Id, TableColumn, TableSettings } from '@vasta/core'
+import type { Id, ListSettings, ObjectSummary, ObjectType, TableColumn, TableSettings } from '@vasta/core'
+import { formulaValue } from './properties.ts'
 import { fieldOptions, type FieldOption } from './query.ts'
 
 export interface Column extends FieldOption {
@@ -46,5 +47,58 @@ export function tableColumns(table: TableSettings | undefined, typeIds: Id[]): C
 export function tableSettings(columns: Column[]): TableSettings {
   return {
     columns: columns.map((c) => ({ field: c.field, ...(c.width ? { width: Math.round(c.width) } : {}), ...(c.hidden ? { hidden: true } : {}), ...(c.wrap ? { wrap: true } : {}) })),
+  }
+}
+
+export interface ListField extends FieldOption {
+  on: boolean
+}
+
+// Shown on a list row like in a table cell; who made or changed an object is not drawn there.
+const NOT_IN_ROWS = new Set(['title', 'createdBy', 'updatedBy'])
+const DEFAULT_ROW = ['tags', 'updatedAt']
+
+/** The fields a list row can show after its title: the chosen ones first, in order, then the rest (off). Unset settings tick what the default row shows. */
+export function listFields(list: ListSettings | undefined, typeIds: Id[]): ListField[] {
+  const options = fieldOptions(typeIds).filter((f) => !NOT_IN_ROWS.has(f.field))
+  const chosen = list?.fields ?? DEFAULT_ROW
+  const byField = new Map(options.map((f) => [f.field, f]))
+  const on = [...new Set(chosen)].flatMap((field) => byField.get(field) ?? [])
+  const ticked = new Set(on.map((f) => f.field))
+  return [...on.map((f) => ({ ...f, on: true })), ...options.filter((f) => !ticked.has(f.field)).map((f) => ({ ...f, on: false }))]
+}
+
+/** Settings to save for these fields (the ticked ones, in order), keeping whether titles wrap. */
+export function listSettings(fields: ListField[], wrap: boolean | undefined): ListSettings {
+  return { fields: fields.filter((f) => f.on).map((f) => f.field), ...(wrap ? { wrap: true } : {}) }
+}
+
+/** The fields a row shows for this object, in order: those its type has (properties) and that have a value. */
+export function rowFields(object: ObjectSummary, type: ObjectType | undefined, fields: ListField[]): ListField[] {
+  return fields.flatMap((field) => {
+    if (!field.on) return []
+    if (!field.def) return hasBuiltin(object, field.field) ? [field] : []
+    const def = type?.properties.find((p) => p.id === field.field)
+    if (!def) return []
+    const value = object.props[def.id]
+    const filled =
+      def.kind === 'formula' ? formulaValue(object, def).kind !== 'empty'
+      : !value ? false
+      : value.kind === 'checkbox' ? value.value
+      : Array.isArray(value.value) || typeof value.value === 'string' ? value.value.length > 0
+      : true
+    return filled ? [{ ...field, def }] : []
+  })
+}
+
+function hasBuiltin(object: ObjectSummary, field: string): boolean {
+  switch (field) {
+    case 'tags': return object.tagIds.length > 0
+    case 'collections': return object.collectionIds.length > 0
+    case 'date': return !!object.date
+    case 'host': return !!object.media?.host
+    case 'createdVia': return !!object.createdVia
+    case 'updatedVia': return !!object.updatedVia
+    default: return true
   }
 }

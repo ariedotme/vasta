@@ -84,6 +84,7 @@ defineExpose({ count: computed(() => results.value.length) })
         :group-field="query.groupBy?.[0]?.field ?? ''"
         :type-ids="query.typeIds"
         :table="query.table"
+        :list="query.list"
         :board="query.board"
         :manual="!query.sort?.length"
         :open-in="query.openIn"
