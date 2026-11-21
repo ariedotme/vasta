@@ -291,6 +291,8 @@ export interface AgentReminderInput {
   climbAfter?: number | null
   escapeAfter?: number
   paused?: boolean
+  /** For `tasks`, `tag` and `query`: skip when nothing matches at start time (defaults to true for `tasks`). */
+  skipIfEmpty?: boolean
   /** An object to open once it is answered; null: none (the default, the app stays out of the way). */
   openAfter?: Id | null
 }
@@ -1596,6 +1598,7 @@ export class AgentTools {
       climbAfter: rule.climbAfter,
       escapeAfter: rule.escapeAfter,
       ...(rule.openAfter && this.visibleId(rule.openAfter) ? { openAfter: { id: rule.openAfter, title: this.titleOf(rule.openAfter) ?? '' } } : {}),
+      ...(rule.skipIfEmpty !== undefined ? { skipIfEmpty: rule.skipIfEmpty } : {}),
       ...(rule.paused ? { paused: true } : {}),
       stats: this.insistent.stats(this.options.user, rule.id),
     }
@@ -1659,6 +1662,7 @@ export class AgentTools {
     if (input.climbAfter !== undefined) changes.climbAfter = input.climbAfter
     if (input.escapeAfter !== undefined) changes.escapeAfter = input.escapeAfter
     if (input.paused !== undefined) changes.paused = input.paused
+    if (input.skipIfEmpty !== undefined) changes.skipIfEmpty = input.skipIfEmpty
     if (input.openAfter !== undefined) changes.openAfter = input.openAfter === null ? null : this.object(input.openAfter).id
     try {
       const rule = current ? this.insistent.update(user, current.id, changes) : this.insistent.create(user, { ...changes, spaceId, ...(object ? { objectId: object.id } : {}) })

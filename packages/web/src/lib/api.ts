@@ -68,6 +68,20 @@ export interface Trash {
   objects: ObjectSummary[]
 }
 
+/** How an automatic reminder reaches the user: a single plain notification, or an insistent style. */
+export type AutoReminderStyle = 'plain' | 'popup' | 'fullscreen' | 'notification' | 'escalating' | 'relentless'
+
+/** Automatic reminders for one space (Settings › Reminders). */
+export interface SpaceReminders {
+  habits: boolean
+  habitsStyle: AutoReminderStyle
+  tasksBefore: number | null
+  tasksStyle: AutoReminderStyle
+  eventsBefore: number | null
+  eventsStyle: AutoReminderStyle
+  food: FoodReminders
+}
+
 /** Settings › Reminders (server/src/reminders.ts); the ntfy token stays on the server. */
 export interface ReminderSettings {
   ntfy?: { server: string; topic: string; hasToken: boolean }
@@ -78,6 +92,8 @@ export interface ReminderSettings {
   /** Minutes before timed events and tasks; null: none. */
   eventsBefore: number | null
   food: FoodReminders
+  /** Resolved automatic reminders for the requested space (`?space=`). */
+  space?: SpaceReminders
   telegramReady: boolean
   /** Desktop apps listening for this user right now. */
   desktopApps: number
@@ -139,12 +155,18 @@ export interface Notice {
 }
 
 export interface ReminderChanges {
+  /** Save automatic reminder settings for this space only. */
+  spaceId?: Id
   /** token: a string sets it, '' clears it, absent keeps it; null turns ntfy off. */
   ntfy?: { server?: string; topic?: string; token?: string } | null
   telegram?: boolean
   desktop?: boolean
   habits?: boolean
+  habitsStyle?: AutoReminderStyle
+  tasksBefore?: number | null
+  tasksStyle?: AutoReminderStyle
   eventsBefore?: number | null
+  eventsStyle?: AutoReminderStyle
   food?: Partial<FoodReminders>
   work?: Partial<WorkNotifications>
   quiet?: { from: string; to: string } | null
@@ -199,6 +221,8 @@ export interface InsistentRule {
   escapeAfter: number
   /** An object the desktop app opens once it is answered; none: it stays out of the way. */
   openAfter?: Id
+  /** For `tasks`, `tag` and `query`: skip an occurrence when empty (defaults to true for `tasks`). */
+  skipIfEmpty?: boolean
   paused?: boolean
   createdAt: string
   /** What the list shows: its title, or its object's. */
@@ -212,8 +236,11 @@ export type RuleInput = Partial<Omit<InsistentRule, 'id' | 'createdAt' | 'name' 
 /** An insistent reminder going on (or answered), as its page shows it. */
 export interface NagView {
   id: string
+  spaceId: Id
   ruleId: string
   title: string
+  /** Short context line for automatic reminders (e.g. start time and location). */
+  note?: string
   object?: { id: Id; title: string; typeId: Id; system: string | null }
   day: string
   startedAt: string
@@ -298,20 +325,30 @@ export const authApi = {
   updateProfile: (changes: ProfileInput) => request<User>('PUT', '/api/auth/me', changes),
   /** `bot` is the bot's username, absent when the server runs no bot. */
   telegram: () => request<{ linked: boolean; bot?: string }>('GET', '/api/auth/telegram'),
-  reminders: () => request<ReminderSettings>('GET', '/api/auth/reminders'),
+  reminders: (spaceId?: Id) => request<ReminderSettings>('GET', `/api/auth/reminders${spaceId ? `?space=${encodeURIComponent(spaceId)}` : ''}`),
   saveReminders: (changes: ReminderChanges) => request<ReminderSettings>('PUT', '/api/auth/reminders', changes),
   /** Turn on notifications for this browser (its PushSubscription as JSON); again refreshes it. */
   addPushDevice: (subscription: unknown, name: string) => request<ReminderSettings>('POST', '/api/auth/reminders/devices', { subscription, name }),
   updatePushDevice: (id: string, changes: { name?: string; kinds?: Partial<PushKinds> }) => request<ReminderSettings>('PATCH', `/api/auth/reminders/devices/${id}`, changes),
   removePushDevice: (id: string) => request<ReminderSettings>('DELETE', `/api/auth/reminders/devices/${id}`),
   testReminders: () => request<{ channel: string; ok: boolean; error?: string }[]>('POST', '/api/auth/reminders/test'),
-  /** Insistent reminders: all of them, or those about an object. */
-  reminderRules: (objectId?: Id) => request<InsistentRule[]>('GET', `/api/auth/reminders/rules${objectId ? `?object=${encodeURIComponent(objectId)}` : ''}`),
+  /** Insistent reminders: all of them, those in a space, or those about an object. */
+  reminderRules: (filter?: Id | { objectId?: Id; spaceId?: Id }) => {
+    const query =
+      typeof filter === 'string'
+        ? `?object=${encodeURIComponent(filter)}`
+        : filter?.objectId
+          ? `?object=${encodeURIComponent(filter.objectId)}`
+          : filter?.spaceId
+            ? `?space=${encodeURIComponent(filter.spaceId)}`
+            : ''
+    return request<InsistentRule[]>('GET', `/api/auth/reminders/rules${query}`)
+  },
   createReminderRule: (input: RuleInput & { objectId?: Id }) => request<InsistentRule>('POST', '/api/auth/reminders/rules', input),
   updateReminderRule: (id: string, input: RuleInput) => request<InsistentRule>('PUT', `/api/auth/reminders/rules/${id}`, input),
   deleteReminderRule: (id: string) => request<void>('DELETE', `/api/auth/reminders/rules/${id}`),
-  /** The insistent reminders going on now. */
-  nags: () => request<NagView[]>('GET', '/api/auth/reminders/nags'),
+  /** The insistent reminders going on now (optionally for one space). */
+  nags: (spaceId?: Id) => request<NagView[]>('GET', `/api/auth/reminders/nags${spaceId ? `?space=${encodeURIComponent(spaceId)}` : ''}`),
   nag: (id: string) => request<NagView>('GET', `/api/auth/reminders/nags/${id}`),
   answerNag: (id: string, answer: NagAnswer, extra: { texts?: string[]; reason?: string } = {}) => request<NagView>('POST', `/api/auth/reminders/nags/${id}`, { answer, ...extra }),
   /** A token for the desktop app to hear reminders with (scope notify); replaces the device's last one. */

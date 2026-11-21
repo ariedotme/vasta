@@ -1,13 +1,12 @@
 # Reminders
 
-The server sends reminders, so they arrive with every app closed (`packages/server/src/reminders.ts`):
+The server sends reminders, so they arrive with every app closed (`packages/server/src/reminders.ts`). Automatic reminders are configured **per space** in Settings › Reminders, each with its own timing and style (a simple notification, a desktop pop-up, full screen, repeating notification, escalating or relentless):
 
+- **Timed tasks** a few minutes before they start (off, or 0, 5, 10, 15, 30 or 60 minutes before), while not done.
+- **Timed events** a few minutes before they start (off, or 0, 5, 10, 15, 30 or 60 minutes before): calendar objects other than tasks, and events of subscribed calendars. All-day items do not remind.
 - **Habits** at their "Remind at" time (a property of the habit: "8:00", "21h30"), in the user's
   time zone, on the days the habit repeats on, while it is not done that day (for a daily goal:
   while the amount is under the goal; the reminder says how far along it is). Paused habits stay quiet.
-- **Timed events and tasks** a few minutes before they start (0, 5, 10, 15, 30 or 60): objects
-  with a time on the calendar (date properties with a time, objects' own dates), tasks not done,
-  and events of subscribed calendars. All-day items do not remind.
 - **Food**, in spaces that track food (core's `foodDayNudge`, `foodWeekNudge`, `foodMealNudge`):
   - *What is left of the day*, at a time (18:00 by default): "600 kcal left today" with "40 g
     protein to go · the week is on track" (or "the week is 800 kcal over so far"). With a weekly
@@ -25,10 +24,12 @@ The server sends reminders, so they arrive with every app closed (`packages/serv
 ## Reminders (insistent reminders)
 
 A reminder that matters asks until it gets a real answer (`packages/server/src/insistent.ts`; the
-code still calls them insistent reminders, the app calls them Reminders). One can be set on any
-object (its menu's **Remind me…**: a habit, a task, an event, an Echo) or on nothing (Settings ›
-Reminders, "New reminder…": an affirmation every morning). The plain habit, event and food
-reminders, and the channels everything goes through, are Settings › Reminder channels. Each one says:
+code still calls them insistent reminders, the app calls them Reminders). Settings › Reminders is
+scoped to the open space: it shows only that space's custom reminders, ongoing alerts and automatic
+reminders. Delivery channels, quiet hours and others' work notifications are account-wide in
+Settings › Reminder channels. One can be set on any object (its menu's **Remind me…**: a habit, a
+task, an event, an Echo) or on nothing (Settings › Reminders, "New reminder…": an affirmation every
+morning). Each one says:
 
 - **When it starts**: the object's own time (a habit's "Remind at" on its days, while not done; a
   task's or event's start, a few minutes before), a time of day on some weekdays, or **the first time
@@ -36,6 +37,8 @@ reminders, and the channels everything goes through, are Settings › Reminder c
   5 minutes without any, or the computer waking; "by 11:00 anyway" starts it wherever they are).
 - **What it shows**, so even an ignored notification gets read: the object, 1 to 5 random objects
   with a tag (sub-tags too) or from a saved query (the ones of last time come last), or today's tasks.
+  Rules showing today's tasks skip empty days by default (`skipIfEmpty`, configurable per rule; also
+  available for tags and queries).
 - **How it is answered**: OK, doing the habit or task (wherever it is marked done), typing its text
   word for word, or saying it out loud (the page listens with the browser's speech recognition; typing
   works where it cannot). Typing or saying it on a habit also marks the habit done. Text is compared
@@ -100,9 +103,11 @@ Agents reach them through the MCP (`list_reminders`, `set_reminder`, `start_remi
 a reminder about a hidden object, in a hidden space or showing a hidden tag does not exist for them.
 `start_reminder` (`InsistentReminders.startNow`) starts a nag now, outside the rule's schedule.
 
-Routes (app sessions): `GET|POST /api/auth/reminders/rules` (`?object=` for an object's),
-`PUT|DELETE /api/auth/reminders/rules/:id`, `GET /api/auth/reminders/nags` (going on now),
-`GET|POST /api/auth/reminders/nags/:id` (`{ answer: ok|done|typed|said|snooze|skip|escape, texts?, reason? }`).
+Routes (app sessions): `GET /api/auth/reminders` (`?space=` for a space's automatic settings),
+`PUT /api/auth/reminders` (with `spaceId` to update one space's automatic settings),
+`GET|POST /api/auth/reminders/rules` (`?object=` for an object's, `?space=` for a space's),
+`PUT|DELETE /api/auth/reminders/rules/:id`, `GET /api/auth/reminders/nags` (going on now, `?space=`
+for one space), `GET|POST /api/auth/reminders/nags/:id` (`{ answer: ok|done|typed|said|snooze|skip|escape, texts?, reason? }`).
 
 **Platform limits.** iOS does not let a web app break through Focus or silent mode: Critical Alerts
 need an entitlement Apple grants to apps, and Web Push cannot ask for time-sensitive delivery. On

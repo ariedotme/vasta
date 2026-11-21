@@ -376,7 +376,15 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   )
 
   // Reminders (Settings › Reminders): the user's channels and what reminds them.
-  authApi.get('/reminders', appAuth, (c) => (reminders ? c.json(reminders.view(c.get('auth').user.id)) : c.json({ error: 'reminders are off on this server' }, 404)))
+  authApi.get('/reminders', appAuth, (c) => {
+    if (!reminders) return c.json({ error: 'reminders are off on this server' }, 404)
+    try {
+      return c.json(reminders.view(c.get('auth').user.id, c.req.query('space') || undefined))
+    } catch (error) {
+      if (error instanceof ReminderError) return c.json({ error: error.message }, 400)
+      throw error
+    }
+  })
 
   authApi.put('/reminders', appAuth, async (c) => {
     if (!reminders) return c.json({ error: 'reminders are off on this server' }, 404)
@@ -459,7 +467,8 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
     appAuth,
     insistentRoute((insistent, user, c) => {
       const objectId = c.req.query('object')
-      const rules = objectId ? insistent.rulesFor(user.id, objectId) : insistent.rules(user.id)
+      const spaceId = c.req.query('space') || undefined
+      const rules = objectId ? insistent.rulesFor(user.id, objectId) : insistent.rules(user.id, spaceId)
       return c.json(rules.map((rule) => ruleView(insistent, user, rule)))
     })
   )
@@ -484,7 +493,7 @@ export function createApp({ store, media, now = () => new Date().toISOString(), 
   authApi.get(
     '/reminders/nags',
     appAuth,
-    insistentRoute((insistent, user, c) => c.json(insistent.openNags(user.id).map((nag) => insistent.view(user, nag.id))))
+    insistentRoute((insistent, user, c) => c.json(insistent.openNags(user.id, c.req.query('space') || undefined).map((nag) => insistent.view(user, nag.id))))
   )
   authApi.get(
     '/reminders/nags/:id',

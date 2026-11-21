@@ -307,6 +307,50 @@ describe('insistent reminders', () => {
     t.insistent.remove('u', rule.id)
     expect(t.insistent.rules('u').map((r) => r.id)).not.toContain(rule.id)
   })
+
+  it('skips Today’s tasks when empty by default, lets rules opt out, and scopes rules and open nags by space', async () => {
+    const t = setup()
+    // Mark the only task in space 's' done so today has no due tasks.
+    const rent = t.store.getObject('rent')!
+    t.store.putObject({ ...rent, props: { ...rent.props, status: { kind: 'select', value: ['done'] } } })
+    // Add a second space with its own tag and pending task.
+    t.store.putSpace({ id: 'work', name: 'Work', sidebar: [], createdAt: AT })
+    for (const type of createBuiltinTypes('work', AT)) t.store.putType(type)
+    t.store.putMember({ spaceId: 'work', userId: 'u', role: 'owner', createdAt: AT })
+    const workTaskType = t.store.getType(builtinTypeId('work', 'task'))!
+    t.store.putObject(newObject(workTaskType, { title: 'Ship PR', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: { start: '2026-10-20', resolution: 'day' } } } }, 'ship', AT))
+    const emptyTag = t.store.getType(builtinTypeId('s', 'tag'))!
+    t.store.putObject(newObject(emptyTag, { title: 'EmptyTag' }, 'empty-tag', AT))
+
+    t.reminders.save('u', { habits: false, eventsBefore: null })
+    await t.reminders.tick(t.now)
+
+    // Default for tasks: skipIfEmpty = true -> does NOT fire when space 's' has 0 tasks.
+    const skippedTasks = t.insistent.create(t.user, { spaceId: 's', title: 'Empty tasks', content: { kind: 'tasks' }, when: { kind: 'daily', at: '08:00' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: null })
+    expect(skippedTasks.skipIfEmpty).toBe(true)
+    // Explicit skipIfEmpty: false -> DOES fire even with 0 tasks.
+    const alwaysTasks = t.insistent.create(t.user, { spaceId: 's', title: 'Always tasks', content: { kind: 'tasks' }, skipIfEmpty: false, when: { kind: 'daily', at: '08:00' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: null })
+    expect(alwaysTasks.skipIfEmpty).toBe(false)
+    // Tag with skipIfEmpty: true -> does NOT fire when empty.
+    t.insistent.create(t.user, { spaceId: 's', title: 'Empty tag', content: { kind: 'tag', tagId: 'empty-tag' }, skipIfEmpty: true, when: { kind: 'daily', at: '08:00' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: null })
+    // Space 'work' has a pending task -> DOES fire.
+    const workTasks = t.insistent.create(t.user, { spaceId: 'work', title: 'Work tasks', content: { kind: 'tasks' }, when: { kind: 'daily', at: '08:00' }, steps: [{ after: 0, channels: ['ntfy'] }], repeat: null })
+
+    await t.runTo('2026-10-20T08:00:30')
+    expect(t.ntfy.map((n) => n.title)).toEqual(['Always tasks', 'Work tasks'])
+
+    // Space scoping for rules and open nags:
+    expect(t.insistent.rules('u', 'work').map((r) => r.id)).toEqual([workTasks.id])
+    expect(t.insistent.rules('u', 's').map((r) => r.id)).not.toContain(workTasks.id)
+    expect(t.insistent.openNags('u', 's').map((n) => n.ruleId)).toEqual([alwaysTasks.id])
+    expect(t.insistent.openNags('u', 'work').map((n) => n.ruleId)).toEqual([workTasks.id])
+
+    // Completing the last task in 'work' auto-closes its open tasks nag on the next tick.
+    const ship = t.store.getObject('ship')!
+    t.store.putObject({ ...ship, props: { ...ship.props, status: { kind: 'select', value: ['done'] } } })
+    await t.runTo('2026-10-20T08:01:00')
+    expect(t.insistent.openNags('u', 'work')).toEqual([])
+  })
 })
 
 describe('matching typed and heard text', () => {

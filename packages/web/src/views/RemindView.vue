@@ -252,6 +252,7 @@ watch(
         {{ status }}
       </p>
       <h1 class="text-center font-bold tracking-tight" :class="popup ? 'text-2xl' : 'text-3xl md:text-4xl'">{{ nag.title }}</h1>
+      <p v-if="nag.note" class="mt-2 text-center text-sm text-ink-soft">{{ nag.note }}</p>
 
       <!-- Saying or typing the text: one phrase at a time. -->
       <section v-if="nag.expected.length" :class="popup ? 'mt-5' : 'mt-8'">

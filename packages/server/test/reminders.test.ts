@@ -8,7 +8,7 @@ import { NodeMediaStore } from '@vasta/core/media-node'
 import { NodeStore } from '@vasta/core/node'
 import { AccountService } from '../src/accounts.ts'
 import { CaptureService } from '../src/capture.ts'
-import { ChangeFeed, DesktopListeners, type DesktopNotification } from '../src/events.ts'
+import { ChangeFeed, DesktopListeners, type DesktopNotification, type DesktopTakeover } from '../src/events.ts'
 import { PushService } from '../src/push.ts'
 import { ReminderService } from '../src/reminders.ts'
 
@@ -121,6 +121,55 @@ describe('reminders', () => {
     await between('2026-10-25T19:59:50', '2026-10-25T20:00:10')
     expect(shown.map((n) => n.title)).toContain('Your week of food')
     expect(shown.find((n) => n.title === 'Your week of food')!.message).toBe('1 700 kcal a day (goal 2 000) · protein 130 g a day (goal 150 g) · on target 1 of 2 days · 1 day on target in a row')
+  })
+
+  it('configures tasks separately from events per space, with selectable styles and per-object pause', async () => {
+    const { store, reminders, desktop } = setup()
+    // Second space with its own task.
+    store.putSpace({ id: 'work', name: 'Work', sidebar: [], createdAt: AT })
+    for (const type of createBuiltinTypes('work', AT)) store.putType(type)
+    store.putMember({ spaceId: 'work', userId: 'u', role: 'owner', createdAt: AT })
+    const taskS = store.getType(builtinTypeId('s', 'task'))!
+    const taskW = store.getType(builtinTypeId('work', 'task'))!
+    store.putObject(newObject(taskS, { title: 'Personal task', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: { start: '2026-10-20T13:00:00.000Z', resolution: 'time' } } } }, 'task-s', AT))
+    store.putObject(newObject(taskW, { title: 'Work task', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: { start: '2026-10-20T13:00:00.000Z', resolution: 'time' } } } }, 'task-w', AT))
+    store.putObject(newObject(taskW, { title: 'Silenced work task', props: { status: { kind: 'select', value: ['todo'] }, due: { kind: 'date', value: { start: '2026-10-20T13:00:00.000Z', resolution: 'time' } } } }, 'task-w-muted', AT))
+
+    // Space 's': tasks off, events stay on at 10 min (plain).
+    const viewS = reminders.save('u', { spaceId: 's', tasksBefore: null, eventsBefore: 10, habits: false })
+    expect(viewS.space).toMatchObject({ tasksBefore: null, eventsBefore: 10, habits: false, tasksStyle: 'plain', eventsStyle: 'plain' })
+    // Space 'work': tasks on at 10 min as a desktop pop-up!
+    const viewW = reminders.save('u', { spaceId: 'work', tasksBefore: 10, tasksStyle: 'popup', eventsBefore: null, habits: false })
+    expect(viewW.space).toMatchObject({ tasksBefore: 10, tasksStyle: 'popup', eventsBefore: null })
+    expect(() => reminders.save('u', { spaceId: 'work', tasksStyle: 'bogus' as never })).toThrow('reminder style')
+    expect(() => reminders.save('u', { spaceId: 'nope', tasksBefore: null })).toThrow('no such space')
+
+    // Pausing an individual task's rule silences its automatic reminder too.
+    reminders.insistent.create(store.getUser('u')!, { objectId: 'task-w-muted', when: { kind: 'object', before: 10 }, paused: true })
+
+    const shown: DesktopNotification[] = []
+    const takeovers: DesktopTakeover[] = []
+    desktop.listen('u', (n) => shown.push(n), { takeover: (t) => takeovers.push(t) })
+
+    // 09:50 local (12:50 UTC): 10 minutes before 10:00 (13:00 UTC).
+    await reminders.tick(Date.parse('2026-10-20T12:49:50.000Z'))
+    await reminders.tick(Date.parse('2026-10-20T12:50:20.000Z'))
+
+    // Space 's' sent only the Standup event (Personal task was off).
+    expect(shown.map((n) => n.title)).toEqual(['Standup'])
+    // Space 'work' opened a pop-up for Work task (Silenced work task was paused).
+    expect(takeovers).toHaveLength(1)
+    expect(takeovers[0]).toMatchObject({ title: 'Work task', popup: true })
+
+    // Open nags are scoped to 'work', not leaking into 's'.
+    expect(reminders.insistent.openNags('u', 's')).toEqual([])
+    expect(reminders.insistent.openNags('u', 'work')).toHaveLength(1)
+    const nagId = takeovers[0]!.id
+    expect(reminders.insistent.view(store.getUser('u')!, nagId)).toMatchObject({ spaceId: 'work', title: 'Work task', note: 'At 10:00, in 10 min' })
+
+    // Answering "done" marks the task done!
+    await reminders.insistent.answer(store.getUser('u')!, nagId, { answer: 'done' })
+    expect(store.getObject('task-w')!.props.status).toEqual({ kind: 'select', value: ['done'] })
   })
 })
 

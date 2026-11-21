@@ -112,8 +112,19 @@ export interface InsistentRule {
   escapeAfter: number
   /** An object to open once it is answered (the desktop app's window comes forward with it); none: the app stays out of the way. */
   openAfter?: Id
+  /**
+   * For `tasks`, `tag` and `query`: skip an occurrence when nothing is found at start time.
+   * Defaults to true for `tasks`, false for `tag` and `query`.
+   */
+  skipIfEmpty?: boolean
   paused?: boolean
   createdAt: string
+}
+
+/** Whether a rule skips occurrences when its content (`tasks`, `tag`, `query`) is empty. */
+export function skipsEmpty(rule: Pick<InsistentRule, 'content' | 'skipIfEmpty'>): boolean {
+  if (rule.content.kind === 'target') return false
+  return rule.skipIfEmpty ?? rule.content.kind === 'tasks'
 }
 
 export type RuleInput = Partial<Omit<InsistentRule, 'id' | 'createdAt' | 'openAfter'>> & { openAfter?: Id | null }
@@ -184,6 +195,12 @@ export interface Nag {
   sent: number
   /** The objects it shows, picked when it started. */
   contentIds: Id[]
+  /** For automatic space reminders with an insistent style (not saved in reminder_rules). */
+  autoRule?: InsistentRule
+  /** Short context line for automatic reminders (e.g. "At 10:00, in 10 min · Room 2"). */
+  note?: string
+  /** Started manually to try out (startNow): never auto-skipped for being empty. */
+  manual?: boolean
   /** Telegram messages sent for it, whose buttons go once it is answered. */
   telegram?: { chat: number; message: number }[]
   /** The takeover was sent. */
@@ -312,14 +329,20 @@ export class InsistentReminders {
 
   // Rules ------------------------------------------------------------------------
 
-  rules(userId: Id): InsistentRule[] {
+  rules(userId: Id, spaceId?: Id): InsistentRule[] {
     const rows = this.store.db.prepare('SELECT rule FROM reminder_rules WHERE user_id = ? ORDER BY created_at').all(userId) as Row[]
-    return rows.map((row) => JSON.parse(row.rule as string) as InsistentRule)
+    const all = rows.map((row) => JSON.parse(row.rule as string) as InsistentRule)
+    return spaceId ? all.filter((r) => r.spaceId === spaceId) : all
   }
 
   rule(userId: Id, id: string): InsistentRule | undefined {
     const row = this.store.db.prepare('SELECT rule FROM reminder_rules WHERE id = ? AND user_id = ?').get(id, userId) as Row | undefined
     return row ? (JSON.parse(row.rule as string) as InsistentRule) : undefined
+  }
+
+  /** The rule for a nag: its saved rule, or its embedded automatic rule. */
+  private resolveRule(userId: Id, nag: Nag): InsistentRule | undefined {
+    return this.rule(userId, nag.ruleId) ?? nag.autoRule
   }
 
   /** The rules about an object. */
@@ -463,6 +486,9 @@ export class InsistentReminders {
     })
     for (let i = 1; i < steps.length; i++) if (steps[i]!.after <= steps[i - 1]!.after) throw new InsistentError('each step comes later than the one before')
     rule.steps = steps
+    if (rule.content.kind === 'target') delete rule.skipIfEmpty
+    else if (rule.skipIfEmpty !== undefined) rule.skipIfEmpty = !!rule.skipIfEmpty
+    else if (rule.content.kind === 'tasks') rule.skipIfEmpty = true
     rule.paused = !!rule.paused || undefined
     if (!rule.paused) delete rule.paused
     return {
@@ -479,6 +505,7 @@ export class InsistentReminders {
       climbAfter: rule.climbAfter,
       escapeAfter: rule.escapeAfter,
       ...(rule.openAfter ? { openAfter: rule.openAfter } : {}),
+      ...(rule.skipIfEmpty !== undefined ? { skipIfEmpty: rule.skipIfEmpty } : {}),
       ...(rule.paused ? { paused: true } : {}),
       createdAt: rule.createdAt,
     }
@@ -603,9 +630,9 @@ export class InsistentReminders {
 
   // Running ----------------------------------------------------------------------
 
-  /** The objects whose plain reminders an insistent one replaces (ReminderService skips them). */
+  /** The objects whose automatic reminders a custom rule replaces (paused too, so pausing silences it). */
   covered(userId: Id): Set<Id> {
-    return new Set(this.rules(userId).flatMap((r) => (!r.paused && r.objectId && r.when.kind === 'object' ? [r.objectId] : [])))
+    return new Set(this.rules(userId).flatMap((r) => (r.objectId && r.when.kind === 'object' ? [r.objectId] : [])))
   }
 
   /** Start what fell due in (from, now] and move every open nag on. */
@@ -616,10 +643,18 @@ export class InsistentReminders {
     }
     const rules = new Map(this.rules(user.id).map((r) => [r.id, r]))
     for (const nag of this.openNags(user.id)) {
-      const rule = rules.get(nag.ruleId)
+      const rule = rules.get(nag.ruleId) ?? nag.autoRule
       if (!rule) this.close(nag, 'ignored', now)
       else await this.advance(user, rule, nag, now)
     }
+  }
+
+  /** Start an automatic space reminder with an insistent style (not saved in reminder_rules). */
+  async startAuto(user: User, rule: InsistentRule, occurrence: { occurrence: string; day: string; at: number }, now = this.now(), note?: string): Promise<Nag | undefined> {
+    const nag = this.start(user, rule, occurrence, false, { rule, ...(note ? { note } : {}) }, now)
+    if (!nag) return undefined
+    await this.advance(user, rule, nag, Math.max(occurrence.at, now))
+    return nag
   }
 
   /**
@@ -639,11 +674,23 @@ export class InsistentReminders {
     return this.view(user, nag.id)
   }
 
-  /** A new nag for an occurrence, unless it already had one, the habit is not due (`manual`: start anyway), or it is done. */
-  private start(user: User, rule: InsistentRule, occurrence: { occurrence: string; day: string; at: number }, manual = false): Nag | undefined {
+  /** A new nag for an occurrence, unless it already had one, the habit is not due (`manual`: start anyway), it is done, or its content is empty and skipped. */
+  private start(
+    user: User,
+    rule: InsistentRule,
+    occurrence: { occurrence: string; day: string; at: number },
+    manual = false,
+    auto?: { rule: InsistentRule; note?: string },
+    atNow = this.now()
+  ): Nag | undefined {
     if (this.store.db.prepare('SELECT 1 FROM reminder_nags WHERE rule_id = ? AND occurrence = ?').get(rule.id, occurrence.occurrence)) return undefined
     if ((!manual && this.skipsDay(rule, occurrence.day)) || this.isDone(rule, occurrence)) return undefined
-    const now = Math.max(occurrence.at, this.now())
+    const contentIds = this.pickContent(user, rule)
+    if (!manual && skipsEmpty(rule)) {
+      if (rule.content.kind === 'tasks' && !this.tasks(user, rule.spaceId).length) return undefined
+      if ((rule.content.kind === 'tag' || rule.content.kind === 'query') && !contentIds.length) return undefined
+    }
+    const now = Math.max(occurrence.at, atNow)
     // The one before ends (it was ignored) when the next one starts.
     for (const open of this.openNags(user.id).filter((n) => n.ruleId === rule.id)) this.close(open, open.outcome ?? 'ignored', now)
     const timeZone = this.timeZone(user)
@@ -663,7 +710,9 @@ export class InsistentReminders {
       step: 0,
       snoozes: 0,
       sent: 0,
-      contentIds: this.pickContent(user, rule),
+      contentIds,
+      ...(manual ? { manual: true } : {}),
+      ...(auto ? { autoRule: auto.rule, ...(auto.note ? { note: auto.note } : {}) } : {}),
     }
     this.store.db
       .prepare('INSERT INTO reminder_nags (id, user_id, rule_id, occurrence, started_at, state) VALUES (?, ?, ?, ?, ?, ?)')
@@ -709,6 +758,7 @@ export class InsistentReminders {
   /** Close it, send it, or wait: what an open nag does now. */
   private async advance(user: User, rule: InsistentRule, nag: Nag, now: number) {
     if (this.isDone(rule, nag)) return this.close(nag, 'done', now)
+    if (!nag.manual && skipsEmpty(rule) && rule.content.kind === 'tasks' && !this.tasks(user, rule.spaceId).length) return this.close(nag, 'done', now)
     if (now >= nag.expiresAt) return this.close(nag, 'ignored', now)
     if (nag.nextAt === null || now < nag.nextAt) return
     const quiet = this.quietUntil(user, now)
@@ -752,7 +802,7 @@ export class InsistentReminders {
     const nag = this.nag(nagId)
     if (!nag || nag.userId !== user.id) throw new InsistentError('no such reminder')
     if (nag.outcome) return nag
-    const rule = this.rule(user.id, nag.ruleId)
+    const rule = this.resolveRule(user.id, nag)
     if (!rule) throw new InsistentError('no such reminder')
     const now = this.now()
     switch (input.answer) {
@@ -801,7 +851,7 @@ export class InsistentReminders {
   /** A typed reply in Telegram: the text, or the reason asked for. Undefined when it is not about a nag. */
   async telegramReply(user: User, replyTo: number, text: string): Promise<string | undefined> {
     for (const nag of this.openNags(user.id)) {
-      const rule = this.rule(user.id, nag.ruleId)
+      const rule = this.resolveRule(user.id, nag)
       const message = nag.telegram?.find((m) => m.message === replyTo)
       if (!rule || !message) continue
       if (nag.asking === replyTo) {
@@ -884,9 +934,12 @@ export class InsistentReminders {
     return row ? (JSON.parse(row.state as string) as Nag) : undefined
   }
 
-  openNags(userId: Id): Nag[] {
+  openNags(userId: Id, spaceId?: Id): Nag[] {
     const rows = this.store.db.prepare('SELECT state FROM reminder_nags WHERE user_id = ? AND closed_at IS NULL ORDER BY started_at').all(userId) as Row[]
-    return rows.map((row) => JSON.parse(row.state as string) as Nag)
+    const all = rows.map((row) => JSON.parse(row.state as string) as Nag)
+    if (!spaceId) return all
+    const rules = new Map(this.rules(userId).map((r) => [r.id, r]))
+    return all.filter((n) => (rules.get(n.ruleId) ?? n.autoRule)?.spaceId === spaceId)
   }
 
   private lastNag(ruleId: string): Nag | undefined {
@@ -902,14 +955,16 @@ export class InsistentReminders {
   view(user: User, nagId: string) {
     const nag = this.nag(nagId)
     if (!nag || nag.userId !== user.id) throw new InsistentError('no such reminder')
-    const rule = this.rule(user.id, nag.ruleId)
+    const rule = this.resolveRule(user.id, nag)
     if (!rule) throw new InsistentError('no such reminder')
     const object = rule.objectId ? this.store.getObject(rule.objectId) : undefined
     const type = object && this.store.getType(object.typeId)
     const items = this.store.getObjectSummaries(nag.contentIds).map((o) => ({ id: o.id, title: o.title, text: o.preview.slice(0, 600), typeId: o.typeId }))
     return {
       id: nag.id,
+      spaceId: rule.spaceId,
       title: this.titleOf(rule),
+      ...(nag.note ? { note: nag.note } : {}),
       ...(object ? { object: { id: object.id, title: object.title, typeId: object.typeId, system: type?.system ?? null } } : {}),
       day: nag.day,
       startedAt: new Date(nag.startedAt).toISOString(),
@@ -1006,6 +1061,7 @@ export class InsistentReminders {
     const lines: string[] = []
     const object = rule.objectId ? this.store.getObject(rule.objectId) : undefined
     const type = object && this.store.getType(object.typeId)
+    if (nag.note) lines.push(nag.note)
     if (rule.content.kind === 'tasks') {
       const tasks = this.tasks(user, rule.spaceId)
       lines.push(tasks.length ? tasks.map((t) => `• ${t.title}`).join('\n') : 'No tasks due today.')
@@ -1092,7 +1148,7 @@ export class InsistentReminders {
     if (answer === 'skip') return { text: '', askWhy: nagId }
     try {
       const after = await this.answer(user, nagId, { answer })
-      const rule = this.rule(user.id, after.ruleId)
+      const rule = this.resolveRule(user.id, after)
       return { text: answer === 'snooze' ? `Snoozed for ${rule?.snooze ?? 15} minutes.` : 'Done ✓' }
     } catch (error) {
       return { text: (error as Error).message }

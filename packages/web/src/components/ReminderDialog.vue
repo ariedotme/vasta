@@ -10,7 +10,7 @@ import { habitRemindAt, type ObjectSummary } from '@vasta/core'
 import { authApi, type AckMode, type LadderStep, type NagChannel, type ReminderSettings, type RuleContent, type RuleInput, type RuleWhen } from '../lib/api.ts'
 import { CHANNELS, STYLES, closeReminderEditor, reminderEditor, styleOf } from '../lib/insistent.ts'
 import { desktop } from '../lib/platform.ts'
-import { summaryOf, systemType, typesById } from '../lib/state.ts'
+import { summaryOf, systemType, typesById, workspace } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import ModalDialog from './ModalDialog.vue'
 import ObjectPicker from './ObjectPicker.vue'
@@ -47,6 +47,7 @@ const steps = ref<LadderStep[]>(copy(existing?.steps ?? firstStyle.steps))
 const snooze = ref(existing?.snooze ?? 15)
 const climbAfter = ref<number | null>(existing?.climbAfter ?? 2)
 const escapeAfter = ref(existing?.escapeAfter ?? 10)
+const skipIfEmpty = ref(existing ? (existing.skipIfEmpty ?? existing.content.kind === 'tasks') : content.value.kind === 'tasks')
 const paused = ref(!!existing?.paused)
 /** The note the desktop app opens once it is answered; null: it stays out of the way. */
 const openAfter = ref<string | null>(existing?.openAfter ?? null)
@@ -120,6 +121,7 @@ const contentKind = computed({
   get: () => content.value.kind,
   set: (kind) => {
     content.value = kind === 'tag' ? { kind, tagId: '', count: count.value } : kind === 'query' ? { kind, queryId: '', count: count.value } : { kind }
+    skipIfEmpty.value = kind === 'tasks'
     if (kind === 'tasks' && (ack.value === 'type' || ack.value === 'say')) ack.value = isHabit.value || isTask.value ? 'done' : 'ok'
   },
 })
@@ -176,6 +178,7 @@ function input(): RuleInput {
     snooze: snooze.value,
     climbAfter: climbAfter.value,
     escapeAfter: escapeAfter.value,
+    ...(content.value.kind !== 'target' ? { skipIfEmpty: skipIfEmpty.value } : {}),
     paused: paused.value,
     openAfter: openAfter.value,
   }
@@ -185,7 +188,10 @@ async function save() {
   busy.value = true
   error.value = ''
   try {
-    const rule = existing ? await authApi.updateReminderRule(existing.id, input()) : await authApi.createReminderRule({ ...input(), ...(objectId ? { objectId } : {}) })
+    const spaceId = !objectId ? workspace.space?.id : undefined
+    const rule = existing
+      ? await authApi.updateReminderRule(existing.id, input())
+      : await authApi.createReminderRule({ ...input(), ...(objectId ? { objectId } : {}), ...(spaceId ? { spaceId } : {}) })
     reminderEditor.saved?.(rule)
     closeReminderEditor()
   } catch (failure) {
@@ -293,6 +299,15 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
           <ObjectPicker v-if="pickerFor === 'after'" no-create @pick="pick" />
           <ObjectPicker v-else-if="pickerFor" no-create :type-ids="pickerFor === 'tag' ? (tagType ? [tagType.id] : []) : queryType ? [queryType.id] : []" @pick="pick" />
         </PopoverMenu>
+        <label v-if="content.kind !== 'target'" class="flex items-start gap-2.5 text-sm">
+          <input v-model="skipIfEmpty" type="checkbox" class="mt-0.5 h-4 w-4 accent-[var(--color-accent)]" />
+          <span>
+            {{ content.kind === 'tasks' ? 'Skip when there are no tasks due' : 'Skip when nothing matches' }}
+            <span class="block text-xs text-ink-faint">
+              {{ content.kind === 'tasks' ? 'Nothing is sent on days with no due or overdue tasks.' : 'Nothing is sent when no objects are found.' }}
+            </span>
+          </span>
+        </label>
       </fieldset>
 
       <!-- How it reaches you -->
@@ -420,7 +435,13 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
         </select>
       </fieldset>
 
-      <label v-if="existing" class="flex items-center gap-2.5"><input v-model="paused" type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" /> Paused</label>
+      <label v-if="existing" class="flex items-start gap-2.5">
+        <input v-model="paused" type="checkbox" class="mt-0.5 h-4 w-4 accent-[var(--color-accent)]" />
+        <span>
+          Paused
+          <span v-if="when.kind === 'object'" class="block text-xs text-ink-faint">Also silences this space's automatic reminder for this {{ type?.name.toLowerCase() ?? 'object' }}.</span>
+        </span>
+      </label>
     </form>
 
     <template #footer>

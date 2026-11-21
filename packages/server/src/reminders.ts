@@ -15,6 +15,7 @@ import {
   foodWeekNudge,
   goalForDay,
   habitAmountText,
+  habitFoodRule,
   habitsWithFood,
   habitRemindAt,
   habitStats,
@@ -39,7 +40,7 @@ import type { NodeStore } from '@vasta/core/node'
 import type { AccountService } from './accounts.ts'
 import type { CalendarService } from './calendars.ts'
 import type { ChangeFeed, DesktopListeners } from './events.ts'
-import { InsistentReminders, type Nag, type NagChannel, type NagDelivery } from './insistent.ts'
+import { InsistentReminders, REMINDER_STYLES, type AckMode, type InsistentRule, type Nag, type NagChannel, type NagDelivery, type RuleWhen } from './insistent.ts'
 import type { PushDevice, PushKind, PushService } from './push.ts'
 import { safeFetch } from './safe-fetch.ts'
 
@@ -60,17 +61,43 @@ export interface WorkNotifications {
   comments: boolean
 }
 
+/** How an automatic reminder reaches the user: a single plain notification, or an insistent style. */
+export const AUTO_STYLES = ['plain', 'popup', 'fullscreen', 'notification', 'escalating', 'relentless'] as const
+export type AutoReminderStyle = (typeof AUTO_STYLES)[number]
+
+/** Automatic reminders for one space (Settings › Reminders). */
+export interface SpaceReminders {
+  /** Habits at their "Remind at" time. */
+  habits: boolean
+  /** How automatic habit reminders reach you. */
+  habitsStyle: AutoReminderStyle
+  /** Minutes before timed tasks; null: off. */
+  tasksBefore: number | null
+  /** How automatic task reminders reach you. */
+  tasksStyle: AutoReminderStyle
+  /** Minutes before timed events (calendar objects other than tasks, and subscribed calendars); null: off. */
+  eventsBefore: number | null
+  /** How automatic event reminders reach you. */
+  eventsStyle: AutoReminderStyle
+  /** Food reminders, when the space tracks food. */
+  food: FoodReminders
+}
+
 export interface ReminderSettings {
   ntfy?: { server: string; topic: string; token?: string }
   /** Also to the user's Telegram chat with the bot. */
   telegram?: boolean
   /** Also as system notifications in the desktop apps open (0.1.10 and later). */
   desktop?: boolean
-  /** Habits at their "Remind at" time. */
+  /** Fallback default for spaces without an override of their own: habits at their "Remind at" time. */
   habits: boolean
-  /** Minutes before timed events and tasks; null: no event reminders. */
+  /** Fallback default: minutes before timed events (and tasks when tasksBefore is unset); null: off. */
   eventsBefore: number | null
+  /** Fallback default: minutes before timed tasks; absent falls back to eventsBefore. */
+  tasksBefore?: number | null
   food: FoodReminders
+  /** Per-space automatic reminder settings (overrides the fallbacks above for each space). */
+  spaces?: Record<Id, Partial<SpaceReminders>>
   work: WorkNotifications
   /** Quiet hours ("HH:MM", in the user's zone; may span midnight): insistent reminders wait them out. */
   quiet: { from: string; to: string } | null
@@ -84,6 +111,8 @@ export interface ReminderView {
   habits: boolean
   eventsBefore: number | null
   food: FoodReminders
+  /** Resolved automatic reminders for the requested space (when `?space=` is passed). */
+  space?: SpaceReminders
   work: WorkNotifications
   quiet: { from: string; to: string } | null
   /** The bot runs and this user linked their Telegram account. */
@@ -188,14 +217,50 @@ export class ReminderService {
   settings(userId: Id): ReminderSettings {
     try {
       const saved = JSON.parse(this.store.getMeta(keyOf(userId)) ?? '{}') as Partial<ReminderSettings>
-      return { ...DEFAULTS, ...saved, food: { ...DEFAULT_FOOD, ...saved.food }, work: { ...DEFAULT_WORK, ...saved.work }, quiet: saved.quiet ?? null }
+      return {
+        ...DEFAULTS,
+        ...saved,
+        food: { ...DEFAULT_FOOD, ...saved.food },
+        work: { ...DEFAULT_WORK, ...saved.work },
+        ...(saved.spaces ? { spaces: { ...saved.spaces } } : {}),
+        quiet: saved.quiet ?? null,
+      }
     } catch {
       return { ...DEFAULTS }
     }
   }
 
-  view(userId: Id): ReminderView {
+  /** Automatic reminders for one space, falling back to the user's legacy defaults when unset. */
+  spaceSettings(userId: Id, spaceId: Id): SpaceReminders {
+    return this.spaceSettingsFrom(this.settings(userId), spaceId)
+  }
+
+  private spaceSettingsFrom(s: ReminderSettings, spaceId: Id): SpaceReminders {
+    const sp = s.spaces?.[spaceId]
+    const fallbackTasks = s.tasksBefore !== undefined ? s.tasksBefore : s.eventsBefore
+    return {
+      habits: sp?.habits ?? s.habits,
+      habitsStyle: sp?.habitsStyle && AUTO_STYLES.includes(sp.habitsStyle) ? sp.habitsStyle : 'plain',
+      tasksBefore: sp?.tasksBefore !== undefined ? sp.tasksBefore : fallbackTasks,
+      tasksStyle: sp?.tasksStyle && AUTO_STYLES.includes(sp.tasksStyle) ? sp.tasksStyle : 'plain',
+      eventsBefore: sp?.eventsBefore !== undefined ? sp.eventsBefore : s.eventsBefore,
+      eventsStyle: sp?.eventsStyle && AUTO_STYLES.includes(sp.eventsStyle) ? sp.eventsStyle : 'plain',
+      food: {
+        dayLeft: sp?.food?.dayLeft !== undefined ? sp.food.dayLeft : s.food.dayLeft,
+        week: sp?.food?.week !== undefined ? (sp.food.week && { ...sp.food.week }) : (s.food.week && { ...s.food.week }),
+        mealsAfter: sp?.food?.mealsAfter !== undefined ? sp.food.mealsAfter : s.food.mealsAfter,
+      },
+    }
+  }
+
+  private assertSpace(userId: Id, spaceId: Id) {
+    const user = this.store.getUser(userId)
+    if (!user || !this.options.accounts.spacesOf(user).some((s) => s.id === spaceId)) throw new ReminderError('no such space')
+  }
+
+  view(userId: Id, spaceId?: Id): ReminderView {
     const settings = this.settings(userId)
+    if (spaceId) this.assertSpace(userId, spaceId)
     return {
       ...(settings.ntfy ? { ntfy: { server: settings.ntfy.server, topic: settings.ntfy.topic, hasToken: !!settings.ntfy.token } } : {}),
       telegram: !!settings.telegram,
@@ -203,6 +268,7 @@ export class ReminderService {
       habits: settings.habits,
       eventsBefore: settings.eventsBefore,
       food: settings.food,
+      ...(spaceId ? { space: this.spaceSettings(userId, spaceId) } : {}),
       work: settings.work,
       quiet: settings.quiet,
       telegramReady: !!this.options.telegram && this.store.getUser(userId)?.telegramUserId !== undefined,
@@ -212,15 +278,24 @@ export class ReminderService {
     }
   }
 
-  /** Change the settings; ntfy.token: a string sets it, '' clears it, absent keeps it. ntfy null turns ntfy off. */
+  /**
+   * Change the settings; ntfy.token: a string sets it, '' clears it, absent keeps it. ntfy null
+   * turns ntfy off. With `spaceId`, automatic reminder settings (habits, tasks, events, food and
+   * their styles) are saved for that space only.
+   */
   save(
     userId: Id,
     input: {
+      spaceId?: Id
       ntfy?: { server?: string; topic?: string; token?: string } | null
       telegram?: boolean
       desktop?: boolean
       habits?: boolean
+      habitsStyle?: AutoReminderStyle
+      tasksBefore?: number | null
+      tasksStyle?: AutoReminderStyle
       eventsBefore?: number | null
+      eventsStyle?: AutoReminderStyle
       food?: Partial<FoodReminders>
       work?: Partial<WorkNotifications>
       quiet?: { from: string; to: string } | null
@@ -238,33 +313,75 @@ export class ReminderService {
     }
     if (input.telegram !== undefined) next.telegram = input.telegram
     if (input.desktop !== undefined) next.desktop = !!input.desktop
-    if (input.habits !== undefined) next.habits = input.habits
-    if (input.eventsBefore !== undefined) {
-      if (input.eventsBefore !== null && !EVENT_LEADS.includes(input.eventsBefore)) throw new ReminderError(`minutes before events: ${EVENT_LEADS.join(', ')} or none`)
-      next.eventsBefore = input.eventsBefore
+
+    const checkLead = (value: number | null, label: string) => {
+      if (value !== null && !EVENT_LEADS.includes(value)) throw new ReminderError(`minutes before ${label}: ${EVENT_LEADS.join(', ')} or none`)
     }
-    if (input.food) {
-      const { dayLeft, week, mealsAfter } = input.food
+    const checkStyle = (value: AutoReminderStyle) => {
+      if (!AUTO_STYLES.includes(value)) throw new ReminderError(`reminder style: ${AUTO_STYLES.join(', ')}`)
+    }
+    const applyFood = (target: FoodReminders, food: Partial<FoodReminders>) => {
+      const { dayLeft, week, mealsAfter } = food
       if (dayLeft !== undefined) {
         if (dayLeft !== null && !CLOCK.test(dayLeft)) throw new ReminderError('the time for what is left of the day is HH:MM')
-        next.food.dayLeft = dayLeft
+        target.dayLeft = dayLeft
       }
       if (week !== undefined) {
         if (week !== null && (!Number.isInteger(week.day) || week.day < 0 || week.day > 6 || !CLOCK.test(week.at))) throw new ReminderError("the week's summary takes a weekday (0 Sunday … 6 Saturday) and HH:MM")
-        next.food.week = week && { day: week.day, at: week.at }
+        target.week = week && { day: week.day, at: week.at }
       }
       if (mealsAfter !== undefined) {
         if (mealsAfter !== null && !MEAL_LEADS.includes(mealsAfter)) throw new ReminderError(`minutes after a meal: ${MEAL_LEADS.join(', ')} or none`)
-        next.food.mealsAfter = mealsAfter
+        target.mealsAfter = mealsAfter
       }
     }
+
+    if (input.spaceId) {
+      this.assertSpace(userId, input.spaceId)
+      const sp = this.spaceSettings(userId, input.spaceId)
+      if (input.habits !== undefined) sp.habits = !!input.habits
+      if (input.habitsStyle !== undefined) {
+        checkStyle(input.habitsStyle)
+        sp.habitsStyle = input.habitsStyle
+      }
+      if (input.tasksBefore !== undefined) {
+        checkLead(input.tasksBefore, 'tasks')
+        sp.tasksBefore = input.tasksBefore
+      }
+      if (input.tasksStyle !== undefined) {
+        checkStyle(input.tasksStyle)
+        sp.tasksStyle = input.tasksStyle
+      }
+      if (input.eventsBefore !== undefined) {
+        checkLead(input.eventsBefore, 'events')
+        sp.eventsBefore = input.eventsBefore
+      }
+      if (input.eventsStyle !== undefined) {
+        checkStyle(input.eventsStyle)
+        sp.eventsStyle = input.eventsStyle
+      }
+      if (input.food) applyFood(sp.food, input.food)
+      next.spaces = { ...next.spaces, [input.spaceId]: sp }
+    } else {
+      if (input.habits !== undefined) next.habits = input.habits
+      if (input.tasksBefore !== undefined) {
+        checkLead(input.tasksBefore, 'tasks')
+        next.tasksBefore = input.tasksBefore
+      }
+      if (input.eventsBefore !== undefined) {
+        checkLead(input.eventsBefore, 'events')
+        next.eventsBefore = input.eventsBefore
+      }
+      if (input.food) applyFood(next.food, input.food)
+    }
+
     if (input.work) for (const key of ['assigned', 'mentioned', 'comments'] as const) if (typeof input.work[key] === 'boolean') next.work[key] = input.work[key]
     if (input.quiet !== undefined) {
       if (input.quiet !== null && (!CLOCK.test(input.quiet.from ?? '') || !CLOCK.test(input.quiet.to ?? '') || input.quiet.from === input.quiet.to)) throw new ReminderError('quiet hours go from HH:MM to another HH:MM')
       next.quiet = input.quiet && { from: input.quiet.from, to: input.quiet.to }
     }
     this.store.setMeta(keyOf(userId), JSON.stringify(next))
-    return this.view(userId)
+    return this.view(userId, input.spaceId)
   }
 
   /** Send a test through every channel the user set; what each answered. */
@@ -307,8 +424,16 @@ export class ReminderService {
         console.error(`Insistent reminders of ${user.username}:`, error)
       }
       const settings = this.settings(user.id)
+      const { plain, auto } = this.collectDue(user, settings, from, now)
+      for (const item of auto) {
+        try {
+          await this.insistent.startAuto(user, item.rule, item.occurrence, now, item.note)
+        } catch (error) {
+          console.error(`Auto reminder of ${user.username}:`, error)
+        }
+      }
       if (!settings.ntfy && !settings.telegram && !settings.desktop && !this.options.push?.devices(user.id).length) continue
-      for (const reminder of this.due(user, settings, from, now)) {
+      for (const reminder of plain) {
         const key = `${user.id}:${reminder.key}`
         if (this.sent.has(key)) continue
         this.sent.set(key, now)
@@ -317,16 +442,40 @@ export class ReminderService {
     }
   }
 
-  /** The reminders of a user whose time falls in (from, to]. */
+  /** The plain reminders of a user whose time falls in (from, to]. */
   due(user: User, settings: ReminderSettings, from: number, to: number): Reminder[] {
+    return this.collectDue(user, settings, from, to).plain
+  }
+
+  /** Plain reminders and insistent-style automatic reminders of a user whose time falls in (from, to]. */
+  private collectDue(user: User, settings: ReminderSettings, from: number, to: number): { plain: Reminder[]; auto: { rule: InsistentRule; occurrence: { occurrence: string; day: string; at: number }; note?: string }[] } {
     const timeZone = this.options.accounts.captureFor(user).timeZone
-    const reminders: Reminder[] = []
+    const plain: Reminder[] = []
+    const auto: { rule: InsistentRule; occurrence: { occurrence: string; day: string; at: number }; note?: string }[] = []
     const days = [...new Set([dayIn(from, timeZone), dayIn(to, timeZone)])]
     const inWindow = (at: number) => at > from && at <= to
-    // Objects with an insistent reminder at their own time get that one instead.
+    // Objects with a custom reminder at their own time get that one instead (paused too).
     const covered = this.insistent.covered(user.id)
+    const createdAt = new Date(to).toISOString()
+    const makeAutoRule = (
+      style: keyof typeof REMINDER_STYLES,
+      base: { id: string; spaceId: Id; objectId?: Id; title?: string; when: RuleWhen; ack: AckMode }
+    ): InsistentRule => {
+      const preset = REMINDER_STYLES[style]
+      return {
+        ...base,
+        content: { kind: 'target' },
+        repeat: preset.repeat,
+        steps: preset.steps,
+        snooze: 15,
+        climbAfter: 2,
+        escapeAfter: 10,
+        createdAt,
+      }
+    }
     for (const space of this.options.accounts.spacesOf(user)) {
-      if (settings.habits) {
+      const sp = this.spaceSettingsFrom(settings, space.id)
+      if (sp.habits) {
         const type = this.store.getType(builtinTypeId(space.id, 'habit'))
         // Habits done from food have their days worked out from what was logged.
         const habits = type ? habitsWithFood(this.store, space.id, this.store.listObjects(type.id), days.at(-1)!) : []
@@ -338,36 +487,90 @@ export class ReminderService {
             const [year, month, date] = day.split('-').map(Number) as [number, number, number]
             const at = instantOf({ year, month, day: date, hour, minute, second: 0 }, timeZone)
             if (!inWindow(at) || !isHabitScheduled(habit, day) || isHabitDone(habit, day)) continue
-            const streak = habitStats(habit, day).current
-            const amount = habitAmountText(habit, day)
-            reminders.push({
-              key: `habit:${habit.id}:${day}`,
-              title: habit.title || 'A habit',
-              message: [amount ? `${amount} so far today` : 'Not done yet today', streak ? `${streak} in a row` : ''].filter(Boolean).join(' · '),
-              tag: 'alarm_clock',
-              kind: 'habits',
-              ...this.link(habit.id),
-            })
+            if (sp.habitsStyle === 'plain') {
+              const streak = habitStats(habit, day).current
+              const amount = habitAmountText(habit, day)
+              plain.push({
+                key: `habit:${habit.id}:${day}`,
+                title: habit.title || 'A habit',
+                message: [amount ? `${amount} so far today` : 'Not done yet today', streak ? `${streak} in a row` : ''].filter(Boolean).join(' · '),
+                tag: 'alarm_clock',
+                kind: 'habits',
+                ...this.link(habit.id),
+              })
+            } else {
+              auto.push({
+                rule: makeAutoRule(sp.habitsStyle, {
+                  id: `auto:habit:${habit.id}`,
+                  spaceId: space.id,
+                  objectId: habit.id,
+                  when: { kind: 'object' },
+                  ack: habitFoodRule(habit) ? 'ok' : 'done',
+                }),
+                occurrence: { occurrence: day, day, at },
+              })
+            }
           }
         }
       }
-      if (settings.eventsBefore !== null) {
-        const lead = settings.eventsBefore * 60_000
+      if (sp.tasksBefore !== null || sp.eventsBefore !== null) {
         const range = { from: days[0]!, to: addDays(days.at(-1)!, 1) }
         const types = new Map(this.store.listTypes(space.id).map((t) => [t.id, t]))
         const objects = this.store.listSpaceObjects(space.id)
         const byId = new Map(objects.map((o) => [o.id, o]))
         const entries = [...objectEntries(objects, types, range, timeZone), ...(this.options.calendars?.entries(space.id, range, timeZone) ?? [])]
         for (const entry of entries) {
-          if (entry.allDay || entry.kind === 'daily-note' || !inWindow(Date.parse(entry.start) - lead)) continue
+          if (entry.allDay || entry.kind === 'daily-note') continue
           const object = entry.objectId ? byId.get(entry.objectId) : undefined
-          if (object && (covered.has(object.id) || isFinishedTask(object, types.get(object.typeId)))) continue
-          reminders.push(this.eventReminder(entry, object, settings.eventsBefore, timeZone))
+          const type = object ? types.get(object.typeId) : undefined
+          const isTask = type?.system === 'task'
+          if (isTask) {
+            if (sp.tasksBefore === null) continue
+            if (entry.recurring && !entry.current) continue
+            if (!object || covered.has(object.id) || isFinishedTask(object, type)) continue
+            const at = Date.parse(entry.start) - sp.tasksBefore * 60_000
+            if (!inWindow(at)) continue
+            if (sp.tasksStyle === 'plain') {
+              plain.push(this.eventReminder(entry, object, sp.tasksBefore, timeZone))
+            } else {
+              auto.push({
+                rule: makeAutoRule(sp.tasksStyle, {
+                  id: `auto:task:${object.id}`,
+                  spaceId: space.id,
+                  objectId: object.id,
+                  when: { kind: 'object', before: sp.tasksBefore },
+                  ack: 'done',
+                }),
+                occurrence: { occurrence: entry.key, day: dayIn(Date.parse(entry.start), timeZone), at },
+                note: this.eventMessage(entry, sp.tasksBefore, timeZone),
+              })
+            }
+          } else {
+            if (sp.eventsBefore === null) continue
+            if (object && covered.has(object.id)) continue
+            const at = Date.parse(entry.start) - sp.eventsBefore * 60_000
+            if (!inWindow(at)) continue
+            if (sp.eventsStyle === 'plain') {
+              plain.push(this.eventReminder(entry, object, sp.eventsBefore, timeZone))
+            } else {
+              auto.push({
+                rule: makeAutoRule(sp.eventsStyle, {
+                  id: object ? `auto:event:${object.id}` : `auto:cal:${entry.key}`,
+                  spaceId: space.id,
+                  ...(object ? { objectId: object.id } : { title: entry.title || 'An event' }),
+                  when: { kind: 'object', before: sp.eventsBefore },
+                  ack: 'ok',
+                }),
+                occurrence: { occurrence: entry.key, day: dayIn(Date.parse(entry.start), timeZone), at },
+                note: this.eventMessage(entry, sp.eventsBefore, timeZone),
+              })
+            }
+          }
         }
       }
-      if (isNutritionOn(space)) reminders.push(...this.foodReminders(space, settings.food, days, inWindow, timeZone))
+      if (isNutritionOn(space)) plain.push(...this.foodReminders(space, sp.food, days, inWindow, timeZone))
     }
-    return reminders
+    return { plain, auto }
   }
 
   /** What is left of the day, the week's summary and meals with nothing logged, whose time falls in the window. */
@@ -415,13 +618,17 @@ export class ReminderService {
     return this.options.webUrl ? { url: `${this.options.webUrl.replace(/\/$/, '')}/${path}` } : {}
   }
 
-  private eventReminder(entry: CalendarEntry, object: ObjectSummary | undefined, minutes: number, timeZone: string): Reminder {
+  private eventMessage(entry: CalendarEntry, minutes: number, timeZone: string): string {
     const clock = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone }).format(new Date(entry.start))
+    return [minutes ? `At ${clock}, in ${minutes} min` : `Now, ${clock}`, entry.location].filter(Boolean).join(' · ')
+  }
+
+  private eventReminder(entry: CalendarEntry, object: ObjectSummary | undefined, minutes: number, timeZone: string): Reminder {
     const title = entry.kind === 'external' ? (entry.title ?? 'An event') : object?.title || 'Something'
     return {
       key: `event:${entry.key}`,
       title,
-      message: [minutes ? `At ${clock}, in ${minutes} min` : `Now, ${clock}`, entry.location].filter(Boolean).join(' · '),
+      message: this.eventMessage(entry, minutes, timeZone),
       tag: 'calendar',
       kind: 'events',
       ...(object ? this.link(object.id) : entry.url ? { url: entry.url } : {}),

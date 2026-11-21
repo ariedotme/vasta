@@ -24,6 +24,19 @@ GitHub release page.
 - **Page width, on this device.** Settings › Appearance offers **Standard**, **Wide** or **Full
   width** for object pages and daily notes. Standard keeps text at its usual width and gives
   notes built with columns more room; side panes and whiteboards keep their own layout.
+- **Automatic reminders for tasks, events, habits and food are configured per space in Settings › Reminders**,
+  with timed tasks separated from timed events and a style picker for each (simple notification,
+  pop-up, full screen, repeating notification, escalating or relentless). Pausing a custom reminder
+  on an object also silences the automatic reminder for it.
+- **Skip empty reminders.** Reminders showing today's tasks now skip days with no due or overdue
+  tasks by default (configurable per rule, and available for tag and query reminders too).
+
+### Changed
+
+- **Settings › Reminders is scoped to the current space.** Switching spaces now shows only that
+  space's rules, ongoing alerts ("Going on now") and automatic reminders, and new reminders save to
+  the open space. Delivery channels, quiet hours and others' work notifications stay account-wide in
+  Settings › Reminder channels.
 
 ### Fixed
 
