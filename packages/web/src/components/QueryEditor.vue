@@ -8,6 +8,7 @@ import { fieldOptions, groupOptions } from '../lib/query.ts'
 import { workspace } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import ColumnsMenu from './ColumnsMenu.vue'
+import ListFieldsMenu from './ListFieldsMenu.vue'
 import FilterGroupEditor from './FilterGroupEditor.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
@@ -113,15 +114,16 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
         </button>
       </div>
       <button
-        v-if="query.layout === 'table'"
+        v-if="!query.layout || query.layout === 'list' || query.layout === 'table'"
         ref="columnsAnchor"
         class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-soft hover:bg-hover hover:text-ink"
         @click="columnsOpen = !columnsOpen"
       >
-        <AppIcon fallback="ph:columns" /> Columns
+        <AppIcon :fallback="query.layout === 'table' ? 'ph:columns' : 'ph:list-dashes'" /> {{ query.layout === 'table' ? 'Columns' : 'Fields' }}
       </button>
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
-        <ColumnsMenu :table="query.table" :type-ids="query.typeIds" @update="setTable" />
+        <ColumnsMenu v-if="query.layout === 'table'" :table="query.table" :type-ids="query.typeIds" @update="setTable" />
+        <ListFieldsMenu v-else-if="!query.layout || query.layout === 'list'" :list="query.list" :type-ids="query.typeIds" @update="update({ list: $event })" />
       </PopoverMenu>
       <label class="flex items-center gap-1.5 text-ink-soft">
         Open in

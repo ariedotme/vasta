@@ -11,6 +11,13 @@ GitHub release page.
 - **Group by a date.** Views and queries can group by a date field: Earlier, Today, Tomorrow,
   This week, Next week, Later and No date. Boards show the date groups as columns or swimlanes,
   without moving or adding cards between them.
+- **Choose the fields on a list's rows.** In a list view or query (also one embedded in a page),
+  the new **Fields** menu picks what follows each title, a due date, a status or any property, puts
+  them in order by dragging, and can wrap long titles. Only fields with a value show; without a
+  choice, rows keep their tags and last-edited time.
+- **Page width, on this device.** Settings › Appearance offers **Standard**, **Wide** or **Full
+  width** for object pages and daily notes. Standard keeps text at its usual width and gives
+  notes built with columns more room; side panes and whiteboards keep their own layout.
 
 ## 0.11.0 (2026-11-17)
 

@@ -50,6 +50,7 @@ import { clearOtherDefaults, deleteTemplate, loadTemplates, previewTemplate, rem
 import DocPreview from '../components/DocPreview.ts'
 import ModalDialog from '../components/ModalDialog.vue'
 import { writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
+import { pageWidthClass } from '../lib/page-width.ts'
 
 /**
  * `variant`: 'page' (its own page), 'pane' (the side pane next to another page: no comments or
@@ -67,6 +68,7 @@ const props = defineProps<{
   block?: string | undefined
   backlinksTitle?: string
 }>()
+const emit = defineEmits<{ columns: [has: boolean] }>()
 const router = useRouter()
 const embedded = computed(() => props.variant === 'embedded')
 const inPane = computed(() => props.variant === 'pane')
@@ -136,7 +138,8 @@ async function toggleAgentContext() {
 const showAllFields = ref(false)
 const hiddenCount = computed(() => valueFields.value.length - visibleFields.value.length)
 /** Dashboards built with columns need room; everything else reads better at text width. */
-const wide = computed(() => isWhiteboard.value || Object.values(object.value?.content ?? {}).some((doc) => doc.content.some((node) => node.type === 'columns')))
+const hasColumns = computed(() => Object.values(object.value?.content ?? {}).some((doc) => doc.content.some((node) => node.type === 'columns')))
+watch(hasColumns, (has) => { if (embedded.value) emit('columns', has) }, { immediate: true })
 
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -791,7 +794,7 @@ async function startFrom(template: ObjectRecord) {
     <input ref="coverInput" type="file" accept="image/*" class="hidden" @change="uploadCover" />
 
     <Teleport defer :to="`#${detailsSlot}`" :disabled="!boardLayout">
-    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', wide ? 'max-w-6xl' : 'max-w-3xl']">
+    <div class="relative" :class="boardLayout ? 'px-5 pt-4' : embedded ? '' : inPane ? ['px-6', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-4') : 'pt-5'] : ['mx-auto px-6 md:px-10', object.coverUrl ? (object.icon ? '-mt-10' : 'pt-6') : isWhiteboard ? 'pt-4 md:pt-6' : 'pt-8 md:pt-14', isWhiteboard ? 'max-w-6xl' : pageWidthClass(hasColumns)]">
       <template v-if="!embedded">
       <button
         v-if="object.icon"

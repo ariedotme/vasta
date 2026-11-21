@@ -14,6 +14,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node editor.mjs [base]       # slash menu, mention, undo, moving a block, image upload
     node weblink.mjs             # a weblink created on the replica, fetched by the server
     node device.mjs; node update.mjs
+    node page-width.mjs [chromium|webkit]   # Vite on 5183 only: Appearance choice, persistence, object/daily-note widths, columns, phones and panes (MODE=json too; SETTINGS=0 skips the headless WebKit Settings hang)
     node desktop.mjs [base]      # Settings › This device: download links, the desktop app's version and shortcut
     node firstsync.mjs [chromium|webkit]   # LAST_OBJECT=<id>: also open it offline
     node refused.mjs             # a refused change: toast, Settings list, dismiss (PHONE=1, SHOTS=<dir>)
@@ -34,6 +35,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node nutrition.mjs [chromium|webkit] [base] [phone]   # food tracking: Settings, a weekly goal, the picker, editing, a recipe, portions, /food in ⌘K, the Nutrition page, kcal in the month (MODE=json too)
     node board.mjs [chromium|webkit] [base] [phone]   # drag between columns and within one (manual order), "+", WIP limit, folding, swimlanes, card fields, Blocked; phone = long press (chromium) (MODE=json too)
     node group-by-date.mjs [base]   # Due groups in a list and board, date columns and swimlanes cannot move or add cards (MODE=json too)
+    node listrows.mjs [chromium|webkit] [base] # Fields: add Due, reorder, wrap titles, switch layouts, reset; an embedded query and narrow rows (MODE=json too)
     node pane.mjs [chromium|webkit] [base] [phone]    # the side pane: off by default, Type settings' switch, a view's Full page choice, list, table, board and query clicks, the calendar still opening the page, editing, back/forward, reload, Esc, Open full page, resizing, trash + Undo; phone = the page (MODE=json too)
     node sprints.mjs [chromium|webkit] [base]   # Settings › Sprints (on, named Rodada), Current rodada and Backlog, a sprint's panel, Finish, Next (MODE=json too)
     node metrics.mjs [chromium|webkit] [base]  # the Tasks page's Metrics: numbers, done per week, cumulative flow (hover), what waits longest (SHOTS=<dir>: light and dark)

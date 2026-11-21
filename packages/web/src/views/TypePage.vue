@@ -7,6 +7,7 @@ import { RANK_PROPERTY_ID, matchesFilter, sortKey as fieldSortKey, statusPropert
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
 import ColumnsMenu from '../components/ColumnsMenu.vue'
+import ListFieldsMenu from '../components/ListFieldsMenu.vue'
 import FilterGroupEditor from '../components/FilterGroupEditor.vue'
 import FlowMetrics from '../components/FlowMetrics.vue'
 import ObjectCollection from '../components/ObjectCollection.vue'
@@ -525,12 +526,12 @@ async function newMenu(event: MouseEvent) {
           <AppIcon fallback="ph:cards" /> Cards
         </button>
         <button
-          v-if="view.layout === 'table'"
+          v-if="view.layout === 'list' || view.layout === 'table'"
           ref="columnsAnchor"
           class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover"
           @click="columnsOpen = !columnsOpen"
         >
-          <AppIcon fallback="ph:columns" /> Columns
+          <AppIcon :fallback="view.layout === 'table' ? 'ph:columns' : 'ph:list-dashes'" /> {{ view.layout === 'table' ? 'Columns' : 'Fields' }}
         </button>
         <button ref="layoutAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="layoutOpen = !layoutOpen">
           <AppIcon :fallback="currentLayout.icon" /> {{ currentLayout.label }}
@@ -581,7 +582,8 @@ async function newMenu(event: MouseEvent) {
         </button>
       </PopoverMenu>
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
-        <ColumnsMenu :table="view.table" :type-ids="[id]" @update="updateView({ table: $event })" />
+        <ColumnsMenu v-if="view.layout === 'table'" :table="view.table" :type-ids="[id]" @update="updateView({ table: $event })" />
+        <ListFieldsMenu v-else-if="view.layout === 'list'" :list="view.list" :type-ids="[id]" @update="updateView({ list: $event })" />
       </PopoverMenu>
       <PopoverMenu v-model:open="layoutOpen" :anchor="layoutAnchor" placement="bottom-end" width="15rem">
         <button
@@ -627,6 +629,7 @@ async function newMenu(event: MouseEvent) {
       :group-field="groupField"
       :type-ids="[id]"
       :table="view.table"
+      :list="view.list"
       :board="view.board"
       :manual="manual"
       :open-in="view.openIn"

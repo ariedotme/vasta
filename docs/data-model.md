@@ -229,6 +229,13 @@ the side pane, `'page'` on its page; unset, each object follows its type's `open
 too: the page). `ObjectCollection` provides the choice to the links inside it (`VIEW_OPENS` in
 `lib/open.ts`), so every layout follows it. The type's `openIn` is the column `types.open_in`.
 
+The list layout's rows are `ListSettings` (`ViewDef.list`, `QueryDef.list`): `fields` names the
+fields after the title, in order (property ids or built-in fields, as in table columns except
+title, createdBy and updatedBy), and `wrap` lets long titles wrap. Only properties of the object's
+own type and fields with a value show, read-only. Without `fields`, rows keep their tags and
+last-edited time; an empty array shows neither. `wrap` alone leaves those default fields intact.
+The Fields menu saves the same settings for type views, query pages and queries embedded in pages.
+
 The table layout's columns are `TableSettings` (`ViewDef.table`, `QueryDef.table`): an ordered list
 of `{ field, width?, hidden?, wrap? }`, the field a property id or a built-in field (title, tags,
 type, collections, createdAt, updatedAt, date, host). The title is always first. Fields the list
