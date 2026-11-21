@@ -8,6 +8,9 @@ GitHub release page.
 
 ### Added
 
+- **Group by a date.** Views and queries can group by a date field: Earlier, Today, Tomorrow,
+  This week, Next week, Later and No date. Boards show the date groups as columns or swimlanes,
+  without moving or adding cards between them.
 - **Choose the fields on a list's rows.** In a list view or query (also one embedded in a page),
   the new **Fields** menu picks what follows each title, a due date, a status or any property, puts
   them in order by dragging, and can wrap long titles. Only fields with a value show; without a
