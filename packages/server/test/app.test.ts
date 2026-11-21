@@ -138,18 +138,18 @@ describe('server API', () => {
     expect(backlinks.map((b) => [b.object.title, b.kind])).toEqual([['Source', 'mention']])
   })
 
-  it('trashes a custom type with its objects, keeps built-in types, and unpins it', async () => {
+  it('trashes a custom type with its objects, keeps built-in types, and unpins it and its views', async () => {
     const { app, store } = setup()
     const type = (await (await app.request('/api/types', json({ spaceId: 's', name: 'Book', pluralName: 'Books' }))).json()) as { id: string }
     await app.request('/api/objects', json({ typeId: type.id, title: 'Dune' }))
-    await app.request('/api/spaces/s', { ...json({ sidebar: [{ id: 'pinned', name: 'Pinned', items: [type.id] }] }), method: 'PUT' })
+    await app.request('/api/spaces/s', { ...json({ sidebar: [{ id: 'pinned', name: 'Pinned', items: [`${type.id}?view=today`, type.id, `${builtinTypeId('s', 'task')}?view=today`] }] }), method: 'PUT' })
 
     expect((await app.request(`/api/types/${builtinTypeId('s', 'page')}`, { method: 'DELETE' })).status).toBe(400)
     expect((await app.request(`/api/types/${type.id}`, { method: 'DELETE' })).status).toBe(204)
 
     const space = (await (await app.request('/api/spaces/s')).json()) as { space: { sidebar: { items: string[] }[] }; types: { id: string }[] }
     expect(space.types.map((t) => t.id)).not.toContain(type.id)
-    expect(space.space.sidebar[0]!.items).toEqual([])
+    expect(space.space.sidebar[0]!.items).toEqual([`${builtinTypeId('s', 'task')}?view=today`])
     expect(store.counts().objects).toBe(0)
   })
 

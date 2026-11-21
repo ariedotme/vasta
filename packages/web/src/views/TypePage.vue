@@ -2,7 +2,7 @@
 import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
+import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, ObjectType, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { RANK_PROPERTY_ID, matchesFilter, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
@@ -15,7 +15,7 @@ import HabitBoard from '../components/HabitBoard.vue'
 import TagTree from '../components/TagTree.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import TypeSettings from '../components/TypeSettings.vue'
-import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu } from '../lib/actions.ts'
+import { deleteObjectFlow, deleteTypeFlow, isInSidebar, pinItems, pinMenu, removeFromSidebar } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
@@ -28,9 +28,11 @@ import { meId, sharedSpace } from '../lib/people.ts'
 import { primeSummaries, replaceType, typesById, unsavedTypes } from '../lib/state.ts'
 import { createFromTemplate, currentTemplates, loadTemplates, newTemplate, templatesOf } from '../lib/templates.ts'
 import { copyObjectLink, openObject } from '../lib/open.ts'
+import { METRICS_VIEW, resolveView, viewItem } from '../lib/view-pins.ts'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
+const route = useRoute()
 
 const type = computed(() => typesById.value.get(props.id))
 const objects = ref<ObjectSummary[]>([])
@@ -67,7 +69,6 @@ const FIXED_VIEWS: Partial<Record<string, { id: string; label: string; icon: str
 }
 const fixedView = computed(() => FIXED_VIEWS[type.value?.system ?? ''])
 // A type with a status (tasks) also has its flow metrics, after its views.
-const METRICS_VIEW = '__metrics'
 const hasMetrics = computed(() => !!statusProperty(type.value))
 const metricsActive = computed(() => hasMetrics.value && activeViewId.value === METRICS_VIEW)
 const fixedActive = computed(() => metricsActive.value || (!!fixedView.value && activeViewId.value === fixedView.value.id))
@@ -81,18 +82,39 @@ function lastView() {
     return ''
   }
 }
-watch(activeViewId, (id) => {
+// Only a view picked is remembered, not one opened by default (the first view on a first visit).
+function pickView(id: string) {
+  activeViewId.value = id
   try {
-    if (id) localStorage.setItem(viewKey, id)
+    localStorage.setItem(viewKey, id)
   } catch {}
+}
+watch(activeViewId, (id) => {
+  // Opened from a view pinned in the sidebar (?view=), then another view picked: the link goes.
+  if (route.query.view && route.query.view !== id) void router.replace({ query: { ...route.query, view: undefined } })
+})
+
+// A pinned view opens its view, also when this type's page is already open. A link to a view that
+// is gone opens the first one, and goes.
+const queryView = () => (typeof route.query.view === 'string' ? route.query.view : '')
+function openLinkedView(t: ObjectType, id: string) {
+  const open = resolveView(t, id, FIXED_VIEWS[t.system ?? '']?.id)
+  if (open === id) return pickView(id)
+  activeViewId.value = open
+  void router.replace({ query: { ...route.query, view: undefined } })
+}
+watch(queryView, (id) => {
+  if (id && type.value) openLinkedView(type.value, id)
 })
 
 watch(type, (t) => {
   if (!t) return
   const fixed = FIXED_VIEWS[t.system ?? '']
-  if (!activeViewId.value) activeViewId.value = lastView() || fixed?.id || ''
-  const metrics = activeViewId.value === METRICS_VIEW && !!statusProperty(t)
-  if (activeViewId.value !== fixed?.id && !metrics && !t.views.some((v) => v.id === activeViewId.value)) activeViewId.value = t.views[0]?.id ?? ''
+  if (!activeViewId.value) {
+    if (queryView()) openLinkedView(t, queryView())
+    else activeViewId.value = lastView() || fixed?.id || ''
+  }
+  activeViewId.value = resolveView(t, activeViewId.value, fixed?.id)
 }, { immediate: true })
 
 const view = computed<ViewDef>(() => type.value?.views.find((v) => v.id === activeViewId.value) ?? { id: 'default', name: 'All', layout: 'list' })
@@ -137,7 +159,7 @@ async function addView() {
   const next = clone(type.value)
   next.views.push({ id, name, layout: view.value.layout })
   replaceType(next)
-  activeViewId.value = id
+  pickView(id)
   void api.saveType(next).then(replaceType)
 }
 
@@ -146,7 +168,6 @@ async function addView() {
 
 const menuAnchor = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
-const route = useRoute()
 const settingsOpen = ref(route.query.settings === '1')
 watch(
   () => route.query.settings,
@@ -181,7 +202,7 @@ function duplicateView() {
   menuOpen.value = false
   const copy: ViewDef = { ...clone(view.value), id: newId(), name: `${view.value.name} copy` }
   saveViews((views) => views.push(copy))
-  activeViewId.value = copy.id
+  pickView(copy.id)
 }
 
 async function deleteView() {
@@ -191,15 +212,37 @@ async function deleteView() {
   if (!(await confirmDialog({ title: `Delete the view “${view.value.name}”?`, confirmLabel: 'Delete view', danger: true }))) return
   saveViews((views) => views.splice(views.findIndex((v) => v.id === id), 1))
   activeViewId.value = type.value?.views[0]?.id ?? ''
+  void removeFromSidebar(viewItem(props.id, id))
 }
 
 const pinned = computed(() => isInSidebar(props.id))
+const viewPinned = computed(() => isInSidebar(viewItem(props.id, view.value.id)))
 
 /** The sections to pin the type in, beside the More menu's row. */
 function pinFrom(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   menuOpen.value = false
   openMenuAt(rect.left, rect.top, pinItems(props.id))
+}
+
+/** The sections to pin the open view in, so it opens from the sidebar on its own. */
+function pinViewFrom(event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  menuOpen.value = false
+  openMenuAt(rect.left, rect.top, pinItems(viewItem(props.id, view.value.id)))
+}
+
+/** A view's tab dragged out carries its link, which the sidebar pins where it is dropped. */
+function dragViewTab(event: DragEvent, v: ViewDef) {
+  const link = new URL(router.resolve(`/t/${viewItem(props.id, v.id)}`).href, location.href).href
+  event.dataTransfer!.effectAllowed = 'copy'
+  event.dataTransfer!.setData('text/uri-list', link)
+  event.dataTransfer!.setData('text/plain', link)
+}
+
+/** Right-click on a view's tab: pin it. */
+function viewTabMenu(event: MouseEvent, v: ViewDef) {
+  openContextMenu(event, [{ kind: 'heading', label: v.name }, pinMenu(viewItem(props.id, v.id))])
 }
 
 async function deleteType() {
@@ -443,6 +486,10 @@ async function newMenu(event: MouseEvent) {
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="duplicateView">
         <AppIcon fallback="ph:copy" class="text-ink-soft" /> Duplicate view
       </button>
+      <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinViewFrom">
+        <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ viewPinned ? 'View pinned in sidebar' : 'Pin view to sidebar' }}
+        <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
+      </button>
       <button
         class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover disabled:opacity-40 disabled:hover:bg-transparent"
         :disabled="type.views.length <= 1"
@@ -466,19 +513,26 @@ async function newMenu(event: MouseEvent) {
         v-if="fixedView"
         class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm"
         :class="fixedActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
-        @click="activeViewId = fixedView.id"
+        @click="pickView(fixedView.id)"
       >
         <AppIcon :fallback="fixedView.icon" :size="14" /> {{ fixedView.label }}
       </button>
-      <button
+      <!-- A div: WebKit does not start a drag on a button. A tab drags into the sidebar to pin the view. -->
+      <div
         v-for="v in type.views"
         :key="v.id"
-        class="rounded-lg px-3 py-1.5 text-sm"
+        role="button"
+        tabindex="0"
+        draggable="true"
+        class="cursor-default select-none rounded-lg px-3 py-1.5 text-sm"
         :class="v.id === view.id ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
-        @click="activeViewId = v.id"
+        @click="pickView(v.id)"
+        @keydown.enter.space.prevent="pickView(v.id)"
+        @contextmenu="viewTabMenu($event, v)"
+        @dragstart="dragViewTab($event, v)"
       >
         {{ v.name }}
-      </button>
+      </div>
       <button class="rounded-lg px-2 py-1.5 text-ink-faint hover:bg-hover hover:text-ink" title="Add view" @click="addView">
         <AppIcon fallback="ph:plus" :size="14" />
       </button>
@@ -486,7 +540,7 @@ async function newMenu(event: MouseEvent) {
         v-if="hasMetrics"
         class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm"
         :class="metricsActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
-        @click="activeViewId = METRICS_VIEW"
+        @click="pickView(METRICS_VIEW)"
       >
         <AppIcon fallback="ph:chart-line-up" :size="14" /> Metrics
       </button>

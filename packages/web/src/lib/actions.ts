@@ -11,7 +11,8 @@ import { previewLine, typedLine, type CompletionSource } from './typed-line.ts'
 import { people } from './people.ts'
 import { loadTemplates, templates } from './templates.ts'
 import { router } from '../router.ts'
-import { closePane, openObject, pageObjectId, paneObjectId } from './open.ts'
+import { closePane, objectPath, openObject, pageObjectId, paneObjectId } from './open.ts'
+import { parseViewItem, viewItem } from './view-pins.ts'
 
 /** With `line`, the title and properties are read from it, e.g. `Dune author:"Frank Herbert"`. */
 export async function createObject(typeId: Id, data: Partial<ObjectRecord> = {}, open = true, line?: string): Promise<ObjectRecord> {
@@ -204,7 +205,8 @@ export async function deleteTypeFlow(type: ObjectType): Promise<boolean> {
     danger: true,
   })
   if (!ok) return false
-  const places = sidebarPlaces(type.id)
+  // Its pins go with it: the type's own and those of its views.
+  const pins = [type.id, ...type.views.map((v) => viewItem(type.id, v.id))].map((item) => ({ item, places: sidebarPlaces(item) }))
   const wasOpen = router.currentRoute.value.path === `/t/${type.id}`
   await api.deleteType(type.id)
   await loadWorkspace(workspace.space?.id)
@@ -215,7 +217,7 @@ export async function deleteTypeFlow(type: ObjectType): Promise<boolean> {
       label: 'Undo',
       run: async () => {
         await restoreTypeFlow(type.id)
-        await restorePlaces(type.id, places)
+        for (const { item, places } of pins) await restorePlaces(item, places)
         if (wasOpen) await router.push(`/t/${type.id}`)
       },
     },
@@ -317,6 +319,12 @@ async function restorePlaces(id: Id, places: SidebarPlace[]) {
 }
 
 export const isInSidebar = (id: Id) => !!workspace.space?.sidebar.some((s) => s.items.includes(id))
+
+/** Where a sidebar item opens: a view, a type or an object. */
+export function sidebarItemPath(item: string) {
+  if (parseViewItem(item) || typesById.value.has(item)) return `/t/${item}`
+  return objectPath(item)
+}
 
 const PINNED = 'Pinned'
 
