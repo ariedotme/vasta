@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.12.0 (2026-11-21)
+
 ### Added
 
 - **Agents can make types.** Through the MCP, Claude Code or Codex can create a type (its
