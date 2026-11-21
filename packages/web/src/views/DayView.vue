@@ -4,6 +4,7 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { isValidDay } from '@vasta/core'
 import { dayKey, todayRoute } from '../lib/actions.ts'
+import { t } from '../lib/i18n.ts'
 
 const props = defineProps<{ day: string }>()
 const router = useRouter()
@@ -12,5 +13,5 @@ onMounted(() => void router.replace(todayRoute(props.day === 'today' || !isValid
 </script>
 
 <template>
-  <div class="grid h-full place-items-center text-sm text-ink-soft">Opening…</div>
+  <div class="grid h-full place-items-center text-sm text-ink-soft">{{ t('calendar.opening') }}</div>
 </template>

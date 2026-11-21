@@ -7,6 +7,7 @@ import type { CalendarEntry, DateValue } from '@vasta/core'
 import { dayKey } from '../../lib/actions.ts'
 import { changeEntryTimes, describeRepeat, entryTime, formatDayShort } from '../../lib/calendar.ts'
 import { displayTitle } from '../../lib/format.ts'
+import { propName, t, typeName } from '../../lib/i18n.ts'
 import { lastError, summaryOf, typesById } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
 import ObjectLink from '../ObjectLink.vue'
@@ -24,7 +25,11 @@ const value = computed<DateValue | undefined>(() => {
   const prop = object.props[props.entry.field ?? '']
   return prop?.kind === 'date' ? prop.value : undefined
 })
-const fieldName = computed(() => (props.entry.field && props.entry.field !== 'date' ? type.value?.properties.find((p) => p.id === props.entry.field)?.name : undefined))
+const fieldName = computed(() => {
+  if (!props.entry.field || props.entry.field === 'date') return undefined
+  const def = type.value?.properties.find((p) => p.id === props.entry.field)
+  return def ? propName(def) : undefined
+})
 const when = computed(() => {
   const days = props.entry.endDay !== props.entry.startDay ? `${formatDayShort(props.entry.startDay)} – ${formatDayShort(props.entry.endDay)}` : formatDayShort(props.entry.startDay)
   const time = entryTime(props.entry)
@@ -85,31 +90,31 @@ function save() {
         <div class="text-xs text-ink-soft">{{ when }}</div>
       </div>
     </div>
-    <div class="flex items-center gap-1.5 text-xs text-ink-soft"><AppIcon fallback="ph:repeat" :size="13" /> {{ describeRepeat(value?.rrule) || 'Repeats' }}</div>
-    <div v-if="type" class="text-xs text-ink-faint">{{ [type.name, fieldName].filter(Boolean).join(' · ') }}</div>
+    <div class="flex items-center gap-1.5 text-xs text-ink-soft"><AppIcon fallback="ph:repeat" :size="13" /> {{ describeRepeat(value?.rrule) || t('calendar.repeats') }}</div>
+    <div v-if="type" class="text-xs text-ink-faint">{{ [typeName(type), fieldName].filter(Boolean).join(' · ') }}</div>
 
     <form v-if="editing" class="space-y-2 border-t border-line pt-2" @submit.prevent="save">
-      <input v-model="day" type="date" aria-label="Day" class="w-full rounded-lg bg-hover px-2 py-1 outline-none" />
+      <input v-model="day" type="date" :aria-label="t('calendar.view.day')" class="w-full rounded-lg bg-hover px-2 py-1 outline-none" />
       <div v-if="!entry.allDay" class="flex items-center gap-1.5">
-        <input v-model="startTime" type="time" aria-label="Start time" class="min-w-0 flex-1 rounded-lg bg-hover px-2 py-1 outline-none" />
+        <input v-model="startTime" type="time" :aria-label="t('calendar.occ.startTime')" class="min-w-0 flex-1 rounded-lg bg-hover px-2 py-1 outline-none" />
         <span class="text-ink-faint">–</span>
-        <input v-model="endTime" type="time" aria-label="End time" class="min-w-0 flex-1 rounded-lg bg-hover px-2 py-1 outline-none" />
+        <input v-model="endTime" type="time" :aria-label="t('calendar.occ.endTime')" class="min-w-0 flex-1 rounded-lg bg-hover px-2 py-1 outline-none" />
       </div>
       <div class="flex justify-end gap-1.5">
-        <button type="button" class="rounded-md px-2 py-1 text-xs hover:bg-hover" @click="editing = false">Cancel</button>
-        <button type="submit" class="rounded-md bg-ink px-2 py-1 text-xs font-medium text-surface hover:opacity-90 disabled:opacity-40" :disabled="busy">Save</button>
+        <button type="button" class="rounded-md px-2 py-1 text-xs hover:bg-hover" @click="editing = false">{{ t('common.cancel') }}</button>
+        <button type="submit" class="rounded-md bg-ink px-2 py-1 text-xs font-medium text-surface hover:opacity-90 disabled:opacity-40" :disabled="busy">{{ t('common.save') }}</button>
       </div>
     </form>
 
     <div v-else class="flex items-center gap-1.5 border-t border-line pt-2 text-xs">
       <ObjectLink :id="entry.objectId!" class="flex items-center gap-1 rounded-md bg-hover px-2 py-1 text-ink-soft hover:text-ink" @click="emit('done')">
-        <AppIcon fallback="ph:arrow-square-out" :size="13" /> Open
+        <AppIcon fallback="ph:arrow-square-out" :size="13" /> {{ t('common.open') }}
       </ObjectLink>
       <button class="flex items-center gap-1 rounded-md bg-hover px-2 py-1 text-ink-soft hover:text-ink" @click="editing = true">
-        <AppIcon fallback="ph:clock" :size="13" /> Change time
+        <AppIcon fallback="ph:clock" :size="13" /> {{ t('calendar.occ.changeTime') }}
       </button>
       <button class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-red-600 hover:bg-hover disabled:opacity-40" :disabled="busy" @click="run({ cancelled: true })">
-        <AppIcon fallback="ph:trash" :size="13" /> Delete
+        <AppIcon fallback="ph:trash" :size="13" /> {{ t('common.delete') }}
       </button>
     </div>
   </div>

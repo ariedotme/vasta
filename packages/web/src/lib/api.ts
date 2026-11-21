@@ -6,6 +6,7 @@ import type { ActivityEntry, AgentSettings, ApiToken, FlowMetrics, Backlink, Cal
 import { SYNC_PROTOCOL, dayIn, type CaptureDestinations } from '@vasta/core'
 import type { OccurrenceEdit } from '@vasta/core/calendar'
 import type { CaptureAnswer } from '@vasta/core/client'
+import { t } from './i18n.ts'
 import { noteNetworkError, noteResponse } from './network.ts'
 import { callStore, syncNow, useReplica } from './replica.ts'
 
@@ -559,7 +560,7 @@ const http = {
 
 type Api = typeof http
 
-const OFFLINE_MESSAGE = 'This needs a connection to the server.'
+const offlineMessage = () => t('errors.offlineNeedsServer')
 
 const now = () => new Date().toISOString()
 /** This device's zone, which decides "today" and times such as "15h" in what is typed. */
@@ -577,7 +578,7 @@ function viaServer<A extends unknown[], R>(call: (...args: A) => Promise<R>) {
     try {
       result = await call(...args)
     } catch (error) {
-      if (error instanceof TypeError) throw new Error(OFFLINE_MESSAGE)
+      if (error instanceof TypeError) throw new Error(offlineMessage())
       throw error
     }
     await syncNow()
@@ -617,7 +618,7 @@ const local: Partial<Api> = {
   backlinks: (id) => callStore('backlinks', id),
   blockId: async (objectId, field, path) => {
     const id = await callStore('ensureBlockId', objectId, field, path, now())
-    if (!id) throw new Error('That block is gone.')
+    if (!id) throw new Error(t('errors.blockGone'))
     return id
   },
   createObject: (data, line) => callStore('createObject', data, now(), line === undefined ? undefined : { text: line, context: { today: dayIn(now(), timeZone()), timeZone: timeZone() } }),
@@ -646,7 +647,7 @@ const local: Partial<Api> = {
     try {
       return await viaServer(http.capture)(spaceId, text, channel, day, typeId, answers, destinations)
     } catch (error) {
-      if (!(error instanceof Error && error.message === OFFLINE_MESSAGE)) throw error
+      if (!(error instanceof Error && error.message === offlineMessage())) throw error
       const result = typeId
         ? await callStore('captureObject', spaceId, typeId, text, channel, day, now(), timeZone(), answers, destinations)
         : await callStore('capture', spaceId, text, channel, day, now(), destinations)

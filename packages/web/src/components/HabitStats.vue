@@ -7,6 +7,7 @@ import { addDays, habitFoodRule, habitProgress, habitStats, habitTarget, habitUn
 import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, formatAmount, habitAmountLabel, habitColor, setHabitAmount, stepHabit, useFoodHabits } from '../lib/habits.ts'
+import { locale, t } from '../lib/i18n.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
 
@@ -22,9 +23,8 @@ const color = computed(() => habitColor(habit.value))
 const target = computed(() => habitTarget(habit.value))
 const unit = computed(() => habitUnit(habit.value))
 
-const locale = typeof navigator !== 'undefined' ? navigator.language : 'en'
-const monthName = new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' })
-const longDay = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+const monthName = computed(() => new Intl.DateTimeFormat(locale.value, { month: 'short', timeZone: 'UTC' }))
+const longDay = computed(() => new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }))
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`)
 
 // As many weeks as the width allows: 11px squares, 3px apart, a year at most.
@@ -54,7 +54,7 @@ const monthLabels = computed(() => {
     const first = week.find((d) => d.endsWith('-01'))
     if (!first) return
     if (labels.length && column - labels.at(-1)!.column < 3) return
-    labels.push({ column, text: monthName.format(utc(first)) })
+    labels.push({ column, text: monthName.value.format(utc(first)) })
   })
   return labels
 })
@@ -80,27 +80,27 @@ const details = computed(() => {
   if (!day) return null
   const progress = habitProgress(habit.value, day)
   const status = isHabitDone(habit.value, day)
-    ? 'Done'
+    ? t('habits.status.done')
     : day < stats.value.since
-      ? 'Before this habit began'
+      ? t('habits.status.beforeBegan')
       : !isHabitScheduled(habit.value, day)
-        ? 'Day off'
+        ? t('habits.status.dayOff')
         : progress > 0
-          ? `${Math.round(progress * 100)}% of the goal`
+          ? t('habits.status.pctOfGoal', { pct: Math.round(progress * 100) })
           : day === today
-            ? 'Not done yet'
-            : 'Missed'
-  return { date: longDay.format(utc(day)), status, amount: target.value ? habitAmountLabel(habit.value, day) : '', done: isHabitDone(habit.value, day) }
+            ? t('habits.status.notDoneYet')
+            : t('habits.status.missed')
+  return { date: longDay.value.format(utc(day)), status, amount: target.value ? habitAmountLabel(habit.value, day) : '', done: isHabitDone(habit.value, day) }
 })
 
 const cards = computed(() => [
-  { label: 'Current streak', value: stats.value.current, icon: 'ph:fire', tint: 'text-orange-500' },
-  { label: 'Best streak', value: stats.value.best, icon: 'ph:trophy', tint: 'text-amber-500' },
-  { label: 'This week', value: `${stats.value.weekDone}/${stats.value.weekScheduled}`, icon: 'ph:calendar-check', tint: 'text-sky-500' },
-  { label: 'Last 30 days', value: `${Math.round(stats.value.rate30 * 100)}%`, icon: 'ph:chart-line-up', tint: 'text-emerald-500' },
+  { label: t('habits.card.currentStreak'), value: stats.value.current, icon: 'ph:fire', tint: 'text-orange-500' },
+  { label: t('habits.card.bestStreak'), value: stats.value.best, icon: 'ph:trophy', tint: 'text-amber-500' },
+  { label: t('habits.card.thisWeek'), value: `${stats.value.weekDone}/${stats.value.weekScheduled}`, icon: 'ph:calendar-check', tint: 'text-sky-500' },
+  { label: t('habits.card.last30Days'), value: `${Math.round(stats.value.rate30 * 100)}%`, icon: 'ph:chart-line-up', tint: 'text-emerald-500' },
   target.value
-    ? { label: 'Average a day', value: `${formatAmount(stats.value.average30)}${unit.value ? ` ${unit.value}` : ''}`, icon: 'ph:gauge', tint: 'text-violet-500' }
-    : { label: 'Times done', value: stats.value.total, icon: 'ph:check-circle', tint: 'text-violet-500' },
+    ? { label: t('habits.card.averageDay'), value: `${formatAmount(stats.value.average30)}${unit.value ? ` ${unit.value}` : ''}`, icon: 'ph:gauge', tint: 'text-violet-500' }
+    : { label: t('habits.card.timesDone'), value: stats.value.total, icon: 'ph:check-circle', tint: 'text-violet-500' },
 ])
 const doneToday = computed(() => isHabitDone(habit.value, today))
 </script>
@@ -111,20 +111,20 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
       <div class="flex items-center gap-2.5 rounded-xl border border-line py-1.5 pl-2 pr-3">
         <HabitCheck :habit="habit" :day="today" :size="26" />
         <div class="text-sm">
-          <div class="font-medium">{{ doneToday ? 'Done today' : 'Today' }}</div>
+          <div class="font-medium">{{ doneToday ? t('habits.doneToday') : t('common.today') }}</div>
           <div v-if="target" class="text-xs tabular-nums text-ink-faint">{{ habitAmountLabel(habit, today) }}</div>
         </div>
         <div v-if="target && !fromFood" class="ml-2 flex items-center gap-1">
-          <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" title="Take 1 away" @click="setHabitAmount(habit.id, today, Math.max(0, habitValue(habit, today) - 1), habit)">
+          <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" :title="t('habits.takeOneAway')" @click="setHabitAmount(habit.id, today, Math.max(0, habitValue(habit, today) - 1), habit)">
             <AppIcon fallback="ph:minus" :size="13" />
           </button>
-          <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" title="Add 1" @click="setHabitAmount(habit.id, today, habitValue(habit, today) + 1, habit)">
+          <button class="grid h-7 w-7 place-items-center rounded-md ring-1 ring-line hover:bg-hover" :title="t('habits.addOne')" @click="setHabitAmount(habit.id, today, habitValue(habit, today) + 1, habit)">
             <AppIcon fallback="ph:plus" :size="13" />
           </button>
         </div>
       </div>
-      <span v-if="!isHabitScheduled(habit, today)" class="text-xs text-ink-faint">Today is a day off for this habit.</span>
-      <span v-if="fromFood" class="flex items-center gap-1 text-xs text-ink-faint" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> Done from what you log in Food</span>
+      <span v-if="!isHabitScheduled(habit, today)" class="text-xs text-ink-faint">{{ t('habits.todayDayOff') }}</span>
+      <span v-if="fromFood" class="flex items-center gap-1 text-xs text-ink-faint" data-habit-from-food><AppIcon fallback="ph:bowl-food" :size="13" /> {{ t('habits.doneFromFood') }}</span>
     </div>
 
     <div class="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -181,7 +181,7 @@ const doneToday = computed(() => isHabitDone(habit.value, today))
         </div>
       </div>
       <p class="mt-2 text-xs text-ink-faint">
-        Click a day to {{ target ? 'add 1' : 'mark it' }}, right click to type {{ target ? 'the amount' : 'it' }}. Counting since {{ longDay.format(utc(stats.since)) }}.
+        {{ target ? t('habits.heatmapHintGoal', { date: longDay.format(utc(stats.since)) }) : t('habits.heatmapHintPlain', { date: longDay.format(utc(stats.since)) }) }}
       </p>
     </div>
   </section>

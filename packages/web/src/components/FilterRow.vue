@@ -4,7 +4,8 @@ import { computed, ref } from 'vue'
 import type { Filter, FilterOperator, FilterValue, Id } from '@vasta/core'
 import { OPERATORS, UNARY_OPERATORS } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
-import { filterFieldOptions, IDS_OPERATOR_LABELS, OPERATOR_LABELS } from '../lib/query.ts'
+import { optionLabel, t, typeName } from '../lib/i18n.ts'
+import { filterFieldOptions, operatorLabel } from '../lib/query.ts'
 import { systemType, workspace } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -26,7 +27,7 @@ const fieldGroups = computed(() => {
 const field = computed(() => fields.value.find((f) => f.field === props.filter.field))
 const kind = computed(() => field.value?.kind ?? 'text')
 const operators = computed(() => OPERATORS[kind.value])
-const label = (op: FilterOperator) => (kind.value === 'ids' ? IDS_OPERATOR_LABELS[op] : undefined) ?? OPERATOR_LABELS[op]
+const label = (op: FilterOperator) => operatorLabel(op, kind.value)
 const needsValue = computed(() => !UNARY_OPERATORS.includes(props.filter.operator))
 
 function setField(name: string) {
@@ -120,7 +121,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
 <template>
   <div class="flex flex-wrap items-start gap-1.5">
     <select :value="filter.field" :class="control" class="max-w-44" @change="setField(($event.target as HTMLSelectElement).value)">
-      <option v-if="!field" :value="filter.field">Unknown field</option>
+      <option v-if="!field" :value="filter.field">{{ t('query.unknownField') }}</option>
       <template v-for="g in fieldGroups" :key="g.through">
         <option v-for="f in g.through ? [] : g.options" :key="f.field" :value="f.field">{{ f.label }}</option>
         <optgroup v-if="g.through" :label="g.through">
@@ -140,20 +141,20 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
         :type="kind === 'number' ? 'number' : 'text'"
         :class="control"
         class="w-40"
-        placeholder="Value"
+        :placeholder="t('query.valuePlaceholder')"
         @change="setLiteral(($event.target as HTMLInputElement).value)"
       />
 
       <!-- Date -->
       <template v-else-if="kind === 'date'">
         <select :value="dateMode" :class="control" @change="setDateMode(($event.target as HTMLSelectElement).value as DateMode)">
-          <option value="today">Today</option>
-          <option value="exact">Exact date</option>
-          <option value="parent">This page's date</option>
+          <option value="today">{{ t('common.today') }}</option>
+          <option value="exact">{{ t('query.exactDate') }}</option>
+          <option value="parent">{{ t('query.thisPageDate') }}</option>
         </select>
         <span v-if="dateMode === 'today'" class="flex items-center gap-1 text-sm text-ink-soft">
-          <input :value="offset" type="number" :class="control" class="w-16" title="Days from today (negative for the past)" @change="setOffset(($event.target as HTMLInputElement).value)" />
-          days
+          <input :value="offset" type="number" :class="control" class="w-16" :title="t('query.daysOffsetTitle')" @change="setOffset(($event.target as HTMLInputElement).value)" />
+          {{ t('query.daysUnit') }}
         </span>
         <input v-else-if="dateMode === 'exact'" type="date" :value="literalText" :class="control" @change="setLiteral(($event.target as HTMLInputElement).value)" />
       </template>
@@ -169,17 +170,17 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
               :class="ids.includes(option.id) ? chip(option.color) : 'text-ink-faint ring-1 ring-line hover:text-ink'"
               @click="toggleId(option.id)"
             >
-              {{ option.label }}
+              {{ field?.def ? optionLabel(field.def.id, option) : option.label }}
             </button>
           </template>
           <template v-else-if="isPerson">
             <button
               class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
               :class="isMe ? 'bg-accent/10 text-accent ring-1 ring-accent/30' : 'text-ink-faint ring-1 ring-line hover:text-ink'"
-              title="Whoever is looking"
+              :title="t('query.meTitle')"
               @click="toggleMe"
             >
-              <AppIcon fallback="ph:user-circle" :size="13" />Me
+              <AppIcon fallback="ph:user-circle" :size="13" />{{ t('query.me') }}
             </button>
             <button
               v-for="id in personChoices"
@@ -193,33 +194,33 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
           </template>
           <template v-else-if="filter.field === 'type'">
             <button
-              v-for="t in workspace.types"
-              :key="t.id"
+              v-for="typeItem in workspace.types"
+              :key="typeItem.id"
               class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
-              :class="ids.includes(t.id) ? chip(t.color) : 'text-ink-faint ring-1 ring-line hover:text-ink'"
-              @click="toggleId(t.id)"
+              :class="ids.includes(typeItem.id) ? chip(typeItem.color) : 'text-ink-faint ring-1 ring-line hover:text-ink'"
+              @click="toggleId(typeItem.id)"
             >
-              <AppIcon :icon="t.icon" fallback="ph:cube" :size="12" />{{ t.name }}
+              <AppIcon :icon="typeItem.icon" fallback="ph:cube" :size="12" />{{ typeName(typeItem) }}
             </button>
           </template>
           <template v-else>
             <span v-if="isParent" class="inline-flex items-center gap-1 rounded-md bg-accent/10 px-1.5 py-0.5 text-sm text-accent">
-              <AppIcon fallback="ph:arrow-elbow-left-up" :size="13" /> This page
-              <button class="text-ink-faint hover:text-ink" title="Remove" @click="useParent(false)"><AppIcon fallback="ph:x" :size="11" /></button>
+              <AppIcon fallback="ph:arrow-elbow-left-up" :size="13" /> {{ t('query.thisPage') }}
+              <button class="text-ink-faint hover:text-ink" :title="t('common.remove')" @click="useParent(false)"><AppIcon fallback="ph:x" :size="11" /></button>
             </span>
             <span v-if="isCurrentSprint" class="inline-flex items-center gap-1 rounded-md bg-accent/10 px-1.5 py-0.5 text-sm text-accent">
-              <AppIcon fallback="ph:flag-banner" :size="13" /> Current {{ (sprintSettings?.name ?? 'sprint').toLowerCase() }}
-              <button class="text-ink-faint hover:text-ink" title="Remove" @click="toggleCurrentSprint"><AppIcon fallback="ph:x" :size="11" /></button>
+              <AppIcon fallback="ph:flag-banner" :size="13" /> {{ t('query.currentSprint', { word: (sprintSettings?.name ?? t('builtin.type.sprint.one')).toLowerCase() }) }}
+              <button class="text-ink-faint hover:text-ink" :title="t('common.remove')" @click="toggleCurrentSprint"><AppIcon fallback="ph:x" :size="11" /></button>
             </span>
             <ObjectChip v-for="id in ids" :key="id" :id="id" :tag="filter.field === 'tags'" removable @remove="toggleId(id)" />
-            <button v-if="isSprintRelation && !isCurrentSprint && !ids.length" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" title="Whichever has today in its dates" @click="toggleCurrentSprint">
-              Current {{ (sprintSettings?.name ?? 'sprint').toLowerCase() }}
+            <button v-if="isSprintRelation && !isCurrentSprint && !ids.length" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" :title="t('query.currentSprintTitle')" @click="toggleCurrentSprint">
+              {{ t('query.currentSprint', { word: (sprintSettings?.name ?? t('builtin.type.sprint.one')).toLowerCase() }) }}
             </button>
             <button v-if="!isParent && !isCurrentSprint" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="picking = !picking">
-              {{ ids.length ? '+' : 'Choose…' }}
+              {{ ids.length ? '+' : t('query.choose') }}
             </button>
-            <button v-if="!isParent && !ids.length" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" title="Match the page this query is embedded in" @click="useParent(true)">
-              This page
+            <button v-if="!isParent && !ids.length" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" :title="t('query.thisPageTitle')" @click="useParent(true)">
+              {{ t('query.thisPage') }}
             </button>
           </template>
         </div>
@@ -229,7 +230,7 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
       </div>
     </template>
 
-    <button class="ml-auto rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="Remove filter" @click="emit('remove')">
+    <button class="ml-auto rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="t('query.removeFilter')" @click="emit('remove')">
       <AppIcon fallback="ph:x" :size="14" />
     </button>
   </div>

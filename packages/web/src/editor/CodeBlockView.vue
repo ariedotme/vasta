@@ -8,6 +8,7 @@ import type { Mounted } from 'pele/lazy'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MERMAID, mountDiagram } from '../lib/mermaid.ts'
 import { boardFromMermaid, isMermaidFlowchart } from '../lib/board-actions.ts'
+import { t } from '../lib/i18n.ts'
 import { lastError, systemType } from '../lib/state.ts'
 import { openObject } from '../lib/open.ts'
 
@@ -76,7 +77,7 @@ async function turnIntoBoard() {
   boarding.value = true
   try {
     const firstLabel = /\[([^\]]+)\]|\(([^)]+)\)|\{([^}]+)\}/.exec(text.value)
-    const title = firstLabel ? `${(firstLabel[1] ?? firstLabel[2] ?? firstLabel[3])!.trim()} flowchart` : 'Flowchart'
+    const title = firstLabel ? t('editor.diagram.namedFlowchart', { name: (firstLabel[1] ?? firstLabel[2] ?? firstLabel[3])!.trim() }) : t('editor.diagram.flowchart')
     const id = await boardFromMermaid(text.value, title)
     await openObject(id)
   } catch (error) {
@@ -100,10 +101,10 @@ function editCode() {
       contenteditable="false"
       class="absolute right-1 top-1 z-[1] flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink-soft opacity-0 shadow-sm transition hover:text-ink group-hover/diagram:opacity-100 focus:opacity-100 max-md:opacity-100"
       :disabled="boarding"
-      title="Make an editable whiteboard from this flowchart"
+      :title="t('editor.diagram.makeBoardTitle')"
       @click.stop="turnIntoBoard"
     >
-      <AppIcon fallback="ph:chalkboard-simple" :size="13" />{{ boarding ? 'Making…' : 'Turn into whiteboard' }}
+      <AppIcon fallback="ph:chalkboard-simple" :size="13" />{{ boarding ? t('editor.diagram.making') : t('editor.diagram.turnIntoBoard') }}
     </button>
     <div
       v-show="text.trim() && !error"
@@ -111,13 +112,13 @@ function editCode() {
       contenteditable="false"
       class="overflow-x-auto rounded-lg py-2"
       :class="editor.isEditable ? 'cursor-text hover:bg-hover/60' : ''"
-      :title="editor.isEditable && !inside ? 'Edit the diagram' : undefined"
+      :title="editor.isEditable && !inside ? t('editor.diagram.edit') : undefined"
       @click="editCode"
     />
     <pre v-show="showCode" :class="error ? 'border-red-300 dark:border-red-900' : ''"><NodeViewContent as="code" /></pre>
     <div v-if="error && text.trim()" contenteditable="false" class="mt-1 select-none whitespace-pre-wrap font-mono text-xs text-red-600 dark:text-red-400" data-diagram-error>{{ error }}</div>
     <p v-else-if="!text.trim() && editor.isEditable" contenteditable="false" class="mt-1 select-none text-xs text-ink-faint">
-      A Mermaid diagram: try <code>flowchart LR</code> and <code>A --> B</code> on the next line.
+      {{ t('editor.diagram.hintBefore') }} <code>flowchart LR</code> {{ t('editor.diagram.hintMiddle') }} <code>A --> B</code> {{ t('editor.diagram.hintAfter') }}
     </p>
   </NodeViewWrapper>
   <NodeViewWrapper v-else as="pre"><NodeViewContent as="code" /></NodeViewWrapper>

@@ -21,6 +21,7 @@ import { onChange } from '../lib/events.ts'
 import { clone } from '../lib/clone.ts'
 import { chip } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
+import { propName, t, typeName, typePluralName } from '../lib/i18n.ts'
 import { confirmDialog, openContextMenu, openMenuAt, promptDialog } from '../lib/overlays.ts'
 import { groupOptions, queryContext } from '../lib/query.ts'
 import { keysOf } from '../lib/shortcuts.ts'
@@ -63,9 +64,9 @@ onBeforeUnmount(() => {
  * Some built-in types get a fixed view before their saved views, and open on it: Tags a Tree of
  * nested tags (TagTree), Habits a Tracker of the last days (HabitBoard).
  */
-const FIXED_VIEWS: Partial<Record<string, { id: string; label: string; icon: string }>> = {
-  tag: { id: '__tree', label: 'Tree', icon: 'ph:tree-structure' },
-  habit: { id: '__tracker', label: 'Tracker', icon: 'ph:check-square' },
+const FIXED_VIEWS: Partial<Record<string, { id: string; labelKey: 'views.tree' | 'views.tracker'; icon: string }>> = {
+  tag: { id: '__tree', labelKey: 'views.tree', icon: 'ph:tree-structure' },
+  habit: { id: '__tracker', labelKey: 'views.tracker', icon: 'ph:check-square' },
 }
 const fixedView = computed(() => FIXED_VIEWS[type.value?.system ?? ''])
 // A type with a status (tasks) also has its flow metrics, after its views.
@@ -117,7 +118,7 @@ watch(type, (t) => {
   activeViewId.value = resolveView(t, activeViewId.value, fixed?.id)
 }, { immediate: true })
 
-const view = computed<ViewDef>(() => type.value?.views.find((v) => v.id === activeViewId.value) ?? { id: 'default', name: 'All', layout: 'list' })
+const view = computed<ViewDef>(() => type.value?.views.find((v) => v.id === activeViewId.value) ?? { id: 'default', name: t('views.all'), layout: 'list' })
 
 // View settings are saved on the type, debounced. Until the save answers, the edited copy is the
 // type (unsavedTypes): a change event reloading the stored one meanwhile would undo the edit.
@@ -154,7 +155,7 @@ function updateView(patch: Partial<ViewDef>) {
 async function addView() {
   if (!type.value) return
   const id = newId()
-  const name = await promptDialog({ title: 'New view', value: 'New view', confirmLabel: 'Create' })
+  const name = await promptDialog({ title: t('views.newView'), value: t('views.newView'), confirmLabel: t('common.create') })
   if (!name || !type.value) return
   const next = clone(type.value)
   next.views.push({ id, name, layout: view.value.layout })
@@ -190,7 +191,7 @@ function saveViews(mutate: (views: ViewDef[]) => void) {
 
 async function renameView() {
   menuOpen.value = false
-  const name = await promptDialog({ title: 'Rename view', value: view.value.name, confirmLabel: 'Rename' })
+  const name = await promptDialog({ title: t('views.renameView'), value: view.value.name, confirmLabel: t('common.renameAction') })
   if (!name) return
   saveViews((views) => {
     const target = views.find((v) => v.id === view.value.id)
@@ -200,7 +201,7 @@ async function renameView() {
 
 function duplicateView() {
   menuOpen.value = false
-  const copy: ViewDef = { ...clone(view.value), id: newId(), name: `${view.value.name} copy` }
+  const copy: ViewDef = { ...clone(view.value), id: newId(), name: t('views.viewCopy', { name: view.value.name }) }
   saveViews((views) => views.push(copy))
   pickView(copy.id)
 }
@@ -209,7 +210,7 @@ async function deleteView() {
   menuOpen.value = false
   if ((type.value?.views.length ?? 0) <= 1) return
   const id = view.value.id
-  if (!(await confirmDialog({ title: `Delete the view “${view.value.name}”?`, confirmLabel: 'Delete view', danger: true }))) return
+  if (!(await confirmDialog({ title: t('views.deleteViewTitle', { name: view.value.name }), confirmLabel: t('views.deleteView'), danger: true }))) return
   saveViews((views) => views.splice(views.findIndex((v) => v.id === id), 1))
   activeViewId.value = type.value?.views[0]?.id ?? ''
   void removeFromSidebar(viewItem(props.id, id))
@@ -254,12 +255,12 @@ async function deleteType() {
 function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, type.value) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
-    { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(object.id) },
+    { label: t('common.open'), icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
+    { label: t('nav.copyLink'), icon: 'ph:link', run: () => copyObjectLink(object.id) },
     pinMenu(object.id),
     { kind: 'separator' },
     {
-      label: 'Move to trash',
+      label: t('nav.moveToTrash'),
       icon: 'ph:trash',
       danger: true,
       run: async () => {
@@ -304,13 +305,13 @@ const isMine = (o: ObjectSummary) => {
 
 const sortFields = computed(() => [
   // A board keeps the order its cards were dragged into until it is sorted by a field.
-  ...(view.value.layout === 'kanban' ? [{ field: RANK_PROPERTY_ID, label: 'Manual' }] : []),
-  { field: 'updatedAt', label: 'Last edited' },
-  { field: 'createdAt', label: 'Created' },
-  { field: 'title', label: 'Title' },
-  ...valueProps.value.filter((p) => ['date', 'number', 'text', 'select', 'formula'].includes(p.kind)).map((p) => ({ field: p.id, label: p.name })),
+  ...(view.value.layout === 'kanban' ? [{ field: RANK_PROPERTY_ID, label: t('views.manual') }] : []),
+  { field: 'updatedAt', label: t('views.lastEdited') },
+  { field: 'createdAt', label: t('views.created') },
+  { field: 'title', label: t('object.titleLabel') },
+  ...valueProps.value.filter((p) => ['date', 'number', 'text', 'select', 'formula'].includes(p.kind)).map((p) => ({ field: p.id, label: propName(p) })),
 ])
-const groupFields = computed(() => [{ field: '', label: 'No grouping' }, ...groupOptions([props.id]).filter((f) => f.field !== 'type')])
+const groupFields = computed(() => [{ field: '', label: t('views.noGrouping') }, ...groupOptions([props.id]).filter((f) => f.field !== 'type')])
 
 const manual = computed(() => view.value.layout === 'kanban' && !view.value.sort?.length)
 const sort = computed<SortRule>(() => (manual.value ? { field: RANK_PROPERTY_ID, direction: 'asc' } : (view.value.sort?.[0] ?? { field: 'updatedAt', direction: 'desc' })))
@@ -382,21 +383,27 @@ const setFilter = (group: FilterGroup) => updateView({ filter: group.items.lengt
 // ---------------------------------------------------------------------------
 // Menus
 
-const layouts: { layout: ViewLayout; label: string; icon: string }[] = [
-  { layout: 'list', label: 'List', icon: 'ph:list-dashes' },
-  { layout: 'grid', label: 'Grid', icon: 'ph:grid-four' },
-  { layout: 'wall', label: 'Wall', icon: 'ph:wall' },
-  { layout: 'gallery', label: 'Gallery', icon: 'ph:images' },
-  { layout: 'table', label: 'Table', icon: 'ph:table' },
-  { layout: 'kanban', label: 'Board', icon: 'ph:kanban' },
-]
+const layouts = computed<{ layout: ViewLayout; label: string; icon: string }[]>(() => [
+  { layout: 'list', label: t('views.layout.list'), icon: 'ph:list-dashes' },
+  { layout: 'grid', label: t('views.layout.grid'), icon: 'ph:grid-four' },
+  { layout: 'wall', label: t('views.layout.wall'), icon: 'ph:wall' },
+  { layout: 'gallery', label: t('views.layout.gallery'), icon: 'ph:images' },
+  { layout: 'table', label: t('views.layout.table'), icon: 'ph:table' },
+  { layout: 'kanban', label: t('views.layout.kanban'), icon: 'ph:kanban' },
+])
 const layoutAnchor = ref<HTMLElement | null>(null)
 const layoutOpen = ref(false)
 /** Where the view opens what is clicked: as the type says (unset), or its own choice. */
 const openChoices = computed<{ openIn: ViewOpenIn | undefined; label: string }[]>(() => [
-  { openIn: undefined, label: `Same as ${type.value?.name ?? 'the type'} (${type.value?.openIn === 'pane' ? 'side pane' : 'full page'})` },
-  { openIn: 'pane', label: 'Side pane' },
-  { openIn: 'page', label: 'Full page' },
+  {
+    openIn: undefined,
+    label: t('views.openSameAs', {
+      type: type.value ? typeName(type.value) : t('views.theType'),
+      where: type.value?.openIn === 'pane' ? t('views.sidePaneLower') : t('views.fullPageLower'),
+    }),
+  },
+  { openIn: 'pane', label: t('views.sidePane') },
+  { openIn: 'page', label: t('views.fullPage') },
 ])
 const sortAnchor = ref<HTMLElement | null>(null)
 const sortOpen = ref(false)
@@ -416,35 +423,35 @@ function setGroup(field: string) {
   groupOpen.value = false
 }
 
-const currentLayout = computed(() => layouts.find((l) => l.layout === view.value.layout) ?? layouts[0]!)
+const currentLayout = computed(() => layouts.value.find((l) => l.layout === view.value.layout) ?? layouts.value[0]!)
 
 // New: from the type's default template (lib/templates.ts); the chevron picks another, or none.
 const typeTemplates = computed(() => (type.value ? templatesOf(type.value.id) : []))
-const defaultTemplate = computed(() => typeTemplates.value.find((t) => t.template?.kind === 'template' && t.template.default))
+const defaultTemplate = computed(() => typeTemplates.value.find((tpl) => tpl.template?.kind === 'template' && tpl.template.default))
 
 async function createNew() {
-  const t = type.value
-  if (!t) return
+  const typeObj = type.value
+  if (!typeObj) return
   await currentTemplates()
-  void createFromTemplate(t, defaultTemplate.value)
+  void createFromTemplate(typeObj, defaultTemplate.value)
 }
 
 async function newMenu(event: MouseEvent) {
   if (!type.value) return
-  const t = type.value
+  const typeObj = type.value
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   await loadTemplates()
   openMenuAt(rect.right - 224, rect.bottom + 4, [
-    { label: `Blank ${t.name.toLowerCase()}`, icon: 'ph:file', run: () => createFromTemplate(t, undefined) },
+    { label: t('views.blankType', { type: typeName(typeObj).toLowerCase() }), icon: 'ph:file', run: () => createFromTemplate(typeObj, undefined) },
     ...typeTemplates.value.map((template) => ({
       label: template.template!.name,
       icon: template === defaultTemplate.value ? 'ph:star-fill' : 'ph:copy-simple',
-      ...(template === defaultTemplate.value ? { hint: 'Default' } : {}),
-      run: () => createFromTemplate(t, template),
+      ...(template === defaultTemplate.value ? { hint: t('common.default') } : {}),
+      run: () => createFromTemplate(typeObj, template),
     })),
     { kind: 'separator' as const },
-    { label: 'New template…', icon: 'ph:plus', run: () => newTemplate(t) },
-    { label: 'Manage templates…', icon: 'ph:gear-six', run: () => (settingsOpen.value = true) },
+    { label: t('views.newTemplateMenu'), icon: 'ph:plus', run: () => newTemplate(typeObj) },
+    { label: t('views.manageTemplatesMenu'), icon: 'ph:gear-six', run: () => (settingsOpen.value = true) },
   ])
 }
 </script>
@@ -452,42 +459,42 @@ async function newMenu(event: MouseEvent) {
 <template>
   <div v-if="type" class="px-4 pb-24 pt-6 md:px-10 md:pt-10">
     <header class="flex items-center gap-3">
-      <button class="grid h-10 w-10 place-items-center rounded-xl hover:ring-2 hover:ring-line" :class="chip(type.color)" title="Type settings" @click="settingsOpen = true">
+      <button class="grid h-10 w-10 place-items-center rounded-xl hover:ring-2 hover:ring-line" :class="chip(type.color)" :title="t('views.typeSettingsTitle')" @click="settingsOpen = true">
         <AppIcon :icon="type.icon" fallback="ph:cube" :size="22" />
       </button>
-      <h1 class="min-w-0 truncate text-2xl font-bold tracking-tight">{{ type.pluralName }}</h1>
+      <h1 class="min-w-0 truncate text-2xl font-bold tracking-tight">{{ typePluralName(type) }}</h1>
       <span class="text-sm text-ink-faint">{{ objects.length }}</span>
-      <button ref="menuAnchor" class="ml-auto rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink" title="More" @click="menuOpen = !menuOpen">
+      <button ref="menuAnchor" class="ml-auto rounded-lg p-2 text-ink-soft hover:bg-hover hover:text-ink" :title="t('object.more')" @click="menuOpen = !menuOpen">
         <AppIcon fallback="ph:dots-three" :size="18" />
       </button>
       <div class="flex shrink-0 items-stretch rounded-lg bg-ink text-sm font-medium text-surface" data-new-split>
-        <button class="flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 hover:opacity-90" :title="defaultTemplate ? `New ${type.name} from “${defaultTemplate.template!.name}”` : `New ${type.name}`" @click="createNew">
-          <AppIcon fallback="ph:plus" /> <span class="max-sm:hidden">New {{ type.name }}</span>
+        <button class="flex items-center gap-1.5 rounded-l-lg px-3 py-1.5 hover:opacity-90" :title="defaultTemplate ? t('views.newTypeFromTemplate', { type: typeName(type), template: defaultTemplate.template!.name }) : t('nav.newOfType', { type: typeName(type) })" @click="createNew">
+          <AppIcon fallback="ph:plus" /> <span class="max-sm:hidden">{{ t('nav.newOfType', { type: typeName(type) }) }}</span>
         </button>
-        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90" title="Templates" aria-label="New from a template" @click="newMenu">
+        <button class="grid place-items-center rounded-r-lg border-l border-surface/25 px-1.5 hover:opacity-90" :title="t('views.templates')" :aria-label="t('views.newFromTemplateAria')" @click="newMenu">
           <AppIcon fallback="ph:caret-down" :size="13" />
         </button>
       </div>
     </header>
     <PopoverMenu v-model:open="menuOpen" :anchor="menuAnchor" placement="bottom-end" width="15rem">
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="(settingsOpen = true), (menuOpen = false)">
-        <AppIcon fallback="ph:gear-six" class="text-ink-soft" /> Type settings…
+        <AppIcon fallback="ph:gear-six" class="text-ink-soft" /> {{ t('nav.typeSettings') }}
       </button>
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinFrom">
-        <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? 'Pinned in sidebar' : 'Pin to sidebar' }}
+        <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ pinned ? t('actions.pinnedInSidebar') : t('actions.pinToSidebar') }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
       </button>
       <div class="my-1 border-t border-line" />
       <template v-if="!fixedActive">
-      <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">View “{{ view.name }}”</div>
+      <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{{ t('views.viewHeading', { name: view.name }) }}</div>
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="renameView">
-        <AppIcon fallback="ph:pencil-simple" class="text-ink-soft" /> Rename view
+        <AppIcon fallback="ph:pencil-simple" class="text-ink-soft" /> {{ t('views.renameView') }}
       </button>
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="duplicateView">
-        <AppIcon fallback="ph:copy" class="text-ink-soft" /> Duplicate view
+        <AppIcon fallback="ph:copy" class="text-ink-soft" /> {{ t('views.duplicateView') }}
       </button>
       <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="pinViewFrom">
-        <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ viewPinned ? 'View pinned in sidebar' : 'Pin view to sidebar' }}
+        <AppIcon fallback="ph:push-pin" class="text-ink-soft" /> {{ viewPinned ? t('views.viewPinned') : t('views.pinView') }}
         <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
       </button>
       <button
@@ -495,13 +502,13 @@ async function newMenu(event: MouseEvent) {
         :disabled="type.views.length <= 1"
         @click="deleteView"
       >
-        <AppIcon fallback="ph:trash-simple" class="text-ink-soft" /> Delete view
+        <AppIcon fallback="ph:trash-simple" class="text-ink-soft" /> {{ t('views.deleteView') }}
       </button>
       </template>
       <template v-if="!type.system">
         <div class="my-1 border-t border-line" />
         <button class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm text-red-600 hover:bg-hover" @click="deleteType">
-          <AppIcon fallback="ph:trash" /> Delete type…
+          <AppIcon fallback="ph:trash" /> {{ t('nav.deleteType') }}
         </button>
       </template>
     </PopoverMenu>
@@ -515,7 +522,7 @@ async function newMenu(event: MouseEvent) {
         :class="fixedActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
         @click="pickView(fixedView.id)"
       >
-        <AppIcon :fallback="fixedView.icon" :size="14" /> {{ fixedView.label }}
+        <AppIcon :fallback="fixedView.icon" :size="14" /> {{ t(fixedView.labelKey) }}
       </button>
       <!-- A div: WebKit does not start a drag on a button. A tab drags into the sidebar to pin the view. -->
       <div
@@ -533,7 +540,7 @@ async function newMenu(event: MouseEvent) {
       >
         {{ v.name }}
       </div>
-      <button class="rounded-lg px-2 py-1.5 text-ink-faint hover:bg-hover hover:text-ink" title="Add view" @click="addView">
+      <button class="rounded-lg px-2 py-1.5 text-ink-faint hover:bg-hover hover:text-ink" :title="t('views.addView')" @click="addView">
         <AppIcon fallback="ph:plus" :size="14" />
       </button>
       <button
@@ -542,23 +549,23 @@ async function newMenu(event: MouseEvent) {
         :class="metricsActive ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'"
         @click="pickView(METRICS_VIEW)"
       >
-        <AppIcon fallback="ph:chart-line-up" :size="14" /> Metrics
+        <AppIcon fallback="ph:chart-line-up" :size="14" /> {{ t('views.metrics') }}
       </button>
 
       <div class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm max-md:-mx-1 max-md:w-full max-md:overflow-x-auto [&>*]:shrink-0">
         <div class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-ink-faint focus-within:bg-hover">
           <AppIcon fallback="ph:magnifying-glass" :size="14" />
-          <input v-model="filterText" class="w-28 bg-transparent md:w-36 text-ink outline-none placeholder:text-ink-faint" placeholder="Filter…" />
+          <input v-model="filterText" class="w-28 bg-transparent md:w-36 text-ink outline-none placeholder:text-ink-faint" :placeholder="t('views.filterPlaceholder')" />
         </div>
         <template v-if="!fixedActive">
         <button
           v-if="showMine"
           class="flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-hover"
           :class="mineOnly ? 'bg-accent/10 text-accent' : 'text-ink-soft'"
-          :title="`Only what ${personProps.map((p) => p.name).join(' or ')} names you in`"
+          :title="t('views.mineTitle', { fields: personProps.map((p) => propName(p)).join(t('views.or')) })"
           @click="toggleMine"
         >
-          <AppIcon fallback="ph:user-circle" /> Mine
+          <AppIcon fallback="ph:user-circle" /> {{ t('views.mine') }}
         </button>
         <button
           ref="filterAnchor"
@@ -566,7 +573,7 @@ async function newMenu(event: MouseEvent) {
           :class="filterCount ? 'text-accent' : 'text-ink-soft'"
           @click="filterOpen = !filterOpen"
         >
-          <AppIcon fallback="ph:funnel" /> Filter<span v-if="filterCount"> · {{ filterCount }}</span>
+          <AppIcon fallback="ph:funnel" /> {{ t('views.filter') }}<span v-if="filterCount"> · {{ filterCount }}</span>
         </button>
         <button ref="sortAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="sortOpen = !sortOpen">
           <AppIcon :fallback="sort.direction === 'asc' ? 'ph:sort-ascending' : 'ph:sort-descending'" />
@@ -574,10 +581,10 @@ async function newMenu(event: MouseEvent) {
         </button>
         <button ref="groupAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="groupOpen = !groupOpen">
           <AppIcon fallback="ph:rows" />
-          {{ groupField ? groupFields.find((f) => f.field === groupField)?.label ?? 'Group' : 'Group' }}
+          {{ groupField ? groupFields.find((f) => f.field === groupField)?.label ?? t('views.group') : t('views.group') }}
         </button>
         <button v-if="view.layout === 'kanban'" ref="boardAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="boardOpen = !boardOpen">
-          <AppIcon fallback="ph:cards" /> Cards
+          <AppIcon fallback="ph:cards" /> {{ t('views.cards') }}
         </button>
         <button
           v-if="view.layout === 'list' || view.layout === 'table'"
@@ -585,7 +592,7 @@ async function newMenu(event: MouseEvent) {
           class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover"
           @click="columnsOpen = !columnsOpen"
         >
-          <AppIcon :fallback="view.layout === 'table' ? 'ph:columns' : 'ph:list-dashes'" /> {{ view.layout === 'table' ? 'Columns' : 'Fields' }}
+          <AppIcon :fallback="view.layout === 'table' ? 'ph:columns' : 'ph:list-dashes'" /> {{ view.layout === 'table' ? t('views.columns') : t('views.fields') }}
         </button>
         <button ref="layoutAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="layoutOpen = !layoutOpen">
           <AppIcon :fallback="currentLayout.icon" /> {{ currentLayout.label }}
@@ -610,21 +617,21 @@ async function newMenu(event: MouseEvent) {
         </button>
       </PopoverMenu>
       <PopoverMenu v-model:open="boardOpen" :anchor="boardAnchor" placement="bottom-end" width="15rem">
-        <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Swimlanes</div>
+        <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{{ t('views.swimlanes') }}</div>
         <select
           :value="view.board?.swimlanes ?? ''"
           class="mx-1.5 mb-2 w-[calc(100%-0.75rem)] rounded-md bg-hover px-2 py-1 text-sm outline-none"
-          aria-label="Swimlanes"
+          :aria-label="t('views.swimlanes')"
           @change="setSwimlanes(($event.target as HTMLSelectElement).value)"
         >
-          <option value="">None</option>
+          <option value="">{{ t('object.none') }}</option>
           <option v-for="f in groupFields.filter((g) => g.field && g.field !== groupField)" :key="f.field" :value="f.field">{{ f.label }}</option>
         </select>
         <div class="flex items-center px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">
-          Card fields
-          <button v-if="cardFieldIds" class="ml-auto normal-case tracking-normal text-ink-faint hover:text-ink" @click="resetCardFields">Automatic</button>
+          {{ t('views.cardFields') }}
+          <button v-if="cardFieldIds" class="ml-auto normal-case tracking-normal text-ink-faint hover:text-ink" @click="resetCardFields">{{ t('views.automatic') }}</button>
         </div>
-        <p v-if="!cardFieldIds" class="px-2.5 pb-1 text-xs text-ink-faint">The first two with a value. Pick to choose.</p>
+        <p v-if="!cardFieldIds" class="px-2.5 pb-1 text-xs text-ink-faint">{{ t('views.cardFieldsHint') }}</p>
         <button
           v-for="p in cardFieldChoices"
           :key="p.id"
@@ -632,7 +639,7 @@ async function newMenu(event: MouseEvent) {
           @click="toggleCardField(p.id)"
         >
           <AppIcon :fallback="cardFieldIds?.includes(p.id) ? 'ph:check-square-fill' : 'ph:square'" :class="cardFieldIds?.includes(p.id) ? 'text-accent' : 'text-ink-faint'" />
-          {{ p.name }}
+          {{ propName(p) }}
         </button>
       </PopoverMenu>
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
@@ -650,7 +657,7 @@ async function newMenu(event: MouseEvent) {
           <AppIcon v-if="view.layout === l.layout" fallback="ph:check" class="ml-auto text-accent" />
         </button>
         <div class="my-1 border-t border-line" />
-        <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Open in</div>
+        <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{{ t('views.openIn') }}</div>
         <button
           v-for="o in openChoices"
           :key="o.label"
@@ -664,17 +671,17 @@ async function newMenu(event: MouseEvent) {
       </PopoverMenu>
     </div>
 
-    <p v-if="loading" class="py-10 text-sm text-ink-faint">Loading…</p>
+    <p v-if="loading" class="py-10 text-sm text-ink-faint">{{ t('common.loading') }}</p>
     <div v-else-if="!objects.length" class="py-16 text-center text-sm text-ink-faint">
-      No {{ type.pluralName.toLowerCase() }} yet.<template v-if="type.system === 'habit'"> Make one with New {{ type.name }}, then check it off each day from Today.</template
-      ><template v-else> Make one with New {{ type.name }}, or press {{ keysOf('search') }} and type “/{{ type.name }}” and a title.</template>
+      {{ t('views.noItemsYet', { plural: typePluralName(type).toLowerCase() }) }}<template v-if="type.system === 'habit'"> {{ t('views.noHabitsHint', { type: typeName(type) }) }}</template
+      ><template v-else> {{ t('views.noItemsHint', { type: typeName(type), keys: keysOf('search'), rawType: type.name }) }}</template>
       <TipsCard class="mx-auto mt-10 max-w-xl text-left" />
     </div>
 
     <FlowMetrics v-else-if="metricsActive" :type="type" />
     <TagTree v-else-if="fixedActive && type.system === 'tag'" :tags="objects" :filter="filterText" @menu="objectMenu" />
     <HabitBoard v-else-if="fixedActive && type.system === 'habit'" :habits="objects" :filter="filterText" @menu="objectMenu" />
-    <p v-else-if="!visible.length" class="py-16 text-center text-sm text-ink-faint">No {{ type.pluralName.toLowerCase() }} match the filter.</p>
+    <p v-else-if="!visible.length" class="py-16 text-center text-sm text-ink-faint">{{ t('views.noItemsMatch', { plural: typePluralName(type).toLowerCase() }) }}</p>
     <ObjectCollection
       v-else
       class="mt-6"
@@ -695,5 +702,5 @@ async function newMenu(event: MouseEvent) {
       @created="created"
     />
   </div>
-  <div v-else class="grid h-full place-items-center text-sm text-ink-soft">Type not found.</div>
+  <div v-else class="grid h-full place-items-center text-sm text-ink-soft">{{ t('views.typeNotFound') }}</div>
 </template>

@@ -4,6 +4,7 @@
 import { NodeViewContent, NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { computed } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
+import { t } from '../lib/i18n.ts'
 import { openMenuAt, promptDialog } from '../lib/overlays.ts'
 
 const props = defineProps(nodeViewProps)
@@ -12,10 +13,10 @@ const condition = computed(() => props.node.attrs.condition as string | null)
 async function editCondition() {
   if (!props.editor.isEditable) return
   const next = await promptDialog({
-    title: 'Condition',
-    message: 'A formula, e.g. weekday(date) = 1, ask("Body", "Yes", "No") = "Yes", has("Due").',
+    title: t('editor.slash.condition'),
+    message: t('editor.template.conditionMessage'),
     value: condition.value ?? '',
-    confirmLabel: 'Save',
+    confirmLabel: t('common.save'),
   })
   if (next !== null) props.updateAttributes({ condition: next })
 }
@@ -67,12 +68,12 @@ function menu(event: MouseEvent) {
     return found
   })()
   openMenuAt(rect.left, rect.bottom + 4, [
-    ...(condition.value !== null ? [{ label: 'Edit condition…', icon: 'ph:function', run: editCondition }] : []),
-    { label: 'Add Else if', icon: 'ph:git-branch', run: () => addBranch(false) },
-    ...(hasElse ? [] : [{ label: 'Add Else', icon: 'ph:arrow-elbow-down-right', run: () => addBranch(true) }]),
+    ...(condition.value !== null ? [{ label: t('editor.template.editCondition'), icon: 'ph:function', run: editCondition }] : []),
+    { label: t('editor.template.addElseIf'), icon: 'ph:git-branch', run: () => addBranch(false) },
+    ...(hasElse ? [] : [{ label: t('editor.template.addElse'), icon: 'ph:arrow-elbow-down-right', run: () => addBranch(true) }]),
     { kind: 'separator' },
-    { label: 'Keep these blocks, without the condition', icon: 'ph:arrow-square-out', run: unwrap },
-    { label: 'Remove this branch', icon: 'ph:trash', danger: true, run: remove },
+    { label: t('editor.template.unwrap'), icon: 'ph:arrow-square-out', run: unwrap },
+    { label: t('editor.template.removeBranch'), icon: 'ph:trash', danger: true, run: remove },
   ])
 }
 </script>
@@ -81,14 +82,14 @@ function menu(event: MouseEvent) {
   <NodeViewWrapper class="vasta-template-branch">
     <div contenteditable="false" class="flex select-none items-center gap-1.5 text-xs font-medium text-violet-700 dark:text-violet-300">
       <AppIcon fallback="ph:git-branch" :size="13" />
-      <template v-if="condition === null"><span>Else</span></template>
+      <template v-if="condition === null"><span>{{ t('editor.template.else') }}</span></template>
       <template v-else>
-        <span class="vasta-branch-if">If</span><span class="vasta-branch-else-if">Else if</span>
+        <span class="vasta-branch-if">{{ t('editor.template.if') }}</span><span class="vasta-branch-else-if">{{ t('editor.template.elseIf') }}</span>
         <button class="min-w-0 truncate rounded px-1 font-mono font-normal hover:bg-hover" :class="condition ? '' : 'text-ink-faint'" @click="editCondition">
-          {{ condition || 'set a condition…' }}
+          {{ condition || t('editor.template.setCondition') }}
         </button>
       </template>
-      <button v-if="editor.isEditable" class="ml-auto rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink" title="Branch" @click="menu">
+      <button v-if="editor.isEditable" class="ml-auto rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink" :title="t('editor.template.branch')" @click="menu">
         <AppIcon fallback="ph:dots-three" :size="14" />
       </button>
     </div>

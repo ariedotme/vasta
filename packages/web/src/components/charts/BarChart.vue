@@ -5,6 +5,7 @@
 // value. Built to be reused (nutrition now, work-tracking metrics later); colors are the
 // --color-chart tokens in style.css. One series: no legend, the heading names it.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { t } from '../../lib/i18n.ts'
 
 export interface Bar {
   key: string
@@ -124,7 +125,7 @@ const tip = computed(() => {
             fill="transparent"
             tabindex="0"
             class="outline-none"
-            :aria-label="`${bar.title}: ${format(bar.value)}${unit}${bar.target ? ` of ${format(bar.target)}${unit}` : ''}`"
+            :aria-label="`${bar.title}: ${format(bar.value)}${unit}${bar.target ? ` ${t('charts.ofTarget', { target: `${format(bar.target)}${unit}` })}` : ''}`"
             @pointerenter="active = index"
             @focus="active = index"
             @blur="active = null"
@@ -137,14 +138,14 @@ const tip = computed(() => {
         :style="{ left: `${tip.left}px`, top: `${tip.top}px` }"
       >
         <div class="font-semibold tabular-nums text-ink">
-          {{ format(tip.bar.value) }}{{ unit }}<span v-if="tip.bar.target" class="font-normal text-ink-faint"> of {{ format(tip.bar.target) }}{{ unit }}</span>
+          {{ format(tip.bar.value) }}{{ unit }}<span v-if="tip.bar.target" class="font-normal text-ink-faint"> {{ t('charts.ofTarget', { target: `${format(tip.bar.target)}${unit}` }) }}</span>
         </div>
         <div class="text-ink-soft">{{ tip.bar.title }}</div>
         <div v-if="tip.bar.note" class="text-ink-faint">{{ tip.bar.note }}</div>
       </div>
     </div>
     <details class="mt-1 text-xs text-ink-faint">
-      <summary class="cursor-pointer select-none hover:text-ink">Show as a table</summary>
+      <summary class="cursor-pointer select-none hover:text-ink">{{ t('charts.showAsTable') }}</summary>
       <table class="mt-1 w-full max-w-sm tabular-nums">
         <tbody>
           <tr v-for="bar in bars" :key="bar.key" class="border-b border-line">

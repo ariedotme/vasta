@@ -6,6 +6,7 @@ import { computed } from 'vue'
 import type { Id } from '@vasta/core'
 import { chip, iconTextClasses } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { tagAncestors, tagColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
@@ -36,7 +37,7 @@ const title = computed(() => (summary.value?.title.trim() && isTag.value ? summa
       />
       <span class="truncate"><span v-if="parents.length" class="opacity-60">{{ parents.map((p) => p.title).join('/') }}/</span>{{ title }}</span>
     </ObjectLink>
-    <button v-if="removable" class="hidden opacity-60 hover:opacity-100 group-hover:inline" title="Remove" @click="$emit('remove')">
+    <button v-if="removable" class="hidden opacity-60 hover:opacity-100 group-hover:inline" :title="t('common.remove')" @click="$emit('remove')">
       <AppIcon fallback="ph:x" :size="12" />
     </button>
   </span>

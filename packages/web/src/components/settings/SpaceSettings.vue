@@ -4,6 +4,7 @@
 import { computed, ref, watch } from 'vue'
 import type { Icon, Id, SpaceRole } from '@vasta/core'
 import { api, type Member } from '../../lib/api.ts'
+import { t } from '../../lib/i18n.ts'
 import { confirmDialog, promptDialog } from '../../lib/overlays.ts'
 import { session } from '../../lib/session.ts'
 import { loadWorkspace, workspace } from '../../lib/state.ts'
@@ -39,7 +40,18 @@ const dirty = computed(() => name.value.trim() !== space.value.name || JSON.stri
 
 // Activity: how long the space keeps who did what (core activity.ts); owners change it.
 const retention = ref<number | null>(null)
-const RETENTION_LABELS: Record<number, string> = { 30: '1 month', 90: '3 months', 180: '6 months', 365: '1 year', 0: 'Forever' }
+const retentionLabel = (days: number) =>
+  days === 30
+    ? t('settings.space.retention.30')
+    : days === 90
+      ? t('settings.space.retention.90')
+      : days === 180
+        ? t('settings.space.retention.180')
+        : days === 365
+          ? t('settings.space.retention.365')
+          : days === 0
+            ? t('settings.space.retention.0')
+            : t('nutrition.daysCount', { count: days })
 const RETENTION_CHOICES = [30, 90, 180, 365, 0]
 async function loadRetention() {
   try {
@@ -53,9 +65,9 @@ async function setRetention(event: Event) {
   const keep = retention.value
   if (keep !== null && days && (keep === 0 || days < keep)) {
     const ok = await confirmDialog({
-      title: `Keep activity for ${RETENTION_LABELS[days]}?`,
-      message: 'What is older than that is deleted now, for every member. Flow metrics only reach back as far as the activity kept.',
-      confirmLabel: 'Delete older activity',
+      title: t('settings.space.retentionConfirmTitle', { duration: retentionLabel(days) }),
+      message: t('settings.space.retentionConfirmMessage'),
+      confirmLabel: t('settings.space.retentionConfirmBtn'),
       danger: true,
     })
     if (!ok) {
@@ -113,7 +125,12 @@ async function save() {
 }
 
 async function newSpace() {
-  const title = await promptDialog({ title: 'New space', message: 'A space of its own, with the built-in types. Share it from here afterwards.', placeholder: 'Home', confirmLabel: 'Create space' })
+  const title = await promptDialog({
+    title: t('settings.space.newSpaceTitle'),
+    message: t('settings.space.newSpaceMessage'),
+    placeholder: t('settings.space.newSpacePlaceholder'),
+    confirmLabel: t('settings.space.createSpace'),
+  })
   if (!title) return
   try {
     const created = await api.createSpace({ name: title })
@@ -152,9 +169,9 @@ async function addMember() {
 async function deleteSpace() {
   const target = space.value
   const ok = await confirmDialog({
-    title: `Delete ${target.name}?`,
-    message: `Everything in it disappears for all ${members.value.length > 1 ? `${members.value.length} members` : 'its members'}. For 30 days the server's admin can still bring it back with vasta space restore; then it is gone. Type the space's name to confirm.`,
-    confirmLabel: 'Delete space',
+    title: t('settings.space.deleteTitle', { name: target.name }),
+    message: members.value.length > 1 ? t('settings.space.deleteMessageMany', { count: members.value.length }) : t('settings.space.deleteMessageOne'),
+    confirmLabel: t('settings.space.deleteSpace'),
     danger: true,
     requireText: target.name,
   })
@@ -173,9 +190,9 @@ async function deleteSpace() {
 async function remove(member: Member) {
   const leaving = member.userId === me.value
   const ok = await confirmDialog({
-    title: leaving ? `Leave ${space.value.name}?` : `Remove ${member.name} from ${space.value.name}?`,
-    message: leaving ? 'You will no longer see this space. An owner can add you back.' : 'They will no longer see this space. Nothing in it is deleted.',
-    confirmLabel: leaving ? 'Leave space' : 'Remove',
+    title: leaving ? t('settings.space.leaveTitle', { name: space.value.name }) : t('settings.space.removeMemberTitle', { member: member.name, space: space.value.name }),
+    message: leaving ? t('settings.space.leaveMessage') : t('settings.space.removeMemberMessage'),
+    confirmLabel: leaving ? t('settings.space.leaveSpace') : t('common.remove'),
     danger: true,
   })
   if (!ok) return
@@ -192,12 +209,12 @@ async function remove(member: Member) {
 </script>
 
 <template>
-  <SettingsSection id="space" title="Space">
+  <SettingsSection id="space" :title="t('settings.section.space')">
     <template #actions>
-      <select v-if="workspace.spaces.length > 1" v-model="spaceId" class="rounded-md bg-hover px-2 py-0.5 text-sm outline-none" title="Space to change">
+      <select v-if="workspace.spaces.length > 1" v-model="spaceId" class="rounded-md bg-hover px-2 py-0.5 text-sm outline-none" :title="t('settings.space.spaceToChange')">
         <option v-for="option in workspace.spaces" :key="option.id" :value="option.id">{{ option.name }}</option>
       </select>
-      <button class="ml-auto flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink" @click="newSpace"><AppIcon fallback="ph:plus" :size="14" /> New space</button>
+      <button class="ml-auto flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink" @click="newSpace"><AppIcon fallback="ph:plus" :size="14" /> {{ t('settings.space.newSpaceTitle') }}</button>
     </template>
 
     <form class="flex items-end gap-3" @submit.prevent="save">
@@ -205,7 +222,7 @@ async function remove(member: Member) {
         ref="iconAnchor"
         type="button"
         class="grid h-[2.375rem] w-[2.375rem] shrink-0 place-items-center rounded-lg border border-line hover:bg-hover"
-        title="Change icon"
+        :title="t('object.changeIcon')"
         @click="iconOpen = !iconOpen"
       >
         <AppIcon :icon="icon" fallback="ph:planet" :size="20" class="text-ink-soft" />
@@ -214,36 +231,36 @@ async function remove(member: Member) {
         <div class="p-2"><IconPicker :icon="icon" @pick="pickIcon" /></div>
       </PopoverMenu>
       <label :class="label" class="flex-1">
-        Name
+        {{ t('typeSettings.name') }}
         <input v-model="name" :class="field" />
       </label>
-      <button type="submit" :class="primary" class="mb-0.5" :disabled="!dirty || !name.trim() || busy">Save</button>
+      <button type="submit" :class="primary" class="mb-0.5" :disabled="!dirty || !name.trim() || busy">{{ t('common.save') }}</button>
     </form>
     <p v-if="error" :class="errorText" class="mt-2">{{ error }}</p>
 
-    <h3 class="mt-6 mb-2 text-sm font-medium">Members</h3>
+    <h3 class="mt-6 mb-2 text-sm font-medium">{{ t('settings.space.members') }}</h3>
     <ul class="divide-y divide-line rounded-xl border border-line">
       <li v-for="member in members" :key="member.userId" class="flex items-center gap-3 px-3 py-2 text-sm">
         <PersonAvatar :id="member.userId" :name="member.name" :size="22" />
         <div class="min-w-0 flex-1">
-          <div class="truncate">{{ member.name }}<span v-if="member.userId === me" class="text-ink-faint"> (you)</span></div>
+          <div class="truncate">{{ member.name }}<span v-if="member.userId === me" class="text-ink-faint">{{ t('settings.space.you') }}</span></div>
           <div class="truncate text-xs text-ink-faint">{{ member.username }}</div>
         </div>
         <select
           v-if="isOwner"
           :value="member.role"
           class="rounded-md bg-hover px-2 py-1 text-sm outline-none"
-          :aria-label="`Role of ${member.name}`"
+          :aria-label="t('settings.space.roleOf', { name: member.name })"
           @change="setRole(member, $event)"
         >
-          <option value="owner">Owner</option>
-          <option value="editor">Editor</option>
+          <option value="owner">{{ t('settings.space.role.owner') }}</option>
+          <option value="editor">{{ t('settings.space.role.editor') }}</option>
         </select>
-        <span v-else class="text-xs text-ink-soft">{{ member.role === 'owner' ? 'Owner' : 'Editor' }}</span>
+        <span v-else class="text-xs text-ink-soft">{{ member.role === 'owner' ? t('settings.space.role.owner') : t('settings.space.role.editor') }}</span>
         <button
           v-if="isOwner || member.userId === me"
           class="rounded-md p-1.5 text-ink-faint hover:bg-hover hover:text-ink disabled:opacity-30"
-          :title="member.userId === me ? (workspace.spaces.length > 1 ? 'Leave this space' : 'Your only space') : 'Remove from this space'"
+          :title="member.userId === me ? (workspace.spaces.length > 1 ? t('settings.space.leaveThisSpace') : t('settings.space.onlySpace')) : t('settings.space.removeFromSpace')"
           :disabled="member.userId === me && workspace.spaces.length <= 1"
           @click="remove(member)"
         >
@@ -252,50 +269,50 @@ async function remove(member: Member) {
       </li>
     </ul>
     <form v-if="isOwner" class="mt-3 flex flex-wrap items-center gap-2" @submit.prevent="addMember">
-      <input v-model="newUsername" class="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-line-strong" placeholder="Username to add" autocapitalize="off" autocomplete="off" spellcheck="false" />
+      <input v-model="newUsername" class="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-line-strong" :placeholder="t('settings.space.usernameToAdd')" autocapitalize="off" autocomplete="off" spellcheck="false" />
       <select v-model="newRole" class="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm outline-none">
-        <option value="editor">Editor</option>
-        <option value="owner">Owner</option>
+        <option value="editor">{{ t('settings.space.role.editor') }}</option>
+        <option value="owner">{{ t('settings.space.role.owner') }}</option>
       </select>
-      <button type="submit" :class="secondary" :disabled="!newUsername.trim()">Add</button>
+      <button type="submit" :class="secondary" :disabled="!newUsername.trim()">{{ t('common.add') }}</button>
     </form>
     <p class="mt-2 text-xs text-ink-faint">
-      Members see and change everything in the space. Owners also add and remove members. Add someone by their exact username; they need an account on this server.
+      {{ t('settings.space.membersHint') }}
     </p>
     <p v-if="membersError" :class="errorText" class="mt-2">{{ membersError }}</p>
 
     <div v-if="retention !== null" class="mt-6 flex flex-wrap items-center gap-3">
       <div class="min-w-0 flex-1 text-sm">
-        <div class="font-medium">Activity history</div>
-        <div class="text-xs text-ink-faint">Who changed what on each object (status, assignee, title…), shown at the bottom of its page. Older activity is deleted automatically.</div>
+        <div class="font-medium">{{ t('settings.space.activityHistory') }}</div>
+        <div class="text-xs text-ink-faint">{{ t('settings.space.activityHistoryHint') }}</div>
       </div>
-      <select v-if="isOwner" :value="retention" class="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm outline-none" aria-label="Keep activity for" @change="setRetention">
-        <option v-for="days in RETENTION_CHOICES" :key="days" :value="days">Keep {{ RETENTION_LABELS[days]!.toLowerCase() }}</option>
+      <select v-if="isOwner" :value="retention" class="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm outline-none" :aria-label="t('settings.space.keepActivityLabel')" @change="setRetention">
+        <option v-for="days in RETENTION_CHOICES" :key="days" :value="days">{{ t('settings.space.keepDuration', { duration: retentionLabel(days).toLowerCase() }) }}</option>
       </select>
-      <span v-else class="text-sm text-ink-soft">Kept {{ RETENTION_LABELS[retention]?.toLowerCase() ?? `${retention} days` }}</span>
+      <span v-else class="text-sm text-ink-soft">{{ t('settings.space.keptDuration', { duration: retentionLabel(retention).toLowerCase() }) }}</span>
     </div>
 
     <div class="mt-6 flex flex-wrap items-center gap-3">
       <div class="min-w-0 flex-1 text-sm">
-        <div class="font-medium">Export this space</div>
+        <div class="font-medium">{{ t('settings.space.exportTitle') }}</div>
         <div class="text-xs text-ink-faint">
-          A ZIP to keep or to take elsewhere: a Markdown file per object (Obsidian and other apps open them), their files, and all of it as JSON with nothing left out.
+          {{ t('settings.space.exportHint') }}
         </div>
         <label class="mt-1.5 flex items-center gap-1.5 text-xs text-ink-soft">
           <input v-model="exportMedia" type="checkbox" class="h-3.5 w-3.5 accent-[var(--color-accent)]" />
-          With pictures and other files
+          {{ t('settings.space.exportWithMedia') }}
         </label>
       </div>
-      <a :class="secondary" :href="exportUrl" download>Export…</a>
+      <a :class="secondary" :href="exportUrl" download>{{ t('settings.space.exportBtn') }}</a>
     </div>
 
     <div v-if="isOwner" class="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 px-3 py-2.5 dark:border-red-900/60">
       <div class="min-w-0 flex-1 text-sm">
-        <div class="font-medium">Delete this space</div>
-        <div class="text-xs text-ink-faint">{{ workspace.spaces.length > 1 ? 'For every member. Kept 30 days in case it was a mistake.' : 'Your only space cannot be deleted; create another one first.' }}</div>
+        <div class="font-medium">{{ t('settings.space.deleteHeading') }}</div>
+        <div class="text-xs text-ink-faint">{{ workspace.spaces.length > 1 ? t('settings.space.deleteHint') : t('settings.space.onlySpaceDeleteHint') }}</div>
       </div>
       <button class="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 dark:border-red-900 dark:hover:bg-red-950" :disabled="workspace.spaces.length <= 1" @click="deleteSpace">
-        Delete space…
+        {{ t('settings.space.deleteSpaceBtn') }}
       </button>
     </div>
   </SettingsSection>

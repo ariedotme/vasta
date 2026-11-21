@@ -1,26 +1,29 @@
 // The settings page's sections, in order: the side navigation and each section's heading.
+import { t } from '../../lib/i18n.ts'
 import { isDesktop, isLocalServer } from '../../lib/platform.ts'
 
 export const SECTIONS = [
-  { id: 'device', label: 'This device', icon: 'ph:device-mobile' },
-  ...(isDesktop ? [{ id: 'desktop', label: 'Desktop app', icon: 'ph:desktop' }] : []),
-  { id: 'appearance', label: 'Appearance', icon: 'ph:palette' },
-  { id: 'account', label: 'Account', icon: 'ph:user-circle' },
-  { id: 'space', label: 'Space', icon: 'ph:planet' },
+  { id: 'device', get label() { return t('settings.section.device') }, icon: 'ph:device-mobile' },
+  ...(isDesktop ? [{ id: 'desktop', get label() { return t('settings.section.desktop') }, icon: 'ph:desktop' }] : []),
+  { id: 'appearance', get label() { return t('settings.section.appearance') }, icon: 'ph:palette' },
+  { id: 'account', get label() { return t('settings.section.account') }, icon: 'ph:user-circle' },
+  { id: 'space', get label() { return t('settings.section.space') }, icon: 'ph:planet' },
   // On the desktop app's own server: no other accounts, and the way to a real server.
-  isLocalServer() ? { id: 'server', label: 'Server', icon: 'ph:hard-drives' } : { id: 'server', label: 'Server accounts', icon: 'ph:users-three' },
-  { id: 'import', label: 'Import', icon: 'ph:download-simple' },
-  { id: 'snippets', label: 'Snippets', icon: 'ph:brackets-curly' },
-  { id: 'sprints', label: 'Sprints', icon: 'ph:flag-banner' },
-  { id: 'inbox', label: 'Inbox', icon: 'ph:tray' },
-  { id: 'nutrition', label: 'Food tracking', icon: 'ph:bowl-food' },
-  { id: 'reminders', label: 'Reminders', icon: 'ph:bell-ringing' },
-  { id: 'reminder-channels', label: 'Reminder channels', icon: 'ph:bell' },
-  { id: 'channels', label: 'Capture channels', icon: 'ph:broadcast' },
-  { id: 'tokens', label: 'Capture tokens', icon: 'ph:key' },
-  { id: 'agents', label: 'Agents', icon: 'ph:robot' },
-  { id: 'telegram', label: 'Telegram', icon: 'ph:telegram-logo' },
-  { id: 'sessions', label: 'Sessions', icon: 'ph:devices' },
+  isLocalServer()
+    ? { id: 'server', get label() { return t('settings.section.server') }, icon: 'ph:hard-drives' }
+    : { id: 'server', get label() { return t('settings.section.serverAccounts') }, icon: 'ph:users-three' },
+  { id: 'import', get label() { return t('settings.section.import') }, icon: 'ph:download-simple' },
+  { id: 'snippets', get label() { return t('settings.section.snippets') }, icon: 'ph:brackets-curly' },
+  { id: 'sprints', get label() { return t('settings.section.sprints') }, icon: 'ph:flag-banner' },
+  { id: 'inbox', get label() { return t('settings.section.inbox') }, icon: 'ph:tray' },
+  { id: 'nutrition', get label() { return t('settings.section.nutrition') }, icon: 'ph:bowl-food' },
+  { id: 'reminders', get label() { return t('settings.section.reminders') }, icon: 'ph:bell-ringing' },
+  { id: 'reminder-channels', get label() { return t('settings.section.reminderChannels') }, icon: 'ph:bell' },
+  { id: 'channels', get label() { return t('settings.section.channels') }, icon: 'ph:broadcast' },
+  { id: 'tokens', get label() { return t('settings.section.tokens') }, icon: 'ph:key' },
+  { id: 'agents', get label() { return t('settings.section.agents') }, icon: 'ph:robot' },
+  { id: 'telegram', get label() { return t('settings.section.telegram') }, icon: 'ph:telegram-logo' },
+  { id: 'sessions', get label() { return t('settings.section.sessions') }, icon: 'ph:devices' },
 ]
 
 export const sectionIcon = (id: string) => SECTIONS.find((s) => s.id === id)?.icon

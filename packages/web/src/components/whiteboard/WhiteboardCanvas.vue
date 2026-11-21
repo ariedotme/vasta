@@ -57,6 +57,8 @@ import { cachedSummary, lastError, primeSummaries, systemType, typesById, useSum
 import { openMenuAt, promptDialog, type MenuItem } from '../../lib/overlays.ts'
 import { openObject } from '../../lib/open.ts'
 import { displayTitle } from '../../lib/format.ts'
+import { propName, t, typeName, typePluralName } from '../../lib/i18n.ts'
+import { mod as shortcutMod } from '../../lib/shortcuts.ts'
 import { kindIcon } from '../../lib/properties.ts'
 import { canvasElements, isMermaidFlowchart, mermaidElements } from '../../lib/board-actions.ts'
 import {
@@ -190,7 +192,7 @@ const frames = computed(() => {
   return [...list].sort((a, b) => row(a) - row(b) || a.x - b.x)
 })
 const scene = ref<Id | null>(null)
-const frameTitle = (frame: PlacedElement | undefined) => (frame?.kind === 'frame' && frame.title?.trim()) || 'Frame'
+const frameTitle = (frame: PlacedElement | undefined) => (frame?.kind === 'frame' && frame.title?.trim()) || t('whiteboard.frame')
 function goToScene(id: Id | null) {
   const frame = id ? frames.value.find((f) => f.id === id) : undefined
   if (frame) fit([frame], 2)
@@ -418,11 +420,11 @@ const stopDrawingOn = () => {
 }
 /** How fingers and a pen share the work (see the top of this file), kept on this device. */
 const DRAW_MODE_KEY = 'vasta.board-draw-mode'
-const DRAW_MODES: { id: DrawMode; label: string; hint: string }[] = [
-  { id: 'auto', label: 'Auto', hint: 'Once a pen touches the board, the pen draws and fingers move the view' },
-  { id: 'pencil', label: 'Pen draws', hint: 'The pen draws with any tool; fingers move the view, select with a tap' },
-  { id: 'touch', label: 'Fingers draw', hint: 'Fingers draw with the pen tool, as a pen or mouse does' },
-]
+const DRAW_MODES = computed<{ id: DrawMode; label: string; hint: string }[]>(() => [
+  { id: 'auto', label: t('whiteboard.side.auto'), hint: t('whiteboard.drawMode.autoHint') },
+  { id: 'pencil', label: t('whiteboard.drawMode.pencil'), hint: t('whiteboard.drawMode.pencilHint') },
+  { id: 'touch', label: t('whiteboard.drawMode.touch'), hint: t('whiteboard.drawMode.touchHint') },
+])
 const drawMode = ref<DrawMode>(readDrawMode())
 function readDrawMode(): DrawMode {
   try {
@@ -1104,11 +1106,11 @@ function connectMenu(from: Id, event: PointerEvent) {
   }
   const centered = (w: number, h: number) => ({ x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2), w, h })
   openMenuAt(event.clientX, event.clientY, [
-    { kind: 'heading', label: 'Connect to a new' },
-    { label: 'Sticky note', icon: 'ph:note-blank', run: make({ kind: 'sticky', text: '', ...centered(SIZES.sticky.w, SIZES.sticky.h) }, true) },
-    { label: 'Text', icon: 'ph:text-t', run: make({ kind: 'text', text: '', ...centered(SIZES.text.w, SIZES.text.h) }, true) },
+    { kind: 'heading', label: t('whiteboard.connectToNew') },
+    { label: t('whiteboard.tool.sticky'), icon: 'ph:note-blank', run: make({ kind: 'sticky', text: '', ...centered(SIZES.sticky.w, SIZES.sticky.h) }, true) },
+    { label: t('propKind.text'), icon: 'ph:text-t', run: make({ kind: 'text', text: '', ...centered(SIZES.text.w, SIZES.text.h) }, true) },
     { label: SHAPE_LABELS[toolSettings.shape.kind], icon: SHAPE_ICONS[toolSettings.shape.kind], run: make({ kind: 'shape', text: '', ...newShape(), ...centered(SIZES.shape.w, SIZES.shape.h) }, true) },
-    { label: 'Object…', icon: 'ph:cards', hint: '@', run: () => void nextTick(() => ((connectPick.value = { from, at, x: p.x, y: p.y }), (pickerOpen.value = true))) },
+    { label: t('whiteboard.objectEllipsis'), icon: 'ph:cards', hint: '@', run: () => void nextTick(() => ((connectPick.value = { from, at, x: p.x, y: p.y }), (pickerOpen.value = true))) },
   ])
 }
 
@@ -1243,7 +1245,7 @@ function addCanvas(canvas: unknown) {
     // Frames first, so they stay under what they hold.
     addLaidOut(list.sort((a, b) => Number(b.kind === 'frame') - Number(a.kind === 'frame')))
   } catch (error) {
-    lastError.value = `Not a JSON Canvas file: ${(error as Error).message}`
+    lastError.value = t('whiteboard.notJsonCanvasDetail', { message: (error as Error).message })
   }
 }
 
@@ -1251,13 +1253,14 @@ function addCanvas(canvas: unknown) {
 const fileInput = ref<HTMLInputElement | null>(null)
 /** The selection, when there is one, else the board. */
 const toExport = () => (selected.value.length ? [...selected.value, ...elements.value.filter((e) => isAttached(e) && selection.value.has(e.parent))] : elements.value)
-const fileName = (extension: string) => `${(props.title || 'Whiteboard').replace(/[\\/:*?"<>|]/g, '-')}.${extension}`
+const fileName = (extension: string) => `${(props.title || t('builtin.type.whiteboard.one')).replace(/[\\/:*?"<>|]/g, '-')}.${extension}`
 async function exportPicture(format: 'svg' | 'png') {
   try {
     const { svg, width, height } = boardSvg(toExport(), {
       card: (id) => {
         const summary = cachedSummary(id)
-        return summary ? { title: displayTitle(summary, typesById.value.get(summary.typeId)), type: typesById.value.get(summary.typeId)?.name } : undefined
+        const cardType = summary ? typesById.value.get(summary.typeId) : undefined
+        return summary ? { title: displayTitle(summary, cardType), ...(cardType ? { type: typeName(cardType) } : {}) } : undefined
       },
     })
     if (format === 'svg') download(new Blob([svg], { type: 'image/svg+xml' }), fileName('svg'))
@@ -1271,7 +1274,7 @@ async function copyMermaid() {
   try {
     await navigator.clipboard.writeText(text)
   } catch {
-    lastError.value = 'Could not copy to the clipboard'
+    lastError.value = t('whiteboard.copyFailed')
   }
 }
 /** Lay the board (or the selection) out along its arrows, frames refitted around what they hold. */
@@ -1290,7 +1293,7 @@ function exportCanvas() {
   const blob = new Blob([JSON.stringify(canvas, null, 2)], { type: 'application/json' })
   const link = document.createElement('a')
   link.href = URL.createObjectURL(blob)
-  link.download = `${(props.title || 'Whiteboard').replace(/[\\/:*?"<>|]/g, '-')}.canvas`
+  link.download = `${(props.title || t('builtin.type.whiteboard.one')).replace(/[\\/:*?"<>|]/g, '-')}.canvas`
   link.click()
   setTimeout(() => URL.revokeObjectURL(link.href), 1000)
 }
@@ -1301,11 +1304,11 @@ async function importCanvas(event: Event) {
   try {
     addCanvas(JSON.parse(await file.text()))
   } catch {
-    lastError.value = 'Not a JSON Canvas file.'
+    lastError.value = t('whiteboard.notJsonCanvas')
   }
 }
 async function askFlowchart() {
-  const source = await promptDialog({ title: 'Add a Mermaid flowchart', placeholder: 'graph LR; A[Idea] --> B{Choose}', confirmLabel: 'Add' })
+  const source = await promptDialog({ title: t('whiteboard.addFlowchartTitle'), placeholder: 'graph LR; A[Idea] --> B{Choose}', confirmLabel: t('common.add') })
   if (source?.trim()) await addFlowchart(source.replace(/;\s*/g, '\n'))
 }
 function boardMenu(event: MouseEvent) {
@@ -1313,13 +1316,13 @@ function boardMenu(event: MouseEvent) {
   openMenuAt(rect.left, rect.bottom + 6, [
     {
       kind: 'submenu',
-      label: 'Export',
+      label: t('whiteboard.menu.export'),
       icon: 'ph:download-simple',
       items: [
-        { label: 'Picture (PNG)', icon: 'ph:image', run: () => exportPicture('png') },
-        { label: 'Vector picture (SVG)', icon: 'ph:file-svg', run: () => exportPicture('svg') },
-        { label: 'JSON Canvas', icon: 'ph:file-code', hint: 'Obsidian and others', run: exportCanvas },
-        { label: 'Copy as Mermaid', icon: 'ph:flow-arrow', run: copyMermaid },
+        { label: t('whiteboard.menu.png'), icon: 'ph:image', run: () => exportPicture('png') },
+        { label: t('whiteboard.menu.svg'), icon: 'ph:file-svg', run: () => exportPicture('svg') },
+        { label: 'JSON Canvas', icon: 'ph:file-code', hint: t('whiteboard.menu.jsonCanvasHint'), run: exportCanvas },
+        { label: t('whiteboard.menu.copyMermaid'), icon: 'ph:flow-arrow', run: copyMermaid },
       ],
     },
     ...(props.readonly || !placed.value.length
@@ -1327,25 +1330,25 @@ function boardMenu(event: MouseEvent) {
       : [
           {
             kind: 'submenu' as const,
-            label: 'Lay out',
+            label: t('whiteboard.menu.layOut'),
             icon: 'ph:tree-structure',
             items: [
-              { label: 'Down, along the arrows', icon: 'ph:arrow-down', run: () => layOut('down') },
-              { label: 'Right, along the arrows', icon: 'ph:arrow-right', run: () => layOut('right') },
-              { label: 'In a grid', icon: 'ph:grid-four', run: () => layOut('grid') },
+              { label: t('whiteboard.menu.layOutDown'), icon: 'ph:arrow-down', run: () => layOut('down') },
+              { label: t('whiteboard.menu.layOutRight'), icon: 'ph:arrow-right', run: () => layOut('right') },
+              { label: t('whiteboard.menu.layOutGrid'), icon: 'ph:grid-four', run: () => layOut('grid') },
             ],
           },
         ]),
     ...(props.readonly
       ? []
       : [
-          { label: 'Import a JSON Canvas…', icon: 'ph:upload-simple', run: () => fileInput.value?.click() },
-          { label: 'Add a Mermaid flowchart…', icon: 'ph:flow-arrow', hint: 'or paste one', run: askFlowchart },
+          { label: t('whiteboard.menu.importCanvas'), icon: 'ph:upload-simple', run: () => fileInput.value?.click() },
+          { label: t('whiteboard.menu.addFlowchart'), icon: 'ph:flow-arrow', hint: t('whiteboard.menu.orPaste'), run: askFlowchart },
         ]),
-    { kind: 'submenu', label: 'Pen and fingers', icon: 'ph:pencil-simple', items: drawModeItems() },
+    { kind: 'submenu', label: t('whiteboard.penAndFingers'), icon: 'ph:pencil-simple', items: drawModeItems() },
   ])
 }
-const drawModeItems = (): MenuItem[] => DRAW_MODES.map((m) => ({ label: m.label, hint: m.hint, checked: drawMode.value === m.id, run: () => (drawMode.value = m.id) }))
+const drawModeItems = (): MenuItem[] => DRAW_MODES.value.map((m) => ({ label: m.label, hint: m.hint, checked: drawMode.value === m.id, run: () => (drawMode.value = m.id) }))
 
 // Card views ----------------------------------------------------------------------
 
@@ -1355,7 +1358,7 @@ const cardFields = computed(() => {
   const card = selected.value.length === 1 && selected.value[0]!.kind === 'card' ? selected.value[0] : undefined
   if (card?.kind !== 'card') return undefined
   const type = typesById.value.get(summaryById.value.get(card.objectId)?.typeId ?? '')
-  return type?.properties.map((p) => ({ id: p.id, name: p.name, icon: kindIcon(p.kind) }))
+  return type?.properties.map((p) => ({ id: p.id, name: propName(p), icon: kindIcon(p.kind) }))
 })
 function setFields(fields: string[]) {
   const card = selected.value[0]
@@ -1385,7 +1388,8 @@ const linkable = computed(() => (selected.value.length === 1 ? arrowObjects(sele
 function relationName(arrow: { relation?: string; from: Id }) {
   const from = byId.value.get(arrow.from)
   const type = from?.kind === 'card' ? typesById.value.get(summaryById.value.get(from.objectId)?.typeId ?? '') : undefined
-  return type?.properties.find((p) => p.id === arrow.relation)?.name ?? 'Linked'
+  const prop = type?.properties.find((p) => p.id === arrow.relation)
+  return prop ? propName(prop) : t('whiteboard.linked')
 }
 
 async function setRelation(arrowId: Id, propertyId: string, add: boolean) {
@@ -1437,16 +1441,16 @@ function linkMenu(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const options = (typeA?.properties ?? []).filter((p) => p.kind === 'relation' && (!p.targetTypeIds.length || p.targetTypeIds.includes(b.typeId)))
   const items: MenuItem[] = [{ kind: 'heading', label: `${displayTitle(a, typeA)} → ${displayTitle(b, typeB)}` }]
-  if (arrow.kind === 'arrow' && arrow.relation) items.push({ label: `Unlink (remove from ${relationName(arrow)})`, icon: 'ph:link-break', run: () => setRelation(arrow.id, arrow.relation!, false) })
-  else if (options.length) for (const p of options) items.push({ label: `Add to “${p.name}”`, icon: 'ph:link-simple', run: () => setRelation(arrow.id, p.id, true) })
-  else items.push({ label: `${typeA?.name ?? 'This type'} has no relation property that takes ${typeB?.pluralName ?? 'these'}`, disabled: true, run: () => {} })
+  if (arrow.kind === 'arrow' && arrow.relation) items.push({ label: t('whiteboard.unlinkFrom', { prop: relationName(arrow) }), icon: 'ph:link-break', run: () => setRelation(arrow.id, arrow.relation!, false) })
+  else if (options.length) for (const p of options) items.push({ label: t('whiteboard.addToProp', { prop: propName(p) }), icon: 'ph:link-simple', run: () => setRelation(arrow.id, p.id, true) })
+  else items.push({ label: t('whiteboard.noRelationProp', { type: typeA ? typeName(typeA) : t('whiteboard.thisTypeFallback'), target: typeB ? typePluralName(typeB) : t('whiteboard.theseFallback') }), disabled: true, run: () => {} })
   // Or a mention in the text, for any two objects (the type needs a text field).
   if (arrow.kind === 'arrow' && typeA?.properties.some((p) => p.kind === 'rich-text')) {
     items.push({ kind: 'separator' })
     items.push(
       arrow.mentioned
-        ? { label: `Mentioned in ${displayTitle(a, typeA)}’s text`, icon: 'ph:at', disabled: true, run: () => {} }
-        : { label: `Mention it in ${displayTitle(a, typeA)}’s text`, icon: 'ph:at', run: () => mentionInText(arrow.id) }
+        ? { label: t('whiteboard.mentionedInText', { title: displayTitle(a, typeA) }), icon: 'ph:at', disabled: true, run: () => {} }
+        : { label: t('whiteboard.mentionInText', { title: displayTitle(a, typeA) }), icon: 'ph:at', run: () => mentionInText(arrow.id) }
     )
   }
   openMenuAt(rect.left, rect.bottom + 6, items)
@@ -1541,13 +1545,13 @@ function commitText() {
 async function labelArrow(id: Id) {
   const arrow = byId.value.get(id)
   if (arrow?.kind !== 'arrow') return
-  const label = await promptDialog({ title: 'Arrow label', value: arrow.label ?? '', placeholder: 'What links them', optional: true, confirmLabel: 'Save' })
+  const label = await promptDialog({ title: t('whiteboard.arrowLabelTitle'), value: arrow.label ?? '', placeholder: t('whiteboard.arrowLabelPlaceholder'), optional: true, confirmLabel: t('common.save') })
   if (label !== null) update({ [id]: { label: label.trim() || undefined } })
 }
 async function renameFrame(id: Id) {
   const element = byId.value.get(id)
   if (element?.kind !== 'frame') return
-  const title = await promptDialog({ title: 'Frame title', value: element.title ?? '', placeholder: 'Frame', optional: true, confirmLabel: 'Save' })
+  const title = await promptDialog({ title: t('whiteboard.frameTitle'), value: element.title ?? '', placeholder: t('whiteboard.frame'), optional: true, confirmLabel: t('common.save') })
   if (title !== null) update({ [id]: { title: title.trim() || undefined } })
 }
 
@@ -1888,7 +1892,7 @@ const cursor = computed(() => {
       >
         <AppIcon v-if="path.arrow.kind === 'arrow' && path.arrow.relation" fallback="ph:link-simple" :size="11" class="-mt-px mr-0.5 inline text-accent" />
         <AppIcon v-else-if="path.arrow.kind === 'arrow' && path.arrow.mentioned" fallback="ph:at" :size="11" class="-mt-px mr-0.5 inline text-accent" />{{
-          path.arrow.kind === 'arrow' ? path.arrow.label || (path.arrow.relation ? relationName(path.arrow) : 'Mentioned') : ''
+          path.arrow.kind === 'arrow' ? path.arrow.label || (path.arrow.relation ? relationName(path.arrow) : t('whiteboard.mentioned')) : ''
         }}
       </div>
 
@@ -1913,7 +1917,7 @@ const cursor = computed(() => {
         <div
           :data-element="selectedOne.id"
           data-handle="connect"
-          title="Drag to another element to draw an arrow"
+          :title="t('whiteboard.handle.connect')"
           class="pointer-events-auto absolute rounded-full border-accent bg-surface"
           :style="{ left: `calc(100% + ${16 / camera.zoom}px)`, top: '50%', width: `${14 / camera.zoom}px`, height: `${14 / camera.zoom}px`, borderWidth: `${2 / camera.zoom}px`, transform: 'translate(-50%, -50%)', cursor: 'crosshair' }"
         />
@@ -1928,7 +1932,7 @@ const cursor = computed(() => {
           <div
             :data-element="selectedOne.id"
             data-handle="rotate"
-            title="Drag to turn (Shift: in steps of 15°)"
+            :title="t('whiteboard.handle.rotate')"
             class="pointer-events-auto absolute left-1/2 rounded-full border-accent bg-surface"
             :style="{ top: `${-26 / camera.zoom}px`, width: `${12 / camera.zoom}px`, height: `${12 / camera.zoom}px`, borderWidth: `${2 / camera.zoom}px`, transform: 'translate(-50%, -50%)', cursor: 'grab' }"
           />
@@ -1956,7 +1960,7 @@ const cursor = computed(() => {
         <div
           data-element="__selection"
           data-handle="scale"
-          title="Drag to scale the selection (Shift keeps its proportions)"
+          :title="t('whiteboard.handle.scale')"
           class="absolute rounded-sm border-accent bg-surface"
           :style="{
             left: `${selectionBox.x + selectionBox.w + 6 / camera.zoom}px`,
@@ -2046,16 +2050,16 @@ const cursor = computed(() => {
       />
       <div data-ui class="absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-surface py-1 pl-3 pr-1 text-sm shadow-md">
         <AppIcon fallback="ph:pen-nib" :size="15" class="text-accent" />
-        <span class="text-ink-soft">Drawing on this {{ attachTarget.kind === 'card' ? 'card' : attachTarget.kind === 'frame' ? 'frame' : attachTarget.kind === 'sticky' ? 'note' : 'element' }}</span>
-        <button class="rounded-full bg-accent px-3 py-1 text-sm font-medium text-white" @click="stopDrawingOn">Done</button>
+        <span class="text-ink-soft">{{ attachTarget.kind === 'card' ? t('whiteboard.drawingOn.card') : attachTarget.kind === 'frame' ? t('whiteboard.drawingOn.frame') : attachTarget.kind === 'sticky' ? t('whiteboard.drawingOn.sticky') : t('whiteboard.drawingOn.element') }}</span>
+        <button class="rounded-full bg-accent px-3 py-1 text-sm font-medium text-white" @click="stopDrawingOn">{{ t('builtin.opt.status.done') }}</button>
       </div>
     </template>
 
     <div v-if="!placed.length && !gesture" class="pointer-events-none absolute inset-0 grid place-items-center p-6 text-center text-sm text-ink-faint">
-      <p>{{ readonly || embedded ? 'This board is empty.' : 'Drag objects here from the sidebar, add one with @, draw with P, or double-click to write.' }}</p>
+      <p>{{ readonly || embedded ? t('whiteboard.emptyReadonly') : t('whiteboard.emptyHint') }}</p>
     </div>
     <button v-if="lost && !embedded" data-ui class="absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm shadow-sm hover:bg-hover" @click="fit()">
-      Back to content
+      {{ t('whiteboard.backToContent') }}
     </button>
 
     <BoardToolbar
@@ -2066,28 +2070,28 @@ const cursor = computed(() => {
       :narrow="size.w < 1040"
       @object="(anchor) => ((pickerAnchor = anchor), (pickerOpen = !pickerOpen))"
     />
-    <div v-else-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink-faint shadow-md">Read only</div>
+    <div v-else-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 rounded-xl border border-line bg-surface px-3 py-2 text-xs text-ink-faint shadow-md">{{ t('whiteboard.readOnly') }}</div>
 
     <!-- Zoom -->
     <div v-if="!embedded" data-ui class="absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] right-3 flex items-center gap-0.5 rounded-xl border border-line bg-surface p-1 text-sm shadow-md">
       <!-- Undo and redo (also ⌘Z, ⇧⌘Z, and two- and three-finger taps) -->
       <template v-if="!readonly">
-        <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" title="Undo (⌘Z)" aria-label="Undo" :disabled="!history.undo" @click="undo.undo()">
+        <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" :title="t('whiteboard.undoShortcut', { mod: shortcutMod })" :aria-label="t('common.undo')" :disabled="!history.undo" @click="undo.undo()">
           <AppIcon fallback="ph:arrow-counter-clockwise" :size="16" />
         </button>
-        <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" title="Redo (⇧⌘Z)" aria-label="Redo" :disabled="!history.redo" @click="undo.redo()">
+        <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" :title="t('whiteboard.redoShortcut', { mod: shortcutMod })" :aria-label="t('whiteboard.redo')" :disabled="!history.redo" @click="undo.redo()">
           <AppIcon fallback="ph:arrow-clockwise" :size="16" />
         </button>
         <span class="mx-0.5 h-5 w-px bg-line" :class="narrow ? 'hidden' : ''" />
       </template>
-      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" title="Zoom out" aria-label="Zoom out" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom / 1.25)">
+      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" :title="t('whiteboard.zoomOut')" :aria-label="t('whiteboard.zoomOut')" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom / 1.25)">
         <AppIcon fallback="ph:minus" :size="16" />
       </button>
-      <button class="h-8 w-14 rounded-lg tabular-nums text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" title="Zoom to 100% (⇧0)" @click="zoomAt(size.w / 2, size.h / 2, 1)">{{ Math.round(camera.zoom * 100) }}%</button>
-      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" title="Zoom in" aria-label="Zoom in" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom * 1.25)">
+      <button class="h-8 w-14 rounded-lg tabular-nums text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" :title="t('whiteboard.zoomReset')" @click="zoomAt(size.w / 2, size.h / 2, 1)">{{ Math.round(camera.zoom * 100) }}%</button>
+      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :class="narrow ? 'hidden' : ''" :title="t('whiteboard.zoomIn')" :aria-label="t('whiteboard.zoomIn')" @click="zoomAt(size.w / 2, size.h / 2, camera.zoom * 1.25)">
         <AppIcon fallback="ph:plus" :size="16" />
       </button>
-      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" title="Fit everything (⇧1)" aria-label="Fit everything" @click="fit()">
+      <button class="grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:bg-hover" :title="t('whiteboard.fitEverythingShortcut')" :aria-label="t('whiteboard.fitEverything')" @click="fit()">
         <AppIcon fallback="ph:frame-corners" :size="16" />
       </button>
     </div>
@@ -2098,38 +2102,38 @@ const cursor = computed(() => {
       data-ui
       class="absolute left-3 top-3 flex max-w-[calc(100%-7.5rem)] items-center rounded-lg border border-line bg-surface text-sm shadow-sm"
     >
-      <button class="grid h-8 w-7 shrink-0 place-items-center rounded-l-lg text-ink-soft hover:bg-hover hover:text-ink" title="Previous frame" aria-label="Previous frame" @click="stepScene(-1)">
+      <button class="grid h-8 w-7 shrink-0 place-items-center rounded-l-lg text-ink-soft hover:bg-hover hover:text-ink" :title="t('whiteboard.prevFrame')" :aria-label="t('whiteboard.prevFrame')" @click="stepScene(-1)">
         <AppIcon fallback="ph:caret-left" :size="14" />
       </button>
       <button
         ref="scenesAnchor"
         class="flex w-40 min-w-0 items-center gap-1.5 border-x border-line px-2 py-1.5 text-left hover:bg-hover max-sm:w-32"
-        title="Scenes: the board's frames"
+        :title="t('whiteboard.scenesTitle')"
         @click="scenesOpen = !scenesOpen"
       >
         <AppIcon fallback="ph:frame-corners" :size="14" class="shrink-0 text-ink-soft" />
-        <span class="truncate" :class="scene ? 'text-ink' : 'text-ink-soft'">{{ scene ? frameTitle(frames.find((f) => f.id === scene)) : 'Whole board' }}</span>
+        <span class="truncate" :class="scene ? 'text-ink' : 'text-ink-soft'">{{ scene ? frameTitle(frames.find((f) => f.id === scene)) : t('whiteboard.wholeBoard') }}</span>
         <AppIcon fallback="ph:caret-down" :size="11" class="ml-auto shrink-0 text-ink-faint" />
       </button>
       <PopoverMenu v-model:open="scenesOpen" :anchor="scenesAnchor" placement="bottom-start" width="17rem">
         <div data-ui @keydown.stop>
           <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" :class="scene ? 'text-ink' : 'text-accent'" @click="(goToScene(null), (scenesOpen = false))">
-            <AppIcon fallback="ph:corners-out" :size="15" class="text-ink-soft" />Whole board
+            <AppIcon fallback="ph:corners-out" :size="15" class="text-ink-soft" />{{ t('whiteboard.wholeBoard') }}
           </button>
-          <p class="px-2.5 pb-0.5 pt-1.5 text-xs font-medium text-ink-faint">Scenes, top to bottom</p>
+          <p class="px-2.5 pb-0.5 pt-1.5 text-xs font-medium text-ink-faint">{{ t('whiteboard.scenesHeading') }}</p>
           <div v-for="(f, i) in frames" :key="f.id" class="group flex items-center rounded-lg hover:bg-hover">
             <button class="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left text-sm" :class="scene === f.id ? 'text-accent' : 'text-ink'" @click="(goToScene(f.id), (scenesOpen = false))">
               <span class="w-4 shrink-0 text-right text-xs tabular-nums text-ink-faint">{{ i + 1 }}</span>
               <span class="truncate">{{ frameTitle(f) }}</span>
             </button>
             <template v-if="!readonly">
-              <button class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-faint opacity-0 hover:text-ink group-hover:opacity-100 [@media(hover:none)]:opacity-100" title="Rename" aria-label="Rename the frame" @click="((scenesOpen = false), renameFrame(f.id))">
+              <button class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-faint opacity-0 hover:text-ink group-hover:opacity-100 [@media(hover:none)]:opacity-100" :title="t('common.renameAction')" :aria-label="t('whiteboard.renameFrameAria')" @click="((scenesOpen = false), renameFrame(f.id))">
                 <AppIcon fallback="ph:pencil-simple" :size="14" />
               </button>
               <button
                 class="mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md hover:text-ink"
                 :class="f.kind === 'frame' && f.cover ? 'text-amber-500' : 'text-ink-faint opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100'"
-                :title="f.kind === 'frame' && f.cover ? 'The default scene: where the board opens, and what embeds show. Click to unset' : 'Make it the default scene: where the board opens, and what embeds show'"
+                :title="f.kind === 'frame' && f.cover ? t('whiteboard.coverUnsetTitle') : t('whiteboard.coverSetTitle')"
                 :aria-pressed="f.kind === 'frame' && !!f.cover"
                 @click="toggleCover(f.id)"
               >
@@ -2139,7 +2143,7 @@ const cursor = computed(() => {
           </div>
         </div>
       </PopoverMenu>
-      <button class="grid h-8 w-7 shrink-0 place-items-center rounded-r-lg text-ink-soft hover:bg-hover hover:text-ink" title="Next frame" aria-label="Next frame" @click="stepScene(1)">
+      <button class="grid h-8 w-7 shrink-0 place-items-center rounded-r-lg text-ink-soft hover:bg-hover hover:text-ink" :title="t('whiteboard.nextFrame')" :aria-label="t('whiteboard.nextFrame')" @click="stepScene(1)">
         <AppIcon fallback="ph:caret-right" :size="14" />
       </button>
     </div>
@@ -2159,8 +2163,8 @@ const cursor = computed(() => {
       v-if="!embedded"
       data-ui
       class="absolute right-[3.25rem] top-3 grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-ink-soft shadow-sm hover:bg-hover hover:text-ink"
-      title="Board"
-      aria-label="Board menu"
+      :title="t('whiteboard.board')"
+      :aria-label="t('whiteboard.boardMenuAria')"
       @click="boardMenu"
     >
       <AppIcon fallback="ph:dots-three" :size="16" />
@@ -2170,7 +2174,7 @@ const cursor = computed(() => {
     <div v-if="connectPick" ref="pointAnchor" class="pointer-events-none absolute h-px w-px" :style="{ left: `${connectPick.x}px`, top: `${connectPick.y}px` }" />
     <PopoverMenu v-model:open="pickerOpen" :anchor="connectPick ? pointAnchor : pickerAnchor" :placement="connectPick ? 'bottom-start' : 'top'" width="20rem">
       <div data-ui @keydown.stop>
-        <ObjectPicker :exclude="[boardId]" create-label="New page" @pick="picked" @create="created" />
+        <ObjectPicker :exclude="[boardId]" :create-label="t('whiteboard.newPage')" @pick="picked" @create="created" />
       </div>
     </PopoverMenu>
   </div>

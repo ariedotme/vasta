@@ -10,6 +10,7 @@ import { computed, reactive, watch } from 'vue'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
 import { onChange } from './events.ts'
+import { t, typeName, typePluralName } from './i18n.ts'
 import { asksDialog, confirmDialog, promptDialog } from './overlays.ts'
 import { meId, people } from './people.ts'
 import { lastError, notice, primeFromObject, summaryOf, systemType, typesById, workspace } from './state.ts'
@@ -146,18 +147,28 @@ export async function clearOtherDefaults(template: ObjectRecord) {
 
 /** "Save as template": a copy of the object as a template of its type, opened to edit. */
 export async function saveAsTemplate(object: ObjectRecord, type: ObjectType) {
-  const name = await promptDialog({ title: 'Save as template', message: `A template of ${type.name}: new ${type.pluralName.toLowerCase()} can start from it.`, value: object.title, placeholder: 'Template name', confirmLabel: 'Save template' })
+  const name = await promptDialog({
+    title: t('templates.saveTitle'),
+    message: t('templates.saveMessage', { type: typeName(type), plural: typePluralName(type).toLowerCase() }),
+    value: object.title,
+    placeholder: t('templates.namePlaceholder'),
+    confirmLabel: t('templates.saveAction'),
+  })
   if (!name) return
   const draft = templateFromObject(object, type, name, '', new Date().toISOString())
   const { id: _id, ...data } = draft
   const template = await api.createObject({ ...data, typeId: type.id })
   remember(template)
-  notice.value = { message: `Saved as a template of ${type.name}`, action: { label: 'Open', run: () => openObject(template.id) } }
+  notice.value = { message: t('templates.savedNotice', { type: typeName(type) }), action: { label: t('common.open'), run: () => openObject(template.id) } }
 }
 
 /** A new, empty template of a type, opened to edit. */
 export async function newTemplate(type: ObjectType) {
-  const name = await promptDialog({ title: `New template of ${type.name}`, placeholder: 'Template name, e.g. “Bug”', confirmLabel: 'Create' })
+  const name = await promptDialog({
+    title: t('templates.newTitle', { type: typeName(type) }),
+    placeholder: t('templates.newPlaceholder'),
+    confirmLabel: t('common.create'),
+  })
   if (!name) return
   const template = await api.createObject({ typeId: type.id, title: '', template: { kind: 'template', name, ...(templatesOf(type.id).length ? {} : { default: true }) } })
   remember(template)
@@ -167,10 +178,10 @@ export async function newTemplate(type: ObjectType) {
 /** Make a template the type's default (the others stop being it), or stop it being the default. */
 export async function setDefaultTemplate(template: ObjectRecord, on: boolean) {
   if (template.template?.kind !== 'template') return
-  const others = on ? templatesOf(template.typeId).filter((t) => t.id !== template.id && t.template?.kind === 'template' && t.template.default) : []
-  const saveInfo = async (t: ObjectRecord, isDefault: boolean) => {
-    const { default: _default, ...info } = t.template as Extract<ObjectRecord['template'], { kind: 'template' }>
-    const saved = await api.saveObject({ ...t, template: { ...info, ...(isDefault ? { default: true } : {}) } }, t)
+  const others = on ? templatesOf(template.typeId).filter((item) => item.id !== template.id && item.template?.kind === 'template' && item.template.default) : []
+  const saveInfo = async (item: ObjectRecord, isDefault: boolean) => {
+    const { default: _default, ...info } = item.template as Extract<ObjectRecord['template'], { kind: 'template' }>
+    const saved = await api.saveObject({ ...item, template: { ...info, ...(isDefault ? { default: true } : {}) } }, item)
     remember(saved)
     return saved
   }
@@ -181,7 +192,7 @@ export async function setDefaultTemplate(template: ObjectRecord, on: boolean) {
 /** Rename a template or snippet. */
 export async function renameTemplate(template: ObjectRecord) {
   if (!template.template) return
-  const name = await promptDialog({ title: 'Rename', value: template.template.name, confirmLabel: 'Rename' })
+  const name = await promptDialog({ title: t('common.renameAction'), value: template.template.name, confirmLabel: t('common.renameAction') })
   if (!name) return
   const saved = await api.saveObject({ ...template, template: { ...template.template, name } }, template)
   remember(saved)
@@ -190,10 +201,12 @@ export async function renameTemplate(template: ObjectRecord) {
 
 export async function deleteTemplate(template: ObjectRecord): Promise<boolean> {
   if (!template.template) return false
-  const what = template.template.kind === 'snippet' ? 'snippet' : 'template'
-  if (!(await confirmDialog({ title: `Delete the ${what} “${template.template.name}”?`, message: 'What was made from it stays as it is.', confirmLabel: 'Delete', danger: true }))) return false
+  const title = template.template.kind === 'snippet'
+    ? t('templates.deleteSnippetTitle', { name: template.template.name })
+    : t('templates.deleteTemplateTitle', { name: template.template.name })
+  if (!(await confirmDialog({ title, message: t('templates.deleteMessage'), confirmLabel: t('common.delete'), danger: true }))) return false
   await api.deleteObject(template.id)
-  templates.list = templates.list.filter((t) => t.id !== template.id)
+  templates.list = templates.list.filter((item) => item.id !== template.id)
   return true
 }
 
@@ -201,12 +214,17 @@ export async function deleteTemplate(template: ObjectRecord): Promise<boolean> {
 export async function saveAsSnippet(content: DocNode[], open = false) {
   const page = systemType('page')
   if (!page) return
-  const name = await promptDialog({ title: 'Save as snippet', message: 'Insert it anywhere with / and its name.', placeholder: 'Snippet name, e.g. “Signature”', confirmLabel: 'Save snippet' })
+  const name = await promptDialog({
+    title: t('templates.saveSnippetTitle'),
+    message: t('templates.saveSnippetMessage'),
+    placeholder: t('templates.saveSnippetPlaceholder'),
+    confirmLabel: t('templates.saveSnippetAction'),
+  })
   if (!name) return
   const snippet = await api.createObject({ typeId: page.id, title: name, content: { [BODY_PROPERTY_ID]: { type: 'doc', content: content.length ? content : [{ type: 'paragraph' }] } }, template: { kind: 'snippet', name } })
   remember(snippet)
   if (open) await openObject(snippet.id)
-  else notice.value = { message: `Snippet “${name}” saved`, action: { label: 'Open', run: () => openObject(snippet.id) } }
+  else notice.value = { message: t('templates.savedSnippetNotice', { name }), action: { label: t('common.open'), run: () => openObject(snippet.id) } }
 }
 
 /** Change a snippet's trigger and scope (Settings › Snippets). */

@@ -6,6 +6,7 @@ import type { Doc, ObjectSummary, ObjectType } from '@vasta/core'
 import { api } from '../../lib/api.ts'
 import { onChange } from '../../lib/events.ts'
 import { displayTitle } from '../../lib/format.ts'
+import { t } from '../../lib/i18n.ts'
 import { imageOf } from '../../lib/media.ts'
 import { iconTextClasses } from '../../lib/colors.ts'
 import AppIcon from '../AppIcon.vue'
@@ -43,7 +44,7 @@ onBeforeUnmount(stop)
       <div v-else-if="content.length" class="prose-sm space-y-1 px-3 py-2 text-sm text-ink">
         <DocPreview v-for="(doc, i) in content" :key="i" :content="doc.content" />
       </div>
-      <p v-else class="px-3 py-2 text-sm text-ink-faint">{{ object.preview || 'Nothing written yet.' }}</p>
+      <p v-else class="px-3 py-2 text-sm text-ink-faint">{{ object.preview || t('whiteboard.nothingWritten') }}</p>
     </div>
   </div>
 </template>

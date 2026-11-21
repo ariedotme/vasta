@@ -2,6 +2,7 @@
 // or right-click menu, so it behaves the same in a browser tab and in the desktop app.
 import type { ColorName, Icon } from '@vasta/core'
 import { reactive, shallowRef } from 'vue'
+import { t } from './i18n.ts'
 
 // ---------------------------------------------------------------------------
 // Dialogs
@@ -68,7 +69,7 @@ export function promptDialog(options: { title: string; message?: string; value?:
       message: options.message,
       value: options.value ?? '',
       placeholder: options.placeholder,
-      confirmLabel: options.confirmLabel ?? 'OK',
+      confirmLabel: options.confirmLabel ?? t('common.ok'),
       ...(options.optional ? { optional: true } : {}),
       resolve: (value) => {
         activeDialog.value = null
@@ -85,7 +86,7 @@ export function confirmDialog(options: { title: string; message?: string; confir
       kind: 'confirm',
       title: options.title,
       message: options.message,
-      confirmLabel: options.confirmLabel ?? 'OK',
+      confirmLabel: options.confirmLabel ?? t('common.ok'),
       danger: options.danger ?? false,
       ...(options.requireText ? { requireText: options.requireText } : {}),
       resolve: (ok) => {
@@ -122,7 +123,7 @@ export function asksDialog(options: { title: string; message?: string; fields: {
       title: options.title,
       message: options.message,
       fields: options.fields,
-      confirmLabel: options.confirmLabel ?? 'Create',
+      confirmLabel: options.confirmLabel ?? t('common.create'),
       resolve: (answers) => {
         activeDialog.value = null
         resolve(answers && Object.fromEntries(Object.entries(answers).map(([label, value]) => [label, value.trim()])))

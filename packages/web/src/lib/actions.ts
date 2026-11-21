@@ -4,6 +4,7 @@ import type { CaptureAnswer } from '@vasta/core/client'
 import { api } from './api.ts'
 import { clone } from './clone.ts'
 import { displayTitle } from './format.ts'
+import { t, tc } from './i18n.ts'
 import { confirmDialog, promptDialog, type MenuItem } from './overlays.ts'
 import { session } from './session.ts'
 import { forgetSummary, loadWorkspace, notice, primeFromObject, refreshCounts, replaceType, summaryOf, systemType, typesById, ui, workspace } from './state.ts'
@@ -125,7 +126,7 @@ export async function captureAsks(text: string): Promise<TemplateAsk[]> {
 /** `answers`: to the questions of the template a "/Type …" line starts from (captureAsks). */
 export async function captureText(text: string, channel: string, answers?: Record<string, string>): Promise<{ space: Space; answer: CaptureAnswer; food?: FoodLineAnswer; made?: Id }> {
   const space = captureSpace()
-  if (!space) throw new Error('There is no space to capture into.')
+  if (!space) throw new Error(t('capture.noSpace'))
   // "/food …" logs what was eaten instead (core's nutrition.ts).
   const eaten = foodCommand(text)
   if (eaten !== undefined) {
@@ -184,7 +185,12 @@ export const isTodayRoute = (route: { path: string; query: Record<string, unknow
 
 export async function newTypeFlow() {
   if (!workspace.space) return
-  const name = await promptDialog({ title: 'New type', message: 'Name one object of this type, e.g. “Book” or “Person”.', placeholder: 'Type name', confirmLabel: 'Create' })
+  const name = await promptDialog({
+    title: t('nav.newType'),
+    message: t('actions.newTypeMessage'),
+    placeholder: t('actions.newTypePlaceholder'),
+    confirmLabel: t('common.create'),
+  })
   if (!name) return
   const type = await api.createType({ spaceId: workspace.space.id, name, pluralName: name, icon: { kind: 'icon', value: 'ph:cube' } })
   replaceType(type)
@@ -197,11 +203,11 @@ export async function deleteTypeFlow(type: ObjectType): Promise<boolean> {
   if (type.system) return false
   const count = workspace.counts[type.id] ?? 0
   const ok = await confirmDialog({
-    title: `Delete “${type.name}”?`,
+    title: t('actions.deleteTypeTitle', { name: type.name }),
     message: count
-      ? `The type and its ${count} ${count === 1 ? 'object' : 'objects'} move to the trash.`
-      : 'The type moves to the trash.',
-    confirmLabel: 'Delete type',
+      ? tc(count, 'actions.deleteTypeMessageWithObjects.one', 'actions.deleteTypeMessageWithObjects.other')
+      : t('actions.deleteTypeMessageEmpty'),
+    confirmLabel: t('actions.deleteTypeConfirm'),
     danger: true,
   })
   if (!ok) return false
@@ -212,9 +218,9 @@ export async function deleteTypeFlow(type: ObjectType): Promise<boolean> {
   await loadWorkspace(workspace.space?.id)
   if (wasOpen) await router.push('/')
   notice.value = {
-    message: `Moved “${type.name}” to the trash`,
+    message: t('actions.movedToTrash', { title: type.name }),
     action: {
-      label: 'Undo',
+      label: t('common.undo'),
       run: async () => {
         await restoreTypeFlow(type.id)
         for (const { item, places } of pins) await restorePlaces(item, places)
@@ -251,9 +257,9 @@ export async function deleteObjectFlow(id: Id): Promise<boolean> {
   if (onPage) await router.push(summary ? `/t/${summary.typeId}` : '/')
   else if (inPane) await closePane()
   notice.value = {
-    message: `Moved “${title}” to the trash`,
+    message: t('actions.movedToTrash', { title }),
     action: {
-      label: 'Undo',
+      label: t('common.undo'),
       run: async () => {
         await restoreObjectFlow(id)
         await restorePlaces(id, places)
@@ -275,7 +281,12 @@ export async function restoreObjectFlow(id: Id): Promise<{ object: ObjectRecord;
 
 /** Ask, then delete an object in the trash for good. */
 export async function deleteForeverFlow(id: Id, title: string): Promise<boolean> {
-  const ok = await confirmDialog({ title: `Delete “${title}” forever?`, message: 'This cannot be undone.', confirmLabel: 'Delete forever', danger: true })
+  const ok = await confirmDialog({
+    title: t('actions.deleteForeverTitle', { title }),
+    message: t('actions.cannotBeUndone'),
+    confirmLabel: t('trash.deleteForever'),
+    danger: true,
+  })
   if (!ok) return false
   await api.deleteObjectForever(id)
   forgetSummary(id)
@@ -365,12 +376,17 @@ export function pinItems(id: Id): MenuItem[] {
       (section): MenuItem => ({ label: section.name, icon: sectionIcon(section), checked: section.items.includes(id), keepOpen: true, run: () => toggleInSection(id, section.id) })
     ),
     { kind: 'separator' },
-    { label: 'New section…', icon: 'ph:folder-simple-plus', run: () => newSectionFlow(id) },
+    { label: t('nav.newSection'), icon: 'ph:folder-simple-plus', run: () => newSectionFlow(id) },
   ]
 }
 
 /** "Pin to sidebar ›" for any right-click menu on a type or an object. */
-export const pinMenu = (id: Id): MenuItem => ({ kind: 'submenu', label: isInSidebar(id) ? 'Pinned in sidebar' : 'Pin to sidebar', icon: 'ph:push-pin', items: pinItems(id) })
+export const pinMenu = (id: Id): MenuItem => ({
+  kind: 'submenu',
+  label: isInSidebar(id) ? t('actions.pinnedInSidebar') : t('actions.pinToSidebar'),
+  icon: 'ph:push-pin',
+  items: pinItems(id),
+})
 
 /**
  * Put an item at a place in a section (a drop in the sidebar). `from` is the section it was dragged
@@ -437,7 +453,7 @@ export function moveInSection(id: Id, sectionId: string, delta: number) {
 }
 
 export async function newSectionFlow(withItem?: Id) {
-  const name = await promptDialog({ title: 'New sidebar section', placeholder: 'Section name', confirmLabel: 'Create' })
+  const name = await promptDialog({ title: t('actions.newSectionTitle'), placeholder: t('actions.newSectionPlaceholder'), confirmLabel: t('common.create') })
   if (!name) return
   await updateSidebar((space) => {
     space.sidebar.push({ id: newId(), name, items: withItem ? [withItem] : [] })
@@ -447,7 +463,7 @@ export async function newSectionFlow(withItem?: Id) {
 export async function renameSectionFlow(sectionId: string) {
   const section = workspace.space?.sidebar.find((s) => s.id === sectionId)
   if (!section) return
-  const name = await promptDialog({ title: 'Rename section', value: section.name, confirmLabel: 'Rename' })
+  const name = await promptDialog({ title: t('actions.renameSectionTitle'), value: section.name, confirmLabel: t('common.renameAction') })
   if (!name) return
   await updateSidebar((space) => {
     const target = space.sidebar.find((s) => s.id === sectionId)
@@ -459,9 +475,9 @@ export async function deleteSectionFlow(sectionId: string) {
   const section = workspace.space?.sidebar.find((s) => s.id === sectionId)
   if (!section) return
   const ok = await confirmDialog({
-    title: `Remove the section “${section.name}”?`,
-    message: 'Only the section goes away; its types and objects are not deleted.',
-    confirmLabel: 'Remove section',
+    title: t('actions.removeSectionTitle', { name: section.name }),
+    message: t('actions.removeSectionMessage'),
+    confirmLabel: t('actions.removeSectionConfirm'),
     danger: true,
   })
   if (ok) await updateSidebar((space) => (space.sidebar = space.sidebar.filter((s) => s.id !== sectionId)))

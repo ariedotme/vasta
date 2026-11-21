@@ -6,6 +6,7 @@ import type { BoardSettings, Id, ObjectSummary, QueryDef, TableSettings } from '
 import { pinMenu } from '../lib/actions.ts'
 import { onChange } from '../lib/events.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { openContextMenu } from '../lib/overlays.ts'
 import { runServerQuery } from '../lib/query.ts'
 import { primeSummaries, typesById } from '../lib/state.ts'
@@ -63,8 +64,8 @@ function moved(saved: ObjectSummary) {
 function objectMenu(event: MouseEvent, object: ObjectSummary) {
   openContextMenu(event, [
     { kind: 'heading', label: displayTitle(object, typesById.value.get(object.typeId)) },
-    { label: 'Open', icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
-    { label: 'Copy link to page', icon: 'ph:link', run: () => copyObjectLink(object.id) },
+    { label: t('common.open'), icon: 'ph:arrow-square-out', run: () => openObject(object.id) },
+    { label: t('nav.copyLink'), icon: 'ph:link', run: () => copyObjectLink(object.id) },
     pinMenu(object.id),
   ])
 }
@@ -74,9 +75,9 @@ defineExpose({ count: computed(() => results.value.length) })
 
 <template>
   <div>
-    <p v-if="loading" class="py-3 text-sm text-ink-faint">Loading…</p>
-    <p v-else-if="failed" class="py-3 text-sm text-red-600">Could not run this query.</p>
-    <p v-else-if="!results.length" class="py-3 text-sm text-ink-faint">No objects match this query.</p>
+    <p v-if="loading" class="py-3 text-sm text-ink-faint">{{ t('common.loading') }}</p>
+    <p v-else-if="failed" class="py-3 text-sm text-red-600">{{ t('query.failed') }}</p>
+    <p v-else-if="!results.length" class="py-3 text-sm text-ink-faint">{{ t('query.empty') }}</p>
     <template v-else>
       <ObjectCollection
         :objects="shown"
@@ -95,7 +96,7 @@ defineExpose({ count: computed(() => results.value.length) })
         @menu="objectMenu"
       />
       <button v-if="limit && results.length > limit && !showAll" class="mt-2 text-xs text-ink-faint hover:text-ink" @click="showAll = true">
-        Show all {{ results.length }}
+        {{ t('query.showAll', { count: results.length }) }}
       </button>
     </template>
   </div>

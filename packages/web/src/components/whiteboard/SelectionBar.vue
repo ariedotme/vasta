@@ -4,6 +4,9 @@
 import { computed, ref, watch } from 'vue'
 import { ARROW_TIPS, SHAPES, arrowDashPatch, arrowTips, arrowTipsPatch, lineDash, type ArrowElement, type ArrowPath, type ArrowTip, type BoardElement, type BoardPatch, type CardView, type ColorName, type Dash, type Fill, type FontSize, type ShapeName, type Side, type TipSize } from '@vasta/core'
 import { BOARD_COLORS, PICKER_COLORS, SHAPE_ICONS, SHAPE_LABELS } from '../../lib/whiteboard.ts'
+import { t } from '../../lib/i18n.ts'
+import { mod } from '../../lib/shortcuts.ts'
+import type { MessageKey } from '../../locales/en.ts'
 import AppIcon from '../AppIcon.vue'
 
 /** `linkable`: the selection is one arrow between two cards (it can become a relation). */
@@ -34,44 +37,45 @@ const arrows = computed(() => props.elements.length > 0 && props.elements.every(
 const joined = computed(() => props.elements.some((e) => e.kind === 'arrow'))
 const firstArrow = computed(() => (arrows.value ? (props.elements[0] as Partial<ArrowElement>) : undefined))
 const tips = computed(() => arrowTips(firstArrow.value ?? {}))
+const colorLabel = (c: ColorName) => t(`color.${c}` as MessageKey)
 const TIP_ICONS: Record<ArrowTip, string> = { arrow: 'ph:caret-right-fill', dot: 'ph:circle-fill', none: 'ph:minus' }
-const TIP_LABELS: Record<ArrowTip, string> = { arrow: 'Arrow', dot: 'Dot', none: 'Nothing' }
-const DASHES: { id: Dash | undefined; label: string }[] = [
-  { id: undefined, label: 'Solid' },
-  { id: 'dashed', label: 'Dashed' },
-  { id: 'dotted', label: 'Dotted' },
-]
-const WIDTHS: { id: number | undefined; label: string }[] = [
-  { id: 1, label: 'Thin' },
-  { id: undefined, label: 'Regular' },
-  { id: 4, label: 'Thick' },
-]
+const TIP_LABELS = computed<Record<ArrowTip, string>>(() => ({ arrow: t('whiteboard.tool.arrow'), dot: t('whiteboard.tip.dot'), none: t('whiteboard.tip.nothing') }))
+const DASHES = computed<{ id: Dash | undefined; label: string }[]>(() => [
+  { id: undefined, label: t('whiteboard.dash.solid') },
+  { id: 'dashed', label: t('whiteboard.dash.dashed') },
+  { id: 'dotted', label: t('whiteboard.dash.dotted') },
+])
+const WIDTHS = computed<{ id: number | undefined; label: string }[]>(() => [
+  { id: 1, label: t('whiteboard.width.thin') },
+  { id: undefined, label: t('whiteboard.width.regular') },
+  { id: 4, label: t('whiteboard.width.thick') },
+])
 const TIP_SIZES: { id: TipSize | undefined; label: string }[] = [
   { id: 'sm', label: 'S' },
   { id: undefined, label: 'M' },
   { id: 'lg', label: 'L' },
 ]
-const SIDES: { id: Side | undefined; label: string }[] = [
-  { id: undefined, label: 'Auto' },
-  { id: 'top', label: 'Top' },
-  { id: 'right', label: 'Right' },
-  { id: 'bottom', label: 'Bottom' },
-  { id: 'left', label: 'Left' },
-]
+const SIDES = computed<{ id: Side | undefined; label: string }[]>(() => [
+  { id: undefined, label: t('whiteboard.side.auto') },
+  { id: 'top', label: t('whiteboard.side.top') },
+  { id: 'right', label: t('whiteboard.side.right') },
+  { id: 'bottom', label: t('whiteboard.side.bottom') },
+  { id: 'left', label: t('whiteboard.side.left') },
+])
 const setTip = (end: 'start' | 'end', tip: ArrowTip) => emit('arrowStyle', arrowTipsPatch(end === 'start' ? tip : tips.value.start, end === 'end' ? tip : tips.value.end))
-const PATHS: { id: ArrowPath; label: string; icon: string }[] = [
-  { id: 'straight', label: 'Straight', icon: 'ph:line-segment' },
-  { id: 'curved', label: 'Curved', icon: 'ph:bezier-curve' },
-  { id: 'elbow', label: 'Right angles', icon: 'ph:arrow-elbow-right' },
-]
+const PATHS = computed<{ id: ArrowPath; label: string; icon: string }[]>(() => [
+  { id: 'straight', label: t('whiteboard.path.straight'), icon: 'ph:line-segment' },
+  { id: 'curved', label: t('whiteboard.path.curved'), icon: 'ph:bezier-curve' },
+  { id: 'elbow', label: t('whiteboard.path.elbow'), icon: 'ph:arrow-elbow-right' },
+])
 const cards = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'card'))
 const currentView = computed<CardView>(() => (cards.value ? ((props.elements[0] as { view?: CardView }).view ?? 'card') : 'card'))
-const VIEWS: { id: CardView; label: string; icon: string }[] = [
-  { id: 'card', label: 'Card', icon: 'ph:cards' },
-  { id: 'compact', label: 'One line', icon: 'ph:rows' },
-  { id: 'embed', label: 'Contents (a query’s results, the text)', icon: 'ph:article' },
-  { id: 'properties', label: 'Title and properties', icon: 'ph:list-bullets' },
-]
+const VIEWS = computed<{ id: CardView; label: string; icon: string }[]>(() => [
+  { id: 'card', label: t('whiteboard.view.card'), icon: 'ph:cards' },
+  { id: 'compact', label: t('whiteboard.view.compact'), icon: 'ph:rows' },
+  { id: 'embed', label: t('whiteboard.view.embed'), icon: 'ph:article' },
+  { id: 'properties', label: t('whiteboard.view.properties'), icon: 'ph:list-bullets' },
+])
 const chosenFields = computed(() => (single.value?.kind === 'card' ? (single.value.fields ?? []) : []))
 function toggleField(id: string) {
   const list = chosenFields.value
@@ -87,17 +91,13 @@ const current = computed(() => {
 const stickies = computed(() => props.elements.length > 0 && props.elements.every((e) => e.kind === 'sticky'))
 const firstShape = computed(() => (shapes.value ? (props.elements[0] as { fill?: Fill; border?: number; dash?: Dash }) : undefined))
 const firstSticky = computed(() => (stickies.value ? (props.elements[0] as { fontSize?: FontSize }) : undefined))
-const FILLS: { id: Fill | undefined; label: string }[] = [
-  { id: undefined, label: 'Tint' },
-  { id: 'none', label: 'None' },
-  { id: 'white', label: 'White' },
-  { id: 'solid', label: 'Solid' },
-]
-const BORDERS: { id: number | undefined; label: string }[] = [
-  { id: 1, label: 'Thin' },
-  { id: undefined, label: 'Regular' },
-  { id: 4, label: 'Thick' },
-]
+const FILLS = computed<{ id: Fill | undefined; label: string }[]>(() => [
+  { id: undefined, label: t('whiteboard.fill.tint') },
+  { id: 'none', label: t('object.none') },
+  { id: 'white', label: t('whiteboard.fill.white') },
+  { id: 'solid', label: t('whiteboard.dash.solid') },
+])
+const BORDERS = WIDTHS
 const FONT_SIZES: { id: FontSize | undefined; label: string }[] = [
   { id: 'sm', label: 'S' },
   { id: undefined, label: 'M' },
@@ -125,20 +125,20 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
     @dblclick.stop
   >
     <div v-if="colorable" class="relative">
-      <button :class="button" title="Color" aria-label="Color" @click="toggle('color')">
+      <button :class="button" :title="t('object.color')" :aria-label="t('object.color')" @click="toggle('color')">
         <span class="h-4 w-4 rounded-full border border-line-strong" :style="{ background: current ? BOARD_COLORS[current] : 'var(--color-ink)' }" />
       </button>
       <div v-if="open === 'color'" class="absolute left-0 top-full mt-1.5 grid w-max grid-cols-5 gap-1 rounded-xl border border-line bg-surface p-1.5 shadow-md">
-        <button class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover" title="Default" @click="(emit('color', undefined), (open = null))">
+        <button class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover" :title="t('common.default')" @click="(emit('color', undefined), (open = null))">
           <span class="h-4 w-4 rounded-full border border-line-strong bg-ink" />
         </button>
-        <button v-for="c in PICKER_COLORS" :key="c" class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover" :title="c" @click="(emit('color', c), (open = null))">
+        <button v-for="c in PICKER_COLORS" :key="c" class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover" :title="colorLabel(c)" @click="(emit('color', c), (open = null))">
           <span class="h-4 w-4 rounded-full" :class="current === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-surface' : ''" :style="{ background: BOARD_COLORS[c] }" />
         </button>
       </div>
     </div>
     <div v-if="shapes" class="relative">
-      <button :class="button" title="Shape" aria-label="Shape" @click="toggle('shape')"><AppIcon :fallback="SHAPE_ICONS[currentShape]" :size="17" /></button>
+      <button :class="button" :title="t('whiteboard.tool.shape')" :aria-label="t('whiteboard.tool.shape')" @click="toggle('shape')"><AppIcon :fallback="SHAPE_ICONS[currentShape]" :size="17" /></button>
       <div v-if="open === 'shape'" class="absolute left-0 top-full mt-1.5 flex w-max gap-0.5 rounded-xl border border-line bg-surface p-1 shadow-md">
         <button v-for="s in SHAPES" :key="s" :class="[button, s === currentShape ? 'bg-hover text-ink' : '']" :title="SHAPE_LABELS[s]" @click="(emit('shape', s), (open = null))">
           <AppIcon :fallback="SHAPE_ICONS[s]" :size="17" />
@@ -146,19 +146,19 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
       </div>
     </div>
     <div v-if="shapes || stickies" class="relative">
-      <button :class="button" :title="shapes ? 'Fill and outline' : 'Text size'" :aria-label="shapes ? 'Fill and outline' : 'Text size'" @click="toggle('style')">
+      <button :class="button" :title="shapes ? t('whiteboard.fillAndOutline') : t('whiteboard.textSize')" :aria-label="shapes ? t('whiteboard.fillAndOutline') : t('whiteboard.textSize')" @click="toggle('style')">
         <AppIcon :fallback="shapes ? 'ph:paint-bucket' : 'ph:text-aa'" :size="17" />
       </button>
       <div v-if="open === 'style'" class="absolute left-0 top-full mt-1.5 w-60 space-y-2 rounded-xl border border-line bg-surface p-2 text-xs shadow-md">
         <template v-if="shapes">
           <div class="flex gap-1">
-            <button v-for="f in FILLS" :key="f.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.fill === f.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { fill: f.id })">{{ f.label }}</button>
+            <button v-for="f in FILLS" :key="f.id ?? 'tint'" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.fill === f.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { fill: f.id })">{{ f.label }}</button>
           </div>
           <div class="flex gap-1">
-            <button v-for="b in BORDERS" :key="b.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.border === b.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { border: b.id })">{{ b.label }}</button>
+            <button v-for="b in BORDERS" :key="b.id ?? 'regular'" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.border === b.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { border: b.id })">{{ b.label }}</button>
           </div>
           <div class="flex gap-1">
-            <button v-for="d in DASHES" :key="d.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.dash === d.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { dash: d.id })">{{ d.label }}</button>
+            <button v-for="d in DASHES" :key="d.id ?? 'solid'" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstShape?.dash === d.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('style', { dash: d.id })">{{ d.label }}</button>
           </div>
         </template>
         <div v-else class="flex gap-1">
@@ -169,14 +169,14 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
     <button
       v-if="single && single.kind !== 'arrow' && single.kind !== 'stroke' && single.kind !== 'text' && single.kind !== 'line'"
       :class="button"
-      title="Draw on it: the strokes move and resize with it"
-      aria-label="Draw on it"
+      :title="t('whiteboard.drawOnTitle')"
+      :aria-label="t('whiteboard.drawOn')"
       @click="emit('drawOn')"
     >
       <AppIcon fallback="ph:pen-nib" :size="17" />
     </button>
     <div v-if="cards" class="relative">
-      <button :class="button" title="How the card shows its object" aria-label="Card view" @click="toggle('view')">
+      <button :class="button" :title="t('whiteboard.cardViewTitle')" :aria-label="t('whiteboard.cardView')" @click="toggle('view')">
         <AppIcon :fallback="VIEWS.find((v) => v.id === currentView)!.icon" :size="17" />
       </button>
       <div v-if="open === 'view'" class="absolute left-0 top-full mt-1.5 w-max rounded-xl border border-line bg-surface p-1 shadow-md">
@@ -190,7 +190,7 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
           <AppIcon :fallback="v.icon" :size="16" />{{ v.label }}
         </button>
         <template v-if="currentView === 'properties' && fields?.length">
-          <p class="mt-1 border-t border-line px-2.5 pb-0.5 pt-1.5 text-xs font-medium text-ink-soft">Properties shown</p>
+          <p class="mt-1 border-t border-line px-2.5 pb-0.5 pt-1.5 text-xs font-medium text-ink-soft">{{ t('whiteboard.propertiesShown') }}</p>
           <button
             v-for="f in fields"
             :key="f.id"
@@ -204,7 +204,7 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
       </div>
     </div>
     <div v-if="arrows" class="relative">
-      <button :class="button" title="Line: course, ends, dashes" aria-label="Line style" @click="toggle('arrow')">
+      <button :class="button" :title="t('whiteboard.lineStyleTitle')" :aria-label="t('whiteboard.lineStyle')" @click="toggle('arrow')">
         <AppIcon :fallback="PATHS.find((p) => p.id === (firstArrow?.path ?? 'straight'))!.icon" :size="17" />
       </button>
       <div v-if="open === 'arrow'" class="absolute left-0 top-full mt-1.5 w-64 space-y-2 rounded-xl border border-line bg-surface p-2 text-xs shadow-md">
@@ -220,46 +220,46 @@ const button = 'grid h-8 w-8 place-items-center rounded-lg text-ink-soft hover:b
           </button>
         </div>
         <div v-for="end in ['start', 'end'] as const" :key="end" class="flex items-center gap-1">
-          <span class="w-12 text-ink-soft">{{ end === 'start' ? 'Start' : 'End' }}</span>
+          <span class="w-12 text-ink-soft">{{ end === 'start' ? t('dateEditor.start') : t('dateEditor.end') }}</span>
           <button
-            v-for="t in ARROW_TIPS"
-            :key="t"
-            :class="[button, tips[end] === t ? 'bg-hover text-ink' : '']"
-            :title="TIP_LABELS[t]"
-            @click="setTip(end, t)"
+            v-for="tip in ARROW_TIPS"
+            :key="tip"
+            :class="[button, tips[end] === tip ? 'bg-hover text-ink' : '']"
+            :title="TIP_LABELS[tip]"
+            @click="setTip(end, tip)"
           >
-            <AppIcon :fallback="TIP_ICONS[t]" :size="t === 'dot' ? 10 : 14" :class="end === 'start' && t === 'arrow' ? 'rotate-180' : ''" />
+            <AppIcon :fallback="TIP_ICONS[tip]" :size="tip === 'dot' ? 10 : 14" :class="end === 'start' && tip === 'arrow' ? 'rotate-180' : ''" />
           </button>
           <span class="ml-auto flex gap-0.5">
-            <button v-for="z in TIP_SIZES" v-show="end === 'end'" :key="z.label" class="h-7 w-6 rounded-md hover:bg-hover" :class="firstArrow?.tipSize === z.id ? 'bg-hover text-ink' : 'text-ink-soft'" :title="`Tip size ${z.label}`" @click="emit('arrowStyle', { tipSize: z.id })">{{ z.label }}</button>
+            <button v-for="z in TIP_SIZES" v-show="end === 'end'" :key="z.label" class="h-7 w-6 rounded-md hover:bg-hover" :class="firstArrow?.tipSize === z.id ? 'bg-hover text-ink' : 'text-ink-soft'" :title="t('whiteboard.tipSize', { size: z.label })" @click="emit('arrowStyle', { tipSize: z.id })">{{ z.label }}</button>
           </span>
         </div>
         <div class="flex gap-1">
-          <button v-for="d in DASHES" :key="d.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstArrow && lineDash(firstArrow) === d.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('arrowStyle', arrowDashPatch(d.id))">{{ d.label }}</button>
+          <button v-for="d in DASHES" :key="d.id ?? 'solid'" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstArrow && lineDash(firstArrow) === d.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('arrowStyle', arrowDashPatch(d.id))">{{ d.label }}</button>
         </div>
         <div class="flex gap-1">
-          <button v-for="w in WIDTHS" :key="w.label" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstArrow?.width === w.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('arrowStyle', { width: w.id })">{{ w.label }}</button>
+          <button v-for="w in WIDTHS" :key="w.id ?? 'regular'" class="h-7 flex-1 rounded-md hover:bg-hover" :class="firstArrow?.width === w.id ? 'bg-hover text-ink' : 'text-ink-soft'" @click="emit('arrowStyle', { width: w.id })">{{ w.label }}</button>
         </div>
         <div v-for="end in joined ? (['fromSide', 'toSide'] as const) : []" :key="end" class="flex items-center gap-1">
-          <span class="w-12 shrink-0 text-ink-soft">{{ end === 'fromSide' ? 'Leaves' : 'Arrives' }}</span>
+          <span class="w-12 shrink-0 text-ink-soft">{{ end === 'fromSide' ? t('whiteboard.leaves') : t('whiteboard.arrives') }}</span>
           <select
             class="h-7 min-w-0 flex-1 rounded-md bg-hover px-1.5 text-ink outline-none"
             :value="firstArrow?.[end] ?? ''"
             @change="emit('arrowStyle', { [end]: (($event.target as HTMLSelectElement).value || undefined) as Side | undefined, bend: undefined })"
           >
-            <option v-for="side in SIDES" :key="side.label" :value="side.id ?? ''">{{ side.label }}</option>
+            <option v-for="side in SIDES" :key="side.id ?? 'auto'" :value="side.id ?? ''">{{ side.label }}</option>
           </select>
         </div>
       </div>
     </div>
-    <button v-if="linkable" :class="button" title="Link the objects (a relation)" aria-label="Link the objects" @click="((open = null), emit('link', $event))"><AppIcon fallback="ph:link-simple" :size="17" /></button>
-    <button v-if="single?.kind === 'card'" :class="button" title="Open" aria-label="Open" @click="emit('open')"><AppIcon fallback="ph:arrow-square-out" :size="17" /></button>
-    <button v-if="single?.kind === 'arrow'" :class="button" title="Label (Enter)" aria-label="Label" @click="emit('label')"><AppIcon fallback="ph:tag-simple" :size="17" /></button>
-    <button v-if="single?.kind === 'frame'" :class="button" title="Rename (Enter)" aria-label="Rename" @click="emit('rename')"><AppIcon fallback="ph:pencil-simple" :size="17" /></button>
+    <button v-if="linkable" :class="button" :title="t('whiteboard.linkObjectsTitle')" :aria-label="t('whiteboard.linkObjects')" @click="((open = null), emit('link', $event))"><AppIcon fallback="ph:link-simple" :size="17" /></button>
+    <button v-if="single?.kind === 'card'" :class="button" :title="t('common.open')" :aria-label="t('common.open')" @click="emit('open')"><AppIcon fallback="ph:arrow-square-out" :size="17" /></button>
+    <button v-if="single?.kind === 'arrow'" :class="button" :title="t('whiteboard.labelShortcut')" :aria-label="t('whiteboard.label')" @click="emit('label')"><AppIcon fallback="ph:tag-simple" :size="17" /></button>
+    <button v-if="single?.kind === 'frame'" :class="button" :title="t('whiteboard.renameShortcut')" :aria-label="t('common.renameAction')" @click="emit('rename')"><AppIcon fallback="ph:pencil-simple" :size="17" /></button>
     <span v-if="colorable || shapes || cards || linkable || arrows || single?.kind === 'card' || single?.kind === 'arrow' || single?.kind === 'frame' || single?.kind === 'shape' || single?.kind === 'sticky'" class="mx-0.5 h-5 w-px bg-line" />
-    <button :class="button" title="Bring to front (])" aria-label="Bring to front" @click="emit('front')"><AppIcon fallback="ph:arrow-line-up" :size="17" /></button>
-    <button :class="button" title="Send to back ([)" aria-label="Send to back" @click="emit('back')"><AppIcon fallback="ph:arrow-line-down" :size="17" /></button>
-    <button :class="button" title="Duplicate (⌘D)" aria-label="Duplicate" @click="emit('duplicate')"><AppIcon fallback="ph:copy" :size="17" /></button>
-    <button :class="button" title="Delete" aria-label="Delete" @click="emit('remove')"><AppIcon fallback="ph:trash" :size="17" /></button>
+    <button :class="button" :title="t('whiteboard.bringToFrontShortcut')" :aria-label="t('whiteboard.bringToFront')" @click="emit('front')"><AppIcon fallback="ph:arrow-line-up" :size="17" /></button>
+    <button :class="button" :title="t('whiteboard.sendToBackShortcut')" :aria-label="t('whiteboard.sendToBack')" @click="emit('back')"><AppIcon fallback="ph:arrow-line-down" :size="17" /></button>
+    <button :class="button" :title="t('whiteboard.duplicateShortcut', { mod })" :aria-label="t('whiteboard.duplicate')" @click="emit('duplicate')"><AppIcon fallback="ph:copy" :size="17" /></button>
+    <button :class="button" :title="t('common.delete')" :aria-label="t('common.delete')" @click="emit('remove')"><AppIcon fallback="ph:trash" :size="17" /></button>
   </div>
 </template>

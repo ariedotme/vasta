@@ -5,6 +5,7 @@ import { computePosition, flip, offset, shift, size } from '@floating-ui/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ColorName, Icon } from '@vasta/core'
 import { blockBackgroundClasses, blockTextClasses, colorNames } from '../lib/colors.ts'
+import { t } from '../lib/i18n.ts'
 import { closeContextMenu, contextMenu, type MenuItem } from '../lib/overlays.ts'
 import AppIcon from './AppIcon.vue'
 
@@ -205,7 +206,7 @@ onBeforeUnmount(() => {
                   item.sample === 'text' ? (color ? blockTextClasses[color] : '') : color ? blockBackgroundClasses[color] : 'text-ink-faint',
                   item.current === color ? 'ring-2 ring-accent' : 'ring-1 ring-line hover:ring-line-strong',
                 ]"
-                :title="color ?? 'Default'"
+                :title="color ? t(`color.${color}`) : t('common.default')"
                 @click="pick(item, color)"
               >
                 <AppIcon v-if="item.sample === 'background' && !color" fallback="ph:prohibit" :size="13" />

@@ -4,6 +4,7 @@
 import { computed, ref } from 'vue'
 import type { Id, TableSettings } from '@vasta/core'
 import { tableColumns, tableSettings, type Column } from '../lib/columns.ts'
+import { t } from '../lib/i18n.ts'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{ table: TableSettings | undefined; typeIds: Id[] }>()
@@ -53,7 +54,7 @@ function endDrag() {
 
 <template>
   <div ref="list" class="flex flex-col p-1 text-sm">
-    <div class="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">Columns</div>
+    <div class="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{{ t('views.columns') }}</div>
     <div
       v-for="(column, index) in columns"
       :key="column.field"
@@ -64,7 +65,7 @@ function endDrag() {
       <span
         v-if="index"
         class="cursor-grab touch-none rounded p-0.5 text-ink-faint hover:text-ink active:cursor-grabbing"
-        title="Drag to reorder"
+        :title="t('views.dragToReorder')"
         @pointerdown.prevent="startDrag($event, column.field)"
         @pointermove="drag"
         @pointerup="endDrag"
@@ -78,7 +79,7 @@ function endDrag() {
       <button
         class="rounded p-1"
         :class="column.wrap ? 'text-accent' : 'text-ink-faint hover:text-ink'"
-        :title="column.wrap ? 'Long values wrap' : 'Long values on one line'"
+        :title="column.wrap ? t('views.wrapOn') : t('views.wrapOff')"
         @click="change(column.field, { wrap: !column.wrap })"
       >
         <AppIcon fallback="ph:arrow-u-down-left" :size="14" />
@@ -87,7 +88,7 @@ function endDrag() {
         v-if="index"
         class="rounded p-1"
         :class="column.hidden ? 'text-ink-faint hover:text-ink' : 'text-ink-soft hover:text-ink'"
-        :title="column.hidden ? 'Show column' : 'Hide column'"
+        :title="column.hidden ? t('views.showColumn') : t('views.hideColumn')"
         @click="change(column.field, { hidden: !column.hidden })"
       >
         <AppIcon :fallback="column.hidden ? 'ph:eye-slash' : 'ph:eye'" :size="14" />
@@ -99,7 +100,7 @@ function endDrag() {
       class="mt-1 rounded-lg px-2 py-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink"
       @click="emit('update', undefined)"
     >
-      Reset columns
+      {{ t('views.resetColumns') }}
     </button>
   </div>
 </template>

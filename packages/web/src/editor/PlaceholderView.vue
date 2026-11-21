@@ -3,6 +3,7 @@
 import { NodeViewWrapper, nodeViewProps } from '@tiptap/vue-3'
 import { parsePlaceholder } from '@vasta/core'
 import { computed } from 'vue'
+import { t } from '../lib/i18n.ts'
 import { promptDialog } from '../lib/overlays.ts'
 
 const props = defineProps(nodeViewProps)
@@ -13,10 +14,10 @@ const braced = computed(() => `{{${value.value}}}`)
 async function edit() {
   if (!props.editor.isEditable) return
   const next = await promptDialog({
-    title: 'Placeholder',
-    message: 'What goes between the braces: date:+7d, ask:With whom?, formula:…',
+    title: t('editor.slash.placeholder'),
+    message: t('editor.template.placeholderMessage'),
     value: value.value,
-    confirmLabel: 'Save',
+    confirmLabel: t('common.save'),
   })
   if (next !== null) props.updateAttributes({ value: next })
 }
@@ -28,7 +29,7 @@ async function edit() {
     class="mx-px inline-flex cursor-pointer items-baseline rounded-md px-1 font-mono text-[0.85em] ring-1"
     :class="known ? 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900' : 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900'"
     contenteditable="false"
-    :title="known ? 'Replaced when an object is made from this template' : 'Not a placeholder Vasta knows'"
+    :title="known ? t('editor.template.placeholderKnown') : t('editor.template.placeholderUnknown')"
     data-placeholder-chip
     @click="edit"
     >{{ braced }}</NodeViewWrapper

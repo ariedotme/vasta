@@ -2,6 +2,7 @@
 import type { Editor, Range } from '@tiptap/core'
 import type { Id } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
+import { t, typeName } from '../lib/i18n.ts'
 import { MERMAID } from '../lib/mermaid.ts'
 import { openMenuAt, type MenuItem } from '../lib/overlays.ts'
 import { systemType, typesById } from '../lib/state.ts'
@@ -31,34 +32,34 @@ export interface SlashContext {
 /** A menu below the cursor. */
 function menuAtCursor(editor: Editor, items: MenuItem[]) {
   const coords = editor.view.coordsAtPos(editor.state.selection.from)
-  openMenuAt(coords.left, coords.bottom + 4, items.length ? items : [{ kind: 'heading', label: 'None yet' }])
+  openMenuAt(coords.left, coords.bottom + 4, items.length ? items : [{ kind: 'heading', label: t('editor.slash.noneYet') }])
 }
 
 const chain = (editor: Editor, range: Range) => editor.chain().focus().deleteRange(range)
 
 export const slashCommands: SlashCommand[] = [
-  { id: 'text', label: 'Text', icon: 'ph:text-t', keywords: 'paragraph', run: (e, r) => chain(e, r).setParagraph().run() },
-  { id: 'h1', label: 'Heading 1', icon: 'ph:text-h-one', keywords: 'title', run: (e, r) => chain(e, r).setHeading({ level: 1 }).run() },
-  { id: 'h2', label: 'Heading 2', icon: 'ph:text-h-two', keywords: 'subtitle', run: (e, r) => chain(e, r).setHeading({ level: 2 }).run() },
-  { id: 'h3', label: 'Heading 3', icon: 'ph:text-h-three', run: (e, r) => chain(e, r).setHeading({ level: 3 }).run() },
-  { id: 'bullet', label: 'Bulleted list', icon: 'ph:list-bullets', keywords: 'ul', run: (e, r) => chain(e, r).toggleBulletList().run() },
-  { id: 'numbered', label: 'Numbered list', icon: 'ph:list-numbers', keywords: 'ol', run: (e, r) => chain(e, r).toggleOrderedList().run() },
-  { id: 'todo', label: 'To-do', icon: 'ph:check-square', keywords: 'task checkbox', run: (e, r) => chain(e, r).toggleTaskList().run() },
-  { id: 'quote', label: 'Quote', icon: 'ph:quotes', run: (e, r) => chain(e, r).toggleBlockquote().run() },
+  { id: 'text', get label() { return t('editor.slash.text') }, icon: 'ph:text-t', keywords: 'text paragraph', run: (e, r) => chain(e, r).setParagraph().run() },
+  { id: 'h1', get label() { return t('editor.slash.h1') }, icon: 'ph:text-h-one', keywords: 'heading title', run: (e, r) => chain(e, r).setHeading({ level: 1 }).run() },
+  { id: 'h2', get label() { return t('editor.slash.h2') }, icon: 'ph:text-h-two', keywords: 'heading subtitle', run: (e, r) => chain(e, r).setHeading({ level: 2 }).run() },
+  { id: 'h3', get label() { return t('editor.slash.h3') }, icon: 'ph:text-h-three', keywords: 'heading', run: (e, r) => chain(e, r).setHeading({ level: 3 }).run() },
+  { id: 'bullet', get label() { return t('editor.slash.bullet') }, icon: 'ph:list-bullets', keywords: 'bulleted list ul', run: (e, r) => chain(e, r).toggleBulletList().run() },
+  { id: 'numbered', get label() { return t('editor.slash.numbered') }, icon: 'ph:list-numbers', keywords: 'numbered list ol', run: (e, r) => chain(e, r).toggleOrderedList().run() },
+  { id: 'todo', get label() { return t('editor.slash.todo') }, icon: 'ph:check-square', keywords: 'to-do task checkbox', run: (e, r) => chain(e, r).toggleTaskList().run() },
+  { id: 'quote', get label() { return t('editor.slash.quote') }, icon: 'ph:quotes', keywords: 'quote', run: (e, r) => chain(e, r).toggleBlockquote().run() },
   {
     id: 'callout',
-    label: 'Callout',
+    get label() { return t('editor.slash.callout') },
     icon: 'ph:lightbulb',
-    keywords: 'note info',
+    keywords: 'callout note info',
     run: (e, r) => chain(e, r).wrapIn('callout', { icon: { kind: 'emoji', value: '💡' } }).run(),
   },
-  { id: 'toggle', label: 'Toggle', icon: 'ph:caret-circle-right', keywords: 'details collapse', run: (e, r) => chain(e, r).run() && toggleFromLine(e) },
-  { id: 'group', label: 'Colored group', icon: 'ph:selection-background', keywords: 'box container', run: (e, r) => chain(e, r).wrapIn('group', { color: 'sky' }).run() },
+  { id: 'toggle', get label() { return t('editor.slash.toggle') }, icon: 'ph:caret-circle-right', keywords: 'toggle details collapse', run: (e, r) => chain(e, r).run() && toggleFromLine(e) },
+  { id: 'group', get label() { return t('editor.slash.group') }, icon: 'ph:selection-background', keywords: 'colored group box container', run: (e, r) => chain(e, r).wrapIn('group', { color: 'sky' }).run() },
   {
     id: 'columns',
-    label: 'Two columns',
+    get label() { return t('editor.slash.columns') },
     icon: 'ph:columns',
-    keywords: 'grid layout',
+    keywords: 'two columns grid layout',
     run: (e, r) =>
       chain(e, r)
         .insertContent({
@@ -72,48 +73,48 @@ export const slashCommands: SlashCommand[] = [
   },
   {
     id: 'image',
-    label: 'Image',
+    get label() { return t('editor.slash.image') },
     icon: 'ph:image',
-    keywords: 'picture photo upload camera',
+    keywords: 'image picture photo upload camera',
     // Synchronous, so the file picker opens within the tap or key press (iOS requires it).
     run: (e, r) => {
       chain(e, r).run()
       pickImages(e)
     },
   },
-  { id: 'table', label: 'Table', icon: 'ph:table', run: (e, r) => chain(e, r).insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run() },
-  { id: 'code', label: 'Code', icon: 'ph:code', run: (e, r) => chain(e, r).toggleCodeBlock().run() },
+  { id: 'table', get label() { return t('editor.slash.table') }, icon: 'ph:table', keywords: 'table', run: (e, r) => chain(e, r).insertTable({ rows: 3, cols: 3, withHeaderRow: false }).run() },
+  { id: 'code', get label() { return t('editor.slash.code') }, icon: 'ph:code', keywords: 'code', run: (e, r) => chain(e, r).toggleCodeBlock().run() },
   {
     id: 'diagram',
-    label: 'Diagram',
+    get label() { return t('editor.slash.diagram') },
     icon: 'ph:flow-arrow',
-    keywords: 'mermaid flowchart chart graph sequence mindmap',
+    keywords: 'diagram mermaid flowchart chart graph sequence mindmap',
     // A Mermaid code block (CodeBlockView.vue draws it), started with a small flowchart.
     run: (e, r) =>
       chain(e, r)
         .insertContent({ type: 'codeBlock', attrs: { language: MERMAID }, content: [{ type: 'text', text: 'flowchart LR\n  A[Idea] --> B[Note]' }] })
         .run(),
   },
-  { id: 'divider', label: 'Divider', icon: 'ph:minus', keywords: 'hr line', run: (e, r) => chain(e, r).setHorizontalRule().run() },
+  { id: 'divider', get label() { return t('editor.slash.divider') }, icon: 'ph:minus', keywords: 'divider hr line', run: (e, r) => chain(e, r).setHorizontalRule().run() },
   {
     id: 'query',
-    label: 'Query',
+    get label() { return t('editor.slash.query') },
     icon: 'ph:funnel',
-    keywords: 'filter list database view',
+    keywords: 'query filter list database view',
     // Creates a query object and embeds it; its settings open right away.
     run: async (e, r) => {
       const type = systemType('query')
       if (!type) return
       chain(e, r).run()
-      const query = await createObject(type.id, { title: 'Query', query: { typeIds: [], layout: 'list' } }, false)
+      const query = await createObject(type.id, { title: t('editor.slash.query'), query: { typeIds: [], layout: 'list' } }, false)
       e.chain().focus().insertContent({ type: 'objectEmbed', attrs: { objectId: query.id, display: 'embed' } }).run()
     },
   },
   {
     id: 'embed',
-    label: 'Embed object',
+    get label() { return t('editor.slash.embed') },
     icon: 'ph:cards',
-    keywords: 'card link',
+    keywords: 'embed object card link',
     // Inserts "@@" so the mention suggestion opens in embed mode.
     run: (e, r) => chain(e, r).insertContent('@@').run(),
   },
@@ -123,25 +124,28 @@ export const slashCommands: SlashCommand[] = [
 const pickers = (context: SlashContext): SlashCommand[] => [
   {
     id: 'snippet',
-    label: 'Snippet…',
+    label: t('editor.slash.snippet'),
     icon: 'ph:brackets-curly',
-    keywords: 'insert reuse',
+    keywords: 'snippet insert reuse',
     run: async (e, r) => {
       await loadTemplates()
-      menuAtCursor(e, [{ kind: 'heading', label: 'Snippets' }, ...snippetsFor(context.objectId).map((s) => ({ label: s.template!.name, icon: 'ph:brackets-curly', run: () => insertSnippet(e, r, s, context.objectId) }))])
+      menuAtCursor(e, [{ kind: 'heading', label: t('editor.slash.snippets') }, ...snippetsFor(context.objectId).map((s) => ({ label: s.template!.name, icon: 'ph:brackets-curly', run: () => insertSnippet(e, r, s, context.objectId) }))])
     },
   },
   {
     id: 'template',
-    label: 'Template…',
+    label: t('editor.slash.template'),
     icon: 'ph:copy-simple',
-    keywords: 'insert',
+    keywords: 'template insert',
     run: async (e, r) => {
       await loadTemplates()
-      const list = templates.list.filter((t) => t.template?.kind === 'template' && t.id !== context.objectId)
+      const list = templates.list.filter((tpl) => tpl.template?.kind === 'template' && tpl.id !== context.objectId)
       menuAtCursor(e, [
-        { kind: 'heading', label: 'Insert a template’s text' },
-        ...list.map((t) => ({ label: t.template!.name, hint: typesById.value.get(t.typeId)?.name, icon: 'ph:copy-simple', run: () => insertTemplate(e, r, t, context.objectId) })),
+        { kind: 'heading', label: t('editor.slash.insertTemplate') },
+        ...list.map((tpl) => {
+          const type = typesById.value.get(tpl.typeId)
+          return { label: tpl.template!.name, hint: type ? typeName(type) : undefined, icon: 'ph:copy-simple', run: () => insertTemplate(e, r, tpl, context.objectId) }
+        }),
       ])
     },
   },
@@ -149,16 +153,16 @@ const pickers = (context: SlashContext): SlashCommand[] => [
 
 /** Blocks only templates and snippets have. */
 const templateCommands: SlashCommand[] = [
-  { id: 'condition', label: 'Condition', icon: 'ph:git-branch', keywords: 'if else template', run: (e, r) => insertCondition(e, r) },
-  { id: 'placeholder', label: 'Placeholder', icon: 'ph:brackets-curly', keywords: 'variable date ask template', run: (e, r) => e.chain().focus().deleteRange(r).insertContent('{{').run() },
+  { id: 'condition', get label() { return t('editor.slash.condition') }, icon: 'ph:git-branch', keywords: 'condition if else template', run: (e, r) => insertCondition(e, r) },
+  { id: 'placeholder', get label() { return t('editor.slash.placeholder') }, icon: 'ph:brackets-curly', keywords: 'placeholder variable date ask template', run: (e, r) => e.chain().focus().deleteRange(r).insertContent('{{').run() },
 ]
 
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 
 export function filterCommands(query: string, context: SlashContext = {}): SlashCommand[] {
-  const q = query.toLowerCase()
+  const q = fold(query)
   const commands = [...slashCommands, ...pickers(context), ...(context.template ? templateCommands : [])]
-  const blocks = commands.filter((c) => !q || c.label.toLowerCase().includes(q) || c.id.includes(q) || c.keywords?.includes(q))
+  const blocks = commands.filter((c) => !q || fold(c.label).includes(q) || c.id.includes(q) || c.keywords?.includes(q))
   // Snippets that apply here, by trigger then name; one whose trigger is typed whole comes first.
   const wanted = fold(query)
   const found = snippetsFor(context.objectId).flatMap((snippet) => {
@@ -173,7 +177,7 @@ export function filterCommands(query: string, context: SlashContext = {}): Slash
     id: `snippet:${snippet.id}`,
     label: info.name,
     icon: 'ph:brackets-curly',
-    group: 'Snippets',
+    group: t('editor.slash.snippets'),
     ...(info.trigger ? { detail: `/${info.trigger}` } : {}),
     run: (e, r) => void insertSnippet(e, r, snippet, context.objectId),
   }))

@@ -36,6 +36,7 @@ import {
 import { ENTRY_DRAGGING, type DropTarget } from '../lib/calendar-drag.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { onChange } from '../lib/events.ts'
+import { t } from '../lib/i18n.ts'
 import { cachedSummary, lastError, primeFromObject, primeSummaries, refreshCounts, typesById, workspace } from '../lib/state.ts'
 import { isPhone } from '../lib/viewport.ts'
 import { openObject } from '../lib/open.ts'
@@ -345,11 +346,11 @@ const openNote = (day: string) => {
       <!-- The day view's page carries the date itself. -->
       <h1 v-if="view !== 'day'" class="mr-2 text-xl font-bold tracking-tight first-letter:uppercase">{{ title }}</h1>
       <div class="flex items-center gap-0.5">
-        <button class="rounded-md p-1.5 text-ink-soft hover:bg-hover hover:text-ink" title="Previous (←)" @click="go({ date: stepAnchor(view, anchor, -1) })">
+        <button class="rounded-md p-1.5 text-ink-soft hover:bg-hover hover:text-ink" :title="t('calendar.prev')" @click="go({ date: stepAnchor(view, anchor, -1) })">
           <AppIcon fallback="ph:caret-left" />
         </button>
-        <button class="rounded-md border border-line px-2.5 py-1 text-sm hover:bg-hover" title="Today (T)" @click="go({ date: dayKey() })">Today</button>
-        <button class="rounded-md p-1.5 text-ink-soft hover:bg-hover hover:text-ink" title="Next (→)" @click="go({ date: stepAnchor(view, anchor, 1) })">
+        <button class="rounded-md border border-line px-2.5 py-1 text-sm hover:bg-hover" :title="t('calendar.todayShortcut')" @click="go({ date: dayKey() })">{{ t('common.today') }}</button>
+        <button class="rounded-md p-1.5 text-ink-soft hover:bg-hover hover:text-ink" :title="t('calendar.next')" @click="go({ date: stepAnchor(view, anchor, 1) })">
           <AppIcon fallback="ph:caret-right" />
         </button>
       </div>
@@ -357,11 +358,11 @@ const openNote = (day: string) => {
 
       <div class="ml-auto flex items-center gap-2">
         <button ref="filterAnchor" class="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-ink-soft hover:bg-hover hover:text-ink" @click="filterOpen = !filterOpen">
-          <AppIcon fallback="ph:eye" /> Show
-          <span v-if="hiddenCount" class="rounded bg-hover px-1 text-xs">{{ hiddenCount }} hidden</span>
+          <AppIcon fallback="ph:eye" /> {{ t('calendar.show') }}
+          <span v-if="hiddenCount" class="rounded bg-hover px-1 text-xs">{{ t('calendar.hiddenCount', { count: hiddenCount }) }}</span>
         </button>
         <PopoverMenu v-model:open="filterOpen" :anchor="filterAnchor" placement="bottom-end" width="15rem">
-          <label v-for="item in [{ key: 'daily-notes', label: 'Daily notes', icon: 'ph:calendar-check' }, { key: 'tasks', label: 'Tasks', icon: 'ph:check-circle' }, { key: 'objects', label: 'Dated objects', icon: 'ph:cube' }]" :key="item.key" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm hover:bg-hover">
+          <label v-for="item in [{ key: 'daily-notes', label: t('builtin.type.daily-note.other'), icon: 'ph:calendar-check' }, { key: 'tasks', label: t('builtin.type.task.other'), icon: 'ph:check-circle' }, { key: 'objects', label: t('calendar.datedObjects'), icon: 'ph:cube' }]" :key="item.key" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm hover:bg-hover">
             <input type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" :checked="!hidden.has(item.key)" @change="toggle(item.key)" />
             <AppIcon :fallback="item.icon" class="text-ink-soft" /> {{ item.label }}
           </label>
@@ -375,7 +376,7 @@ const openNote = (day: string) => {
           </template>
           <div class="mx-2.5 my-1 border-t border-line" />
           <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover" @click="(filterOpen = false), (sourcesOpen = true)">
-            <AppIcon fallback="ph:calendar-dots" class="text-ink-soft" /> Subscribed calendars…
+            <AppIcon fallback="ph:calendar-dots" class="text-ink-soft" /> {{ t('calendar.subscribedCalendarsMenu') }}
           </button>
         </PopoverMenu>
 
@@ -395,7 +396,7 @@ const openNote = (day: string) => {
           v-if="view !== 'month' && !isPhone"
           class="grid h-8 w-8 place-items-center rounded-md hover:bg-hover hover:text-ink"
           :class="panelOpen ? 'bg-hover text-ink' : 'text-ink-soft'"
-          :title="panelOpen ? 'Hide the month' : 'Show the month'"
+          :title="panelOpen ? t('calendar.hideMonth') : t('calendar.showMonth')"
           @click="panelOpen = !panelOpen"
         >
           <AppIcon fallback="ph:calendar-blank" />

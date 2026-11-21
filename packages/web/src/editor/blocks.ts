@@ -16,6 +16,7 @@ import { NodeSelection, Plugin, PluginKey, Selection, SelectionRange, TextSelect
 import type { Mappable } from '@tiptap/pm/transform'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import { embedFor } from '../lib/embeds.ts'
+import { t } from '../lib/i18n.ts'
 import { imageOf } from '../lib/media.ts'
 import type { ColorName } from '@vasta/core'
 import { openMenuAt, type MenuItem } from '../lib/overlays.ts'
@@ -252,8 +253,8 @@ function colorMenu(view: EditorView, x: number, y: number) {
     view.focus()
   }
   openMenuAt(x, y, [
-    { kind: 'colors', label: 'Text', sample: 'text', current: shared('text'), pick: pick('text') },
-    { kind: 'colors', label: 'Background', sample: 'background', current: shared('background'), pick: pick('background') },
+    { kind: 'colors', label: t('editor.slash.text'), sample: 'text', current: shared('text'), pick: pick('text') },
+    { kind: 'colors', label: t('editor.block.background'), sample: 'background', current: shared('background'), pick: pick('background') },
   ])
 }
 
@@ -267,9 +268,9 @@ async function copyBlockLink(view: EditorView, objectId: string, pos: number) {
   const desktop = '__TAURI_INTERNALS__' in window
   try {
     await navigator.clipboard.writeText(desktop ? `vasta://${path}` : `${location.origin}/${path}`)
-    notice.value = { message: 'Link to the block copied' }
+    notice.value = { message: t('editor.block.linkCopied') }
   } catch {
-    lastError.value = 'Could not copy the link'
+    lastError.value = t('editor.block.copyLinkFailed')
   }
 }
 
@@ -283,7 +284,7 @@ function openBlockMenu(editor: Editor, x: number, y: number, objectId: string | 
   const textOnly = selection.blocks.every((node) => node.isTextblock)
   const count = selection.blocks.length
   const turnInto: MenuItem[] = [
-    { kind: 'heading', label: 'Turn into' },
+    { kind: 'heading', label: t('editor.block.turnInto') },
     ...slashCommands
       .filter((c) => TURN_INTO.includes(c.id))
       .map(
@@ -301,25 +302,25 @@ function openBlockMenu(editor: Editor, x: number, y: number, objectId: string | 
   ]
   const items: MenuItem[] = []
   // A second menu in place of a submenu; it opens once this one has closed.
-  if (textOnly) items.push({ label: 'Turn into…', icon: 'ph:arrows-clockwise', run: () => setTimeout(() => openMenuAt(x, y, turnInto)) }, { kind: 'separator' })
+  if (textOnly) items.push({ label: t('editor.block.turnIntoMenu'), icon: 'ph:arrows-clockwise', run: () => setTimeout(() => openMenuAt(x, y, turnInto)) }, { kind: 'separator' })
   const embed = count === 1 && selection.blocks[0]?.type.name === 'objectEmbed' ? selection.blocks[0] : undefined
   if (embed) items.push(...embedDisplays(view, selection.from, embed))
   const current = () => view.state.selection as BlockSelection
   const colorable = selection.blocks.some((node) => 'textColor' in node.attrs)
   const linkable = count === 1 && objectId && 'id' in selection.blocks[0]!.attrs
   if (colorable || linkable) {
-    if (colorable) items.push({ label: 'Color…', icon: 'ph:palette', run: () => setTimeout(() => colorMenu(view, x, y)) })
-    if (linkable) items.push({ label: 'Copy link to block', icon: 'ph:link', run: () => copyBlockLink(view, objectId, selection.from) })
+    if (colorable) items.push({ label: t('editor.block.colorMenu'), icon: 'ph:palette', run: () => setTimeout(() => colorMenu(view, x, y)) })
+    if (linkable) items.push({ label: t('editor.block.copyLink'), icon: 'ph:link', run: () => copyBlockLink(view, objectId, selection.from) })
     items.push({ kind: 'separator' })
   }
   items.push(
-    { label: count > 1 ? `Duplicate ${count} blocks` : 'Duplicate', icon: 'ph:copy-simple', hint: `${MOD}D`, run: () => duplicate(view, current()) },
-    { label: 'Move up', icon: 'ph:arrow-up', hint: `${MOD}⇧↑`, disabled: !selection.$from.nodeBefore, run: () => move(view, -1) },
-    { label: 'Move down', icon: 'ph:arrow-down', hint: `${MOD}⇧↓`, disabled: !selection.$to.nodeAfter, run: () => move(view, 1) },
-    { label: 'Copy', icon: 'ph:clipboard-text', hint: `${MOD}C`, run: () => copy(view, current()) },
-    { label: 'Save as snippet…', icon: 'ph:brackets-curly', run: () => saveAsSnippet(current().blocks.map((node) => node.toJSON() as DocNode)) },
+    { label: count > 1 ? t('editor.block.duplicateCount', { count }) : t('editor.block.duplicate'), icon: 'ph:copy-simple', hint: `${MOD}D`, run: () => duplicate(view, current()) },
+    { label: t('nav.moveUp'), icon: 'ph:arrow-up', hint: `${MOD}⇧↑`, disabled: !selection.$from.nodeBefore, run: () => move(view, -1) },
+    { label: t('nav.moveDown'), icon: 'ph:arrow-down', hint: `${MOD}⇧↓`, disabled: !selection.$to.nodeAfter, run: () => move(view, 1) },
+    { label: t('editor.block.copy'), icon: 'ph:clipboard-text', hint: `${MOD}C`, run: () => copy(view, current()) },
+    { label: t('editor.block.saveAsSnippet'), icon: 'ph:brackets-curly', run: () => saveAsSnippet(current().blocks.map((node) => node.toJSON() as DocNode)) },
     { kind: 'separator' },
-    { label: count > 1 ? `Delete ${count} blocks` : 'Delete', icon: 'ph:trash', danger: true, hint: '⌫', run: () => remove(view, current()) }
+    { label: count > 1 ? t('editor.block.deleteCount', { count }) : t('common.delete'), icon: 'ph:trash', danger: true, hint: '⌫', run: () => remove(view, current()) }
   )
   openMenuAt(x, y, items)
 }
@@ -334,14 +335,14 @@ function embedDisplays(view: EditorView, pos: number, node: PMNode): MenuItem[] 
   const mimeType = summary.media?.mimeType ?? summary.media?.file?.mimeType ?? ''
   const isImage = (type?.system === 'image' || mimeType.startsWith('image/')) && !!imageOf(summary)
   const displays: { value: string; label: string; icon: string }[] = [
-    { value: 'inline', label: 'Inline', icon: 'ph:text-align-left' },
-    { value: 'card', label: 'Card', icon: 'ph:cards' },
-    { value: 'wide-card', label: 'Wide card', icon: 'ph:rows' },
-    ...(type?.system === 'weblink' && embedFor(summary.media?.url) ? [{ value: 'embed', label: 'Embed', icon: 'ph:play-circle' }] : []),
-    ...(isImage ? [{ value: 'image', label: 'Image', icon: 'ph:image' }] : []),
+    { value: 'inline', label: t('editor.block.displayInline'), icon: 'ph:text-align-left' },
+    { value: 'card', label: t('editor.block.displayCard'), icon: 'ph:cards' },
+    { value: 'wide-card', label: t('editor.block.displayWideCard'), icon: 'ph:rows' },
+    ...(type?.system === 'weblink' && embedFor(summary.media?.url) ? [{ value: 'embed', label: t('editor.block.displayEmbed'), icon: 'ph:play-circle' }] : []),
+    ...(isImage ? [{ value: 'image', label: t('editor.slash.image'), icon: 'ph:image' }] : []),
   ]
   return [
-    { kind: 'heading', label: 'Show as' },
+    { kind: 'heading', label: t('editor.block.showAs') },
     ...displays.map(
       (d): MenuItem => ({
         label: d.label,
@@ -410,7 +411,7 @@ class BlockHandle {
     this.handle = document.createElement('div')
     this.handle.setAttribute('role', 'button')
     this.handle.className = 'vasta-block-handle'
-    this.handle.title = 'Click to select, drag to move'
+    this.handle.title = t('editor.block.handleDesktop')
     this.handle.draggable = !this.touch
     this.handle.innerHTML = HANDLE_ICON
     this.handle.hidden = true
@@ -420,7 +421,7 @@ class BlockHandle {
     this.dropLine.hidden = true
     this.wrapper.appendChild(this.dropLine)
     if (this.touch) {
-      this.handle.title = 'Tap for the block menu, drag to move'
+      this.handle.title = t('editor.block.handleTouch')
       this.handle.classList.add('vasta-block-handle-touch')
       this.handle.addEventListener('pointerdown', this.onPress)
       this.handle.addEventListener('pointermove', this.onTouchMove)

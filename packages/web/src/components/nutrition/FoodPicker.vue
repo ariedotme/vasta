@@ -26,6 +26,7 @@ import {
   type PropertyValue,
 } from '@vasta/core'
 import { createObject, dayKey } from '../../lib/actions.ts'
+import { t } from '../../lib/i18n.ts'
 import { dailyNotesBetween, entryTime, formatGrams, formatKcal, logEntry, meals, nutritionTypeId, writeEntries } from '../../lib/nutrition.ts'
 import { lastError } from '../../lib/state.ts'
 import { isTouch } from '../../lib/viewport.ts'
@@ -80,7 +81,7 @@ async function logQuick() {
   try {
     const meal = chosenMeal.value
     const note = await writeEntries(props.day, undefined, { [newId()]: quickEntry(q.name, q.nutrients, entryTime(props.day, meal), meal?.id) })
-    added.value.unshift({ name: q.name || 'Quick entry', amount: '', kcal: q.nutrients.kcal })
+    added.value.unshift({ name: q.name || t('nutrition.picker.quickEntry'), amount: '', kcal: q.nutrients.kcal })
     emit('logged', note)
     query.value = ''
     focusSearch()
@@ -95,11 +96,11 @@ async function logQuick() {
 function describe(source: ObjectSummary): string {
   if (isRecipe(source)) {
     const facts = recipeFacts(source, props.lookup)
-    if (facts.servingGrams && facts.per100) return `${formatKcal(scaleNutrients(facts.per100, facts.servingGrams).kcal)} kcal / serving`
-    return facts.per100 ? `${formatKcal(facts.per100.kcal)} kcal / 100 g` : 'no ingredients with data yet'
+    if (facts.servingGrams && facts.per100) return t('nutrition.picker.kcalPerServing', { kcal: formatKcal(scaleNutrients(facts.per100, facts.servingGrams).kcal) })
+    return facts.per100 ? t('nutrition.picker.kcalPer100', { kcal: formatKcal(facts.per100.kcal) }) : t('nutrition.picker.noIngredientsData')
   }
   const per100 = foodNutrients(source)
-  return per100 ? `${formatKcal(per100.kcal)} kcal / 100 g` : 'no nutrition data yet'
+  return per100 ? t('nutrition.picker.kcalPer100', { kcal: formatKcal(per100.kcal) }) : t('nutrition.picker.noNutritionData')
 }
 
 const portions = computed(() => (picked.value ? sourcePortions(picked.value, props.lookup) : []))
@@ -212,7 +213,7 @@ const small = 'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tex
 </script>
 
 <template>
-  <ModalDialog :title="`Log food${chosenMeal ? ` · ${chosenMeal.name}` : ''}`" width="34rem" @close="emit('close')">
+  <ModalDialog :title="chosenMeal ? t('nutrition.picker.titleMeal', { meal: chosenMeal.name }) : t('nutrition.day.logFood')" width="34rem" @close="emit('close')">
     <template #icon><AppIcon fallback="ph:bowl-food" class="text-ink-soft" /></template>
 
     <div class="mb-3 flex flex-wrap gap-1.5">
@@ -230,39 +231,39 @@ const small = 'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tex
     <!-- A new food: its nutrition, then its amount. -->
     <form v-if="creating" class="space-y-3" @submit.prevent="createFood">
       <div class="grid grid-cols-[1fr_auto] gap-2">
-        <input v-model="form.name" :class="input" placeholder="Name" aria-label="Name" />
-        <input v-model="form.brand" :class="input" class="w-32" placeholder="Brand" aria-label="Brand" />
+        <input v-model="form.name" :class="input" :placeholder="t('typeSettings.name')" :aria-label="t('typeSettings.name')" />
+        <input v-model="form.brand" :class="input" class="w-32" :placeholder="t('builtin.prop.brand')" :aria-label="t('builtin.prop.brand')" />
       </div>
       <div class="flex items-center gap-2 text-sm text-ink-soft">
-        Nutrition per
-        <input v-model="form.base" :class="small" class="w-16" inputmode="decimal" aria-label="Base amount in grams" /> g
-        <span class="text-xs text-ink-faint">(as on the label; kept per 100 g)</span>
+        {{ t('nutrition.picker.nutritionPer') }}
+        <input v-model="form.base" :class="small" class="w-16" inputmode="decimal" :aria-label="t('nutrition.picker.baseAmountLabel')" /> g
+        <span class="text-xs text-ink-faint">{{ t('nutrition.picker.asOnLabel') }}</span>
       </div>
       <div class="grid grid-cols-5 gap-2 max-md:grid-cols-3">
-        <label v-for="[key, name] in [['kcal', 'kcal'], ['protein', 'Protein'], ['carbs', 'Carbs'], ['fat', 'Fat'], ['fiber', 'Fiber']] as const" :key="key" class="text-xs text-ink-faint">
+        <label v-for="[key, name] in [['kcal', 'kcal'], ['protein', t('builtin.prop.protein')], ['carbs', t('builtin.prop.carbs')], ['fat', t('builtin.prop.fat')], ['fiber', t('builtin.prop.fiber')]] as const" :key="key" class="text-xs text-ink-faint">
           {{ name }}
           <input v-model="form[key]" :class="small" class="mt-0.5" inputmode="decimal" :placeholder="key === 'kcal' ? '0' : 'g'" />
         </label>
       </div>
       <div class="flex items-center gap-2 text-sm text-ink-soft">
         1
-        <input v-model="form.portion" :class="small" class="flex-1" placeholder="portion (slice, cup…), optional" aria-label="Portion name" />
+        <input v-model="form.portion" :class="small" class="flex-1" :placeholder="t('nutrition.picker.portionOptional')" :aria-label="t('nutrition.picker.portionName')" />
         =
-        <input v-model="form.portionGrams" :class="small" class="w-20" inputmode="decimal" placeholder="g" aria-label="Portion grams" /> g
+        <input v-model="form.portionGrams" :class="small" class="w-20" inputmode="decimal" placeholder="g" :aria-label="t('nutrition.picker.portionGrams')" /> g
       </div>
       <div class="flex gap-2">
-        <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40" :disabled="busy || !form.name.trim()">Create food</button>
-        <button type="button" class="rounded-lg px-3 py-1.5 text-sm text-ink-soft hover:bg-hover" @click="creating = false">Cancel</button>
+        <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40" :disabled="busy || !form.name.trim()">{{ t('nutrition.picker.createFood') }}</button>
+        <button type="button" class="rounded-lg px-3 py-1.5 text-sm text-ink-soft hover:bg-hover" @click="creating = false">{{ t('common.cancel') }}</button>
       </div>
-      <p class="text-xs text-ink-faint">Without kcal it is logged as "needs nutrition data"; fill it in on the food's page later.</p>
+      <p class="text-xs text-ink-faint">{{ t('nutrition.picker.withoutKcalHint') }}</p>
     </form>
 
     <!-- The amount of the food picked. -->
     <form v-else-if="picked" class="space-y-3" @submit.prevent="log">
       <div class="flex items-center gap-2">
-        <button type="button" class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="Back to the list" @click="back"><AppIcon fallback="ph:arrow-left" /></button>
+        <button type="button" class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="t('nutrition.picker.backToList')" @click="back"><AppIcon fallback="ph:arrow-left" /></button>
         <div class="min-w-0 flex-1">
-          <div class="truncate font-medium">{{ picked.title || 'Untitled' }}</div>
+          <div class="truncate font-medium">{{ picked.title || t('common.untitled') }}</div>
           <div class="text-xs text-ink-faint">{{ describe(picked) }}</div>
         </div>
       </div>
@@ -270,8 +271,8 @@ const small = 'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tex
         ref="amountInput"
         v-model="amount"
         :class="input"
-        :placeholder="portions[0] ? `150 g, or 1 ${portions[0].name}` : '150 g'"
-        aria-label="Amount"
+        :placeholder="portions[0] ? t('nutrition.picker.amountPlaceholderPortion', { portion: portions[0].name }) : '150 g'"
+        :aria-label="t('nutrition.day.amount')"
         enterkeyhint="done"
         @keydown.esc.prevent.stop="back"
       />
@@ -287,20 +288,20 @@ const small = 'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tex
         </button>
       </div>
       <div class="flex items-center gap-3">
-        <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40 max-md:px-4 max-md:py-2" :disabled="busy || !amount.trim() || preview.error">Log</button>
+        <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40 max-md:px-4 max-md:py-2" :disabled="busy || !amount.trim() || preview.error">{{ t('nutrition.picker.logBtn') }}</button>
         <span class="text-sm" :class="preview.error ? 'text-red-600 dark:text-red-400' : 'tabular-nums text-ink-soft'">{{ preview.text }}</span>
       </div>
     </form>
 
     <!-- Search. -->
     <template v-else>
-      <input ref="searchInput" v-model="query" :class="input" placeholder="Search foods and recipes" aria-label="Search foods and recipes" @keydown="onSearchKey" />
+      <input ref="searchInput" v-model="query" :class="input" :placeholder="t('nutrition.picker.searchPlaceholder')" :aria-label="t('nutrition.picker.searchPlaceholder')" @keydown="onSearchKey" />
       <div class="mt-2 max-h-[45vh] overflow-y-auto max-md:max-h-none">
         <button v-if="quick" class="mb-1 flex w-full items-center gap-2.5 rounded-lg bg-hover px-2.5 py-2 text-left text-sm max-md:py-3" data-quick-entry :disabled="busy" @click="logQuick">
           <AppIcon fallback="ph:lightning" class="shrink-0 text-ink-faint" />
-          <span class="min-w-0 flex-1 truncate">Log {{ quick.name ? `“${quick.name}”` : 'just the kcal' }} <span class="text-ink-faint">without a food</span></span>
+          <span class="min-w-0 flex-1 truncate">{{ quick.name ? t('nutrition.picker.logQuickNamed', { name: quick.name }) : t('nutrition.picker.logQuickJustKcal') }} <span class="text-ink-faint">{{ t('nutrition.picker.withoutAFood') }}</span></span>
           <span class="shrink-0 text-xs tabular-nums text-ink-faint">
-            {{ formatKcal(quick.nutrients.kcal) }} kcal<template v-if="quick.nutrients.protein"> · {{ formatGrams(quick.nutrients.protein) }} g protein</template>
+            {{ formatKcal(quick.nutrients.kcal) }} kcal<template v-if="quick.nutrients.protein">{{ t('nutrition.picker.proteinInline', { grams: formatGrams(quick.nutrients.protein) }) }}</template>
           </span>
         </button>
         <button
@@ -312,19 +313,19 @@ const small = 'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 tex
           @mousemove="highlighted = index"
         >
           <AppIcon :fallback="isRecipe(source) ? 'ph:cooking-pot' : 'ph:bowl-food'" class="shrink-0 text-ink-faint" />
-          <span class="min-w-0 flex-1 truncate">{{ source.title || 'Untitled' }}<span v-if="foodBrand(source)" class="text-ink-faint"> · {{ foodBrand(source) }}</span></span>
+          <span class="min-w-0 flex-1 truncate">{{ source.title || t('common.untitled') }}<span v-if="foodBrand(source)" class="text-ink-faint"> · {{ foodBrand(source) }}</span></span>
           <span class="shrink-0 text-xs tabular-nums text-ink-faint">{{ describe(source) }}</span>
         </button>
-        <p v-if="!results.length && !query.trim()" class="px-2.5 py-3 text-sm text-ink-faint">No foods yet. Type a name to create the first one.</p>
-        <p v-if="!query.trim()" class="px-2.5 pt-2 text-xs text-ink-faint">Not sure what it was? Type its kcal: “muffin ~350 kcal”, “300 kcal”.</p>
+        <p v-if="!results.length && !query.trim()" class="px-2.5 py-3 text-sm text-ink-faint">{{ t('nutrition.picker.emptyFoods') }}</p>
+        <p v-if="!query.trim()" class="px-2.5 pt-2 text-xs text-ink-faint">{{ t('nutrition.picker.quickHint') }}</p>
         <button v-if="query.trim() && !quick" class="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-accent hover:bg-hover max-md:py-3" @click="startCreating">
-          <AppIcon fallback="ph:plus" /> Create food “{{ query.trim() }}”
+          <AppIcon fallback="ph:plus" /> {{ t('nutrition.picker.createFoodNamed', { name: query.trim() }) }}
         </button>
       </div>
     </template>
 
     <div v-if="added.length" class="mt-4 border-t border-line pt-3">
-      <div class="mb-1 text-xs font-medium text-ink-faint">Added</div>
+      <div class="mb-1 text-xs font-medium text-ink-faint">{{ t('nutrition.picker.added') }}</div>
       <div v-for="(item, index) in added" :key="index" class="flex items-center gap-2 py-0.5 text-sm">
         <AppIcon fallback="ph:check" class="text-emerald-600 dark:text-emerald-400" :size="14" />
         <span class="min-w-0 flex-1 truncate">{{ item.name }} <span class="text-ink-faint">{{ item.amount }}</span></span>

@@ -5,6 +5,7 @@
 import { inflateSync } from 'fflate'
 import type { Id } from '@vasta/core'
 import { api, MAX_UPLOAD_BYTES, type CapacitiesImportReport } from './api.ts'
+import { t } from './i18n.ts'
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic',
@@ -58,7 +59,7 @@ function entries(data: Uint8Array): ZipEntry[] {
       break
     }
   }
-  if (end === -1) throw new Error('not a ZIP archive')
+  if (end === -1) throw new Error(t('settings.import.notZip'))
   let count = view.getUint16(end + 10, true)
   let at = view.getUint32(end + 16, true)
   if ((count === 0xffff || at === 0xffffffff) && end >= 20 && view.getUint32(end - 20, true) === 0x07064b50) {
@@ -69,7 +70,7 @@ function entries(data: Uint8Array): ZipEntry[] {
   const decoder = new TextDecoder()
   const found: ZipEntry[] = []
   for (let i = 0; i < count; i++) {
-    if (view.getUint32(at, true) !== 0x02014b50) throw new Error('not a ZIP archive')
+    if (view.getUint32(at, true) !== 0x02014b50) throw new Error(t('settings.import.notZip'))
     const nameLength = view.getUint16(at + 28, true)
     const extraLength = view.getUint16(at + 30, true)
     const entry: ZipEntry = {
@@ -101,7 +102,7 @@ function unpack(data: Uint8Array, entry: ZipEntry): Uint8Array {
   const raw = data.subarray(start, start + entry.compressedSize)
   if (entry.method === 0) return raw.slice()
   if (entry.method === 8) return inflateSync(raw, { out: new Uint8Array(entry.size) })
-  throw new Error(`${entry.name} is compressed in a way Vasta cannot read`)
+  throw new Error(t('settings.import.unsupportedCompression', { name: entry.name }))
 }
 
 /** Read the export and list its space folders. Throws when the file is not one. */
@@ -111,7 +112,7 @@ export async function readExport(file: File): Promise<ExportArchive> {
   try {
     list = entries(data)
   } catch {
-    throw new Error('This file is not a ZIP archive.')
+    throw new Error(t('settings.import.fileNotZip'))
   }
   const spaces = new Map<string, ExportSpace>()
   for (const entry of list) {
@@ -125,7 +126,7 @@ export async function readExport(file: File): Promise<ExportArchive> {
     spaces.set(name, space)
   }
   const found = [...spaces.values()].filter((s) => s.notes)
-  if (!found.length) throw new Error('No notes in this file. Choose the ZIP of a full export from Capacities.')
+  if (!found.length) throw new Error(t('settings.import.noNotesInZip'))
   return { data, spaces: found }
 }
 

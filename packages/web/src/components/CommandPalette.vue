@@ -11,6 +11,8 @@ import { completionSource, createObject, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { bareUrl } from '../lib/embeds.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t, typeName, typePluralName, type MessageKey } from '../lib/i18n.ts'
+import { en } from '../locales/en.ts'
 import { foodSourcesOf, nutritionOn, previewFoodLine } from '../lib/nutrition.ts'
 import { meId, people } from '../lib/people.ts'
 import { lastError, notice, primeFromObject, primeSummaries, refreshCounts, systemType, typesById, ui, workspace } from '../lib/state.ts'
@@ -35,7 +37,7 @@ type Result =
   | { kind: 'command'; command: Command }
 
 interface Command {
-  label: string
+  key: MessageKey
   icon: string
   /** A shortcut's id in lib/shortcuts.ts, for its keys. */
   shortcut?: string
@@ -44,18 +46,18 @@ interface Command {
   when?: () => boolean
 }
 
-/** Places and actions, offered when the query matches their name. */
+/** Places and actions, offered when the query matches their localized (or English) name. */
 const COMMANDS: Command[] = [
-  { label: 'Today', icon: 'ph:calendar-check', shortcut: 'today', run: GO.today.run },
-  { label: 'Inbox', icon: 'ph:tray', shortcut: 'inbox', run: GO.inbox.run },
-  { label: 'Calendar', icon: 'ph:calendar-dots', shortcut: 'calendar', run: GO.calendar.run },
-  { label: 'Tasks', icon: 'ph:check-circle', shortcut: 'tasks', run: GO.tasks.run },
-  { label: 'Settings', icon: 'ph:gear-six', shortcut: 'settings', run: () => router.push('/settings') },
-  { label: 'Trash', icon: 'ph:trash', run: () => router.push('/trash') },
-  { label: 'Keyboard shortcuts', icon: 'ph:keyboard', shortcut: 'shortcuts', run: () => (ui.shortcutsOpen = true) },
-  { label: 'Show or hide the sidebar', icon: 'ph:sidebar-simple', shortcut: 'sidebar', run: toggleSidebar },
-  { label: 'Change theme', icon: 'ph:circle-half', run: cycleTheme },
-  { label: 'Nutrition', icon: 'ph:chart-bar', run: () => router.push('/nutrition'), when: () => nutritionOn.value },
+  { key: 'common.today', icon: 'ph:calendar-check', shortcut: 'today', run: GO.today.run },
+  { key: 'common.inbox', icon: 'ph:tray', shortcut: 'inbox', run: GO.inbox.run },
+  { key: 'common.calendar', icon: 'ph:calendar-dots', shortcut: 'calendar', run: GO.calendar.run },
+  { key: 'common.tasks', icon: 'ph:check-circle', shortcut: 'tasks', run: GO.tasks.run },
+  { key: 'common.settings', icon: 'ph:gear-six', shortcut: 'settings', run: () => router.push('/settings') },
+  { key: 'common.trash', icon: 'ph:trash', run: () => router.push('/trash') },
+  { key: 'nav.keyboardShortcuts', icon: 'ph:keyboard', shortcut: 'shortcuts', run: () => (ui.shortcutsOpen = true) },
+  { key: 'palette.toggleSidebar', icon: 'ph:sidebar-simple', shortcut: 'sidebar', run: toggleSidebar },
+  { key: 'palette.changeTheme', icon: 'ph:circle-half', run: cycleTheme },
+  { key: 'common.nutrition', icon: 'ph:chart-bar', run: () => router.push('/nutrition'), when: () => nutritionOn.value },
 ]
 
 const router = useRouter()
@@ -93,13 +95,19 @@ const results = computed<Result[]>(() => {
   }
   const q = query.value.trim().toLowerCase()
   const types: Result[] = q
-    ? workspace.types.filter((t) => t.pluralName.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)).slice(0, 4).map((type) => ({ kind: 'type', type }))
+    ? workspace.types
+        .filter((type) => [type.pluralName, type.name, typePluralName(type), typeName(type)].some((s) => s.toLowerCase().includes(q)))
+        .slice(0, 4)
+        .map((type) => ({ kind: 'type', type }))
     : []
   const page = systemType('page')
   const url = bareUrl(query.value)
   if (url) return [{ kind: 'weblink', url }, ...objects.value.map((object): Result => ({ kind: 'object', object }))]
   const create: Result[] = q && page ? [{ kind: 'create', title: query.value.trim(), type: page }] : []
-  const commands: Result[] = q.length > 1 ? COMMANDS.filter((c) => c.label.toLowerCase().includes(q) && (!c.when || c.when())).map((command) => ({ kind: 'command', command })) : []
+  const commands: Result[] =
+    q.length > 1
+      ? COMMANDS.filter((c) => (t(c.key).toLowerCase().includes(q) || en[c.key].toLowerCase().includes(q)) && (!c.when || c.when())).map((command) => ({ kind: 'command', command }))
+      : []
   return [...commands, ...objects.value.map((object): Result => ({ kind: 'object', object })), ...types, ...create]
 })
 
@@ -225,13 +233,13 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
             ref="input"
             v-model="query"
             class="w-full bg-transparent py-3.5 text-[15px] outline-none placeholder:text-ink-faint"
-            placeholder="Search or create…"
+            :placeholder="t('palette.placeholder')"
             @keydown="onKey"
             @keyup="readCursor"
             @click="readCursor"
           />
           <kbd class="rounded border border-line px-1.5 text-[11px] text-ink-faint max-md:hidden">esc</kbd>
-          <button class="-mr-2 rounded-md p-2 text-ink-faint md:hidden" title="Close" @click="ui.paletteOpen = false"><AppIcon fallback="ph:x" /></button>
+          <button class="-mr-2 rounded-md p-2 text-ink-faint md:hidden" :title="t('common.close')" @click="ui.paletteOpen = false"><AppIcon fallback="ph:x" /></button>
         </div>
         <div class="max-h-[45dvh] overflow-y-auto p-1.5 md:max-h-[55vh]">
           <button
@@ -248,25 +256,25 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
                 <div class="truncate text-sm font-medium">{{ displayTitle(result.object, typeOf(result.object)) }}</div>
                 <div v-if="result.object.preview" class="truncate text-xs text-ink-faint">{{ result.object.preview }}</div>
               </div>
-              <span class="shrink-0 text-xs text-ink-faint">{{ typeOf(result.object)?.name }}</span>
+              <span class="shrink-0 text-xs text-ink-faint">{{ typeName(typeOf(result.object)) }}</span>
             </template>
             <template v-else-if="result.kind === 'command'">
               <AppIcon :fallback="result.command.icon" :size="18" class="text-ink-soft" />
-              <span class="flex-1 text-sm">{{ result.command.label }}</span>
+              <span class="flex-1 text-sm">{{ t(result.command.key) }}</span>
               <kbd v-if="result.command.shortcut" class="rounded border border-line px-1.5 font-sans text-[11px] text-ink-faint max-md:hidden">{{ keysOf(result.command.shortcut) }}</kbd>
             </template>
             <template v-else-if="result.kind === 'type'">
               <TypeIcon :icon="result.type.icon" fallback="ph:cube" :size="18" :color="result.type.color" />
-              <span class="flex-1 text-sm">{{ result.type.pluralName }}</span>
-              <span class="text-xs text-ink-faint">Type</span>
+              <span class="flex-1 text-sm">{{ typePluralName(result.type) }}</span>
+              <span class="text-xs text-ink-faint">{{ t('common.type') }}</span>
             </template>
             <template v-else-if="result.kind === 'weblink'">
               <AppIcon fallback="ph:link" :size="18" class="text-accent" />
               <div class="min-w-0 flex-1">
-                <div class="text-sm">Save as weblink</div>
+                <div class="text-sm">{{ t('palette.saveAsWeblink') }}</div>
                 <div class="truncate text-xs text-ink-faint">{{ result.url }}</div>
               </div>
-              <span class="text-xs text-ink-faint">{{ systemType('weblink')?.name }}</span>
+              <span class="text-xs text-ink-faint">{{ typeName(systemType('weblink')) }}</span>
             </template>
             <template v-else-if="result.kind === 'complete'">
               <AppIcon :icon="result.item.icon" fallback="ph:cube" :size="18" class="text-ink-soft" />
@@ -276,13 +284,13 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
             <template v-else-if="result.kind === 'typed'">
               <AppIcon :icon="result.type.icon" fallback="ph:plus-circle" :size="18" class="text-accent" />
               <div class="min-w-0 flex-1">
-                <div class="truncate text-sm">Create {{ result.preview.title ? `“${result.preview.title}”` : `a ${result.type.name}` }}</div>
-                <div v-if="result.preview.unknownTemplate" class="truncate text-xs text-amber-700 dark:text-amber-400">{{ result.type.name }} has no template “{{ result.preview.unknownTemplate }}”</div>
-                <div v-else-if="result.preview.errors.length" class="truncate text-xs text-amber-700 dark:text-amber-400">Cannot read {{ result.preview.errors.join('; ') }}</div>
-                <div v-else-if="result.preview.parts.length || result.preview.template" class="truncate text-xs text-ink-faint">{{ [...(result.preview.template ? [`from ${result.preview.template}`] : []), ...result.preview.parts].join(', ') }}</div>
-                <div v-else-if="result.preview.properties.length" class="truncate text-xs text-ink-faint">name:value sets {{ result.preview.properties.join(', ') }}</div>
+                <div class="truncate text-sm">{{ result.preview.title ? t('palette.createNamed', { title: result.preview.title }) : t('palette.createType', { type: typeName(result.type) }) }}</div>
+                <div v-if="result.preview.unknownTemplate" class="truncate text-xs text-amber-700 dark:text-amber-400">{{ t('palette.noTemplate', { type: typeName(result.type), template: result.preview.unknownTemplate }) }}</div>
+                <div v-else-if="result.preview.errors.length" class="truncate text-xs text-amber-700 dark:text-amber-400">{{ t('palette.cannotRead', { errors: result.preview.errors.join('; ') }) }}</div>
+                <div v-else-if="result.preview.parts.length || result.preview.template" class="truncate text-xs text-ink-faint">{{ [...(result.preview.template ? [t('palette.fromTemplate', { template: result.preview.template })] : []), ...result.preview.parts].join(', ') }}</div>
+                <div v-else-if="result.preview.properties.length" class="truncate text-xs text-ink-faint">{{ t('palette.nameValueSets', { properties: result.preview.properties.join(', ') }) }}</div>
               </div>
-              <span class="shrink-0 text-xs text-ink-faint">{{ result.type.name }}</span>
+              <span class="shrink-0 text-xs text-ink-faint">{{ typeName(result.type) }}</span>
             </template>
             <template v-else-if="result.kind === 'food'">
               <AppIcon fallback="ph:bowl-food" :size="18" class="text-accent" />
@@ -290,15 +298,15 @@ const typeOf = (object: ObjectSummary) => typesById.value.get(object.typeId)
                 <div class="text-sm">{{ result.preview.text }}</div>
                 <div v-if="result.preview.problem" class="text-xs text-amber-700 dark:text-amber-400">{{ result.preview.problem }}</div>
               </div>
-              <span class="shrink-0 text-xs text-ink-faint">Food</span>
+              <span class="shrink-0 text-xs text-ink-faint">{{ typeName(systemType('food')) || t('builtin.type.food.one') }}</span>
             </template>
             <template v-else>
               <AppIcon fallback="ph:plus-circle" :size="18" class="text-accent" />
-              <span class="flex-1 text-sm">Create “{{ result.title }}”</span>
-              <span class="text-xs text-ink-faint">{{ result.type.name }}</span>
+              <span class="flex-1 text-sm">{{ t('palette.createNamed', { title: result.title }) }}</span>
+              <span class="text-xs text-ink-faint">{{ typeName(result.type) }}</span>
             </template>
           </button>
-          <p v-if="!results.length" class="px-3 py-6 text-center text-sm text-ink-faint">Nothing found</p>
+          <p v-if="!results.length" class="px-3 py-6 text-center text-sm text-ink-faint">{{ t('palette.nothingFound') }}</p>
         </div>
       </div>
     </div>

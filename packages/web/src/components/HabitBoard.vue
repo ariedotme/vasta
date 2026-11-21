@@ -6,6 +6,7 @@ import { addDays, habitStats, habitTarget, habitUnit, isHabitDone, isHabitPaused
 import { dayKey } from '../lib/actions.ts'
 import { swatchClasses } from '../lib/colors.ts'
 import { habitColor, useFoodHabits } from '../lib/habits.ts'
+import { locale, t } from '../lib/i18n.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
 import HabitCheck from './HabitCheck.vue'
@@ -16,8 +17,7 @@ const emit = defineEmits<{ menu: [event: MouseEvent, object: ObjectSummary] }>()
 
 const today = dayKey()
 const days = computed(() => Array.from({ length: isPhone.value ? 7 : 14 }, (_, i) => addDays(today, i - (isPhone.value ? 6 : 13))))
-const locale = typeof navigator !== 'undefined' ? navigator.language : 'en'
-const weekday = new Intl.DateTimeFormat(locale, { weekday: 'narrow', timeZone: 'UTC' })
+const weekday = computed(() => new Intl.DateTimeFormat(locale.value, { weekday: 'narrow', timeZone: 'UTC' }))
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`)
 
 const habits = useFoodHabits(toRef(props, 'habits'))
@@ -35,13 +35,13 @@ const rows = computed(() => {
     <table class="w-full border-separate border-spacing-0 text-sm">
       <thead>
         <tr class="text-[11px] text-ink-faint">
-          <th class="sticky left-0 z-10 bg-surface pb-2 text-left font-medium">Habit</th>
+          <th class="sticky left-0 z-10 bg-surface pb-2 text-left font-medium">{{ t('builtin.type.habit.one') }}</th>
           <th v-for="day in days" :key="day" class="w-8 pb-2 text-center font-normal" :class="day === today ? 'text-accent' : ''">
             <div class="first-letter:uppercase">{{ weekday.format(utc(day)) }}</div>
             <div class="tabular-nums" :class="day === today ? 'font-semibold' : ''">{{ Number(day.slice(8)) }}</div>
           </th>
-          <th class="w-16 pb-2 pl-3 text-right font-medium">Streak</th>
-          <th class="w-16 pb-2 pl-3 text-right font-medium max-sm:hidden">30 days</th>
+          <th class="w-16 pb-2 pl-3 text-right font-medium">{{ t('habits.streak') }}</th>
+          <th class="w-16 pb-2 pl-3 text-right font-medium max-sm:hidden">{{ t('metrics.days', { days: 30 }) }}</th>
         </tr>
       </thead>
       <tbody>
@@ -49,8 +49,8 @@ const rows = computed(() => {
           <td class="sticky left-0 z-10 max-w-[14rem] border-t border-line/70 bg-surface py-1.5 pr-3">
             <ObjectLink :id="row.habit.id" class="flex min-w-0 items-center gap-2 hover:underline">
               <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="swatchClasses[habitColor(row.habit)]" />
-              <span class="truncate font-medium">{{ row.habit.title || 'Untitled' }}</span>
-              <span v-if="row.paused" class="text-xs text-ink-faint">paused</span>
+              <span class="truncate font-medium">{{ row.habit.title || t('common.untitled') }}</span>
+              <span v-if="row.paused" class="text-xs text-ink-faint">{{ t('habits.paused') }}</span>
               <span v-else-if="habitTarget(row.habit)" class="shrink-0 text-xs text-ink-faint">{{ habitTarget(row.habit) }} {{ habitUnit(row.habit) }}</span>
             </ObjectLink>
           </td>
@@ -65,6 +65,6 @@ const rows = computed(() => {
         </tr>
       </tbody>
     </table>
-    <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">No habits match the filter.</p>
+    <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">{{ t('habits.noMatch') }}</p>
   </div>
 </template>

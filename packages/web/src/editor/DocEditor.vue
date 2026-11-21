@@ -14,6 +14,7 @@ import { useRouter } from 'vue-router'
 import type * as Y from 'yjs'
 import AppIcon from '../components/AppIcon.vue'
 import { api } from '../lib/api.ts'
+import { t } from '../lib/i18n.ts'
 import { promptDialog } from '../lib/overlays.ts'
 import { lastError, notice, primeFromObject, refreshCounts } from '../lib/state.ts'
 import { saveAsSnippet, selectedBlocks } from '../lib/templates.ts'
@@ -44,7 +45,12 @@ function appPath(href: string): string | undefined {
 
 const editor = useEditor({
   ...(props.text ? {} : { content: props.doc ?? { type: 'doc', content: [{ type: 'paragraph' }] } }),
-  extensions: createExtensions(props.placeholder ?? (props.template ? 'Type / for blocks, {{ for placeholders…' : 'Type / for blocks, @ to link an object…'), props.text, props.objectId, props.template),
+  extensions: createExtensions(
+    props.placeholder ?? (props.template ? t('editor.templatePlaceholder') : t('editor.placeholder')),
+    props.text,
+    props.objectId,
+    props.template
+  ),
   autofocus: props.autofocus ? 'end' : false,
   editorProps: {
     attributes: { class: 'vasta-doc' },
@@ -152,7 +158,12 @@ async function setLink() {
   if (!editor.value) return
   const previous = editor.value.getAttributes('link').href as string | undefined
   const { from, to } = editor.value.state.selection
-  const href = await promptDialog({ title: previous ? 'Edit link' : 'Add link', value: previous ?? 'https://', placeholder: 'https://', confirmLabel: 'Save' })
+  const href = await promptDialog({
+    title: previous ? t('editor.editLink') : t('editor.addLink'),
+    value: previous ?? 'https://',
+    placeholder: 'https://',
+    confirmLabel: t('common.save'),
+  })
   if (!editor.value || href === null) return
   // The dialog took focus; restore the selection before applying the mark.
   editor.value.chain().focus().setTextSelection({ from, to }).extendMarkRange('link').setLink({ href }).run()
@@ -166,10 +177,10 @@ async function quote() {
   if (empty) return
   const passage = current.state.doc.textBetween(from, to, ' ', ' ').trim()
   const note = await promptDialog({
-    title: 'Save as quote',
+    title: t('editor.saveQuoteTitle'),
     message: passage.length > 240 ? `${passage.slice(0, 240)}…` : passage,
-    placeholder: 'A note (optional)',
-    confirmLabel: 'Save quote',
+    placeholder: t('editor.saveQuotePlaceholder'),
+    confirmLabel: t('editor.saveQuoteConfirm'),
     optional: true,
   })
   if (note === null) return
@@ -178,7 +189,7 @@ async function quote() {
     primeFromObject(created)
     void refreshCounts()
     editor.value?.chain().focus().setTextSelection({ from, to }).setMark('highlight', { color: 'yellow', quoteId: created.id }).run()
-    notice.value = { message: 'Quote saved', action: { label: 'Open', run: () => openObject(created.id) } }
+    notice.value = { message: t('editor.quoteSaved'), action: { label: t('common.open'), run: () => openObject(created.id) } }
   } catch (error) {
     lastError.value = (error as Error).message
   }
@@ -195,15 +206,15 @@ function removeLink() {
   editor.value?.chain().focus().extendMarkRange('link').unsetLink().run()
 }
 
-const marks: { name: string; title: string; icon: string; run: () => unknown }[] = [
-  { name: 'bold', title: 'Bold', icon: 'ph:text-b-bold', run: () => editor.value?.chain().focus().toggleBold().run() },
-  { name: 'italic', title: 'Italic', icon: 'ph:text-italic', run: () => editor.value?.chain().focus().toggleItalic().run() },
-  { name: 'strike', title: 'Strikethrough', icon: 'ph:text-strikethrough', run: () => editor.value?.chain().focus().toggleStrike().run() },
-  { name: 'code', title: 'Code', icon: 'ph:code', run: () => editor.value?.chain().focus().toggleCode().run() },
-  { name: 'highlight', title: 'Highlight', icon: 'ph:highlighter', run: () => editor.value?.chain().focus().toggleHighlight({ color: 'yellow' }).run() },
-  { name: 'link', title: 'Link', icon: 'ph:link', run: setLink },
-  ...(props.objectId ? [{ name: 'quote', title: 'Save as quote', icon: 'ph:quotes', run: quote }] : []),
-  { name: 'snippet', title: 'Save as snippet', icon: 'ph:brackets-curly', run: snippet },
+const marks = [
+  { name: 'bold', title: () => t('editor.mark.bold'), icon: 'ph:text-b-bold', run: () => editor.value?.chain().focus().toggleBold().run() },
+  { name: 'italic', title: () => t('editor.mark.italic'), icon: 'ph:text-italic', run: () => editor.value?.chain().focus().toggleItalic().run() },
+  { name: 'strike', title: () => t('editor.mark.strike'), icon: 'ph:text-strikethrough', run: () => editor.value?.chain().focus().toggleStrike().run() },
+  { name: 'code', title: () => t('editor.mark.code'), icon: 'ph:code', run: () => editor.value?.chain().focus().toggleCode().run() },
+  { name: 'highlight', title: () => t('editor.mark.highlight'), icon: 'ph:highlighter', run: () => editor.value?.chain().focus().toggleHighlight({ color: 'yellow' }).run() },
+  { name: 'link', title: () => t('editor.mark.link'), icon: 'ph:link', run: setLink },
+  ...(props.objectId ? [{ name: 'quote', title: () => t('editor.saveQuoteTitle'), icon: 'ph:quotes', run: quote }] : []),
+  { name: 'snippet', title: () => t('editor.mark.snippet'), icon: 'ph:brackets-curly', run: snippet },
 ]
 </script>
 
@@ -219,12 +230,12 @@ const marks: { name: string; title: string; icon: string; run: () => unknown }[]
         :key="mark.name"
         class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover"
         :class="editor.isActive(mark.name) ? 'bg-hover text-accent' : 'text-ink-soft'"
-        :title="mark.title"
+        :title="mark.title()"
         @click="mark.run"
       >
         <AppIcon :fallback="mark.icon" />
       </button>
-      <button v-if="editor.isActive('link')" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft hover:bg-hover" title="Remove link" @click="removeLink">
+      <button v-if="editor.isActive('link')" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft hover:bg-hover" :title="t('editor.removeLink')" @click="removeLink">
         <AppIcon fallback="ph:link-break" />
       </button>
     </BubbleMenu>

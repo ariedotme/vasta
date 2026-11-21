@@ -4,6 +4,7 @@ import { computed, reactive, ref, watch, type Ref } from 'vue'
 import type { Id, ObjectRecord, ObjectSummary, ObjectType, Space, SystemTypeKey } from '@vasta/core'
 import { docToPlainText } from '@vasta/core'
 import { api } from './api.ts'
+import { t } from './i18n.ts'
 
 export const workspace = reactive({
   space: null as Space | null,
@@ -38,7 +39,7 @@ export async function loadWorkspace(spaceId?: Id) {
     } catch {}
     const id = spaceId ?? (spaces.some((s) => s.id === stored) ? stored : spaces[0]?.id)
     if (!id) {
-      workspace.error = 'No space found. Import one with `pnpm import:capacities`.'
+      workspace.error = t('errors.noSpaceFound')
       return
     }
     const bundle = await api.space(id)
@@ -50,7 +51,7 @@ export async function loadWorkspace(spaceId?: Id) {
     workspace.ready = true
     rememberSpace(id)
   } catch (error) {
-    workspace.error = `Could not reach the Vasta server (${(error as Error).message}).`
+    workspace.error = t('errors.cannotReachServer', { message: (error as Error).message })
   }
 }
 

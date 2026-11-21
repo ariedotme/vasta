@@ -10,6 +10,7 @@ import {
   type NewBoardElement,
 } from '@vasta/core'
 import { api } from './api.ts'
+import { t } from './i18n.ts'
 import { openText, useReplica } from './replica.ts'
 import { openRemoteText } from './remote-text.ts'
 import { primeSummaries, systemType, workspace } from './state.ts'
@@ -59,7 +60,7 @@ export function canvasElements(canvas: unknown, at: { x: number; y: number }): (
 /** A new whiteboard holding a flowchart; returns its id (to open it). */
 export async function boardFromMermaid(source: string, title: string): Promise<Id> {
   const type = systemType('whiteboard')
-  if (!type) throw new Error('This space has no Whiteboard type.')
+  if (!type) throw new Error(t('whiteboard.error.noType'))
   const elements = await mermaidElements(source, { x: 0, y: 0 })
   const board = await api.createObject({ typeId: type.id, title })
   const session = useReplica() ? await openText(board.id) : await openRemoteText(board.id)

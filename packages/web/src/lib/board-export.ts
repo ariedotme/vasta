@@ -3,6 +3,7 @@
 // rasterized. Cards show their object's title and type, text wraps by an estimate of its width
 // (an SVG has no text layout, and a foreignObject would keep a PNG from being made in Safari).
 import { arrowTips, attachedTo, isAttached, isPlaced, lineDash, lineEnds, type BoardElement, type PlacedElement } from '@vasta/core'
+import { t } from './i18n.ts'
 import {
   BOARD_COLORS,
   STICKY_INK,
@@ -89,11 +90,11 @@ export function boardSvg(elements: BoardElement[], options: ExportOptions): { sv
       case 'frame':
         return at(
           `<rect width="${b.w}" height="${b.h}" rx="12" fill="${e.color ? `${BOARD_COLORS[e.color]}14` : '#ffffff73'}" stroke="${LINE}" />` +
-            `<text x="0" y="-6" font-size="13" fill="${INK_SOFT}">${escape(e.title?.trim() || 'Frame')}</text>`
+            `<text x="0" y="-6" font-size="13" fill="${INK_SOFT}">${escape(e.title?.trim() || t('whiteboard.frame'))}</text>`
         )
       case 'card': {
         const card = options.card(e.objectId)
-        const title = card?.title || 'Untitled'
+        const title = card?.title || t('common.untitled')
         const compact = e.view === 'compact'
         return at(
           `<rect width="${b.w}" height="${b.h}" rx="${compact ? 8 : 12}" fill="${PAPER}" stroke="${LINE}" />` +
@@ -184,7 +185,7 @@ export async function svgToPng(svg: string, width: number, height: number, scale
     image.decoding = 'async'
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve()
-      image.onerror = () => reject(new Error('the picture of the board could not be drawn'))
+      image.onerror = () => reject(new Error(t('whiteboard.error.renderFailed')))
       image.src = url
     })
     const canvas = document.createElement('canvas')
@@ -192,7 +193,7 @@ export async function svgToPng(svg: string, width: number, height: number, scale
     canvas.height = Math.round(height * k)
     const context = canvas.getContext('2d')!
     context.drawImage(image, 0, 0, canvas.width, canvas.height)
-    return await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('no PNG'))), 'image/png'))
+    return await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error(t('whiteboard.error.noPng')))), 'image/png'))
   } finally {
     URL.revokeObjectURL(url)
   }

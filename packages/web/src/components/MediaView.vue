@@ -3,6 +3,7 @@
 import { computed } from 'vue'
 import type { MediaInfo, ObjectType } from '@vasta/core'
 import { mediaUrl } from '../lib/api.ts'
+import { t } from '../lib/i18n.ts'
 
 const props = defineProps<{ media: MediaInfo; type: ObjectType | undefined }>()
 
@@ -20,7 +21,7 @@ const mime = computed(() => props.media.file?.mimeType ?? (props.type?.system ==
     <video v-else-if="src && mime.startsWith('video/')" :src="src" controls class="w-full rounded-xl" />
 
     <p v-else-if="!src && type?.system && type.system !== 'weblink'" class="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-ink-faint">
-      File not available{{ media.url ? '' : ' in this space' }}.
+      {{ media.url ? t('media.notAvailable') : t('media.notAvailableInSpace') }}
     </p>
   </section>
 </template>

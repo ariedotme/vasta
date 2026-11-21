@@ -11,6 +11,7 @@ import BoardCardEmbed from './BoardCardEmbed.vue'
 import BoardCardProperties from './BoardCardProperties.vue'
 import { iconTextClasses } from '../../lib/colors.ts'
 import { displayTitle } from '../../lib/format.ts'
+import { t } from '../../lib/i18n.ts'
 
 const props = defineProps<{
   element: PlacedElement
@@ -128,7 +129,7 @@ function onInput(event: Event) {
         <BoardCardProperties v-else-if="element.view === 'properties'" :object="summary" :type="type" :fields="element.fields" class="pointer-events-none" />
         <ObjectCard v-else :object="summary" :type="type" variant="grid" class="pointer-events-none h-full" />
       </template>
-      <div v-if="!summary" class="grid h-full place-items-center rounded-xl border border-dashed border-line-strong bg-surface text-sm text-ink-faint">Loading…</div>
+      <div v-if="!summary" class="grid h-full place-items-center rounded-xl border border-dashed border-line-strong bg-surface text-sm text-ink-faint">{{ t('common.loading') }}</div>
     </template>
 
     <!-- Loose arrow: only its line takes the pointer -->
@@ -184,7 +185,7 @@ function onInput(event: Event) {
         class="pointer-events-auto absolute left-0 max-w-full origin-bottom-left truncate whitespace-nowrap pb-1 text-ink-soft"
         :style="{ bottom: '100%', fontSize: `${13 / zoom}px` }"
       >
-        {{ element.title?.trim() || 'Frame' }}
+        {{ element.title?.trim() || t('whiteboard.frame') }}
       </div>
       <div :data-element="element.id" class="pointer-events-auto absolute inset-x-0 top-0" :style="{ height: edge }" />
       <div :data-element="element.id" class="pointer-events-auto absolute inset-x-0 bottom-0" :style="{ height: edge }" />
@@ -218,7 +219,7 @@ function onInput(event: Event) {
           class="w-full resize-none overflow-hidden bg-transparent text-[15px] leading-snug text-ink outline-none"
           :class="element.kind === 'shape' ? 'text-center' : element.kind === 'sticky' ? 'h-full p-3' : 'h-full p-1'"
           :style="{ color: textColor, fontSize }"
-          :placeholder="element.kind === 'text' ? 'Text' : ''"
+          :placeholder="element.kind === 'text' ? t('propKind.text') : ''"
           @input="onInput"
           @blur="emit('commit')"
         />

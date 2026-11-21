@@ -10,6 +10,7 @@ import { useRoute } from 'vue-router'
 import { SAID_MATCH, TYPED_MATCH, textMatch } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import { authApi, type NagAnswer, type NagView } from '../lib/api.ts'
+import { locale, t, tc } from '../lib/i18n.ts'
 import { closeTakeover, takeoverReady } from '../lib/platform.ts'
 import { listen, speechLanguage, speechUnavailable, type Listening } from '../lib/speech.ts'
 
@@ -57,20 +58,24 @@ onBeforeUnmount(() => {
   listening.value?.stop()
 })
 
-const typeLabel = computed(() => (nag.value?.object?.system === 'habit' ? 'Habit' : nag.value?.object?.system === 'task' ? 'Task' : 'Reminder'))
+const typeLabel = computed(() => (nag.value?.object?.system === 'habit' ? t('builtin.type.habit.one') : nag.value?.object?.system === 'task' ? t('builtin.type.task.one') : t('reminders.title')))
 const status = computed(() => {
   const n = nag.value
   if (!n) return ''
-  const parts = [n.sent > 1 ? `Reminder ${n.sent}` : 'Reminder', n.snoozes ? `snoozed ${n.snoozes === 1 ? 'once' : `${n.snoozes} times`}` : '', n.steps > 1 ? `step ${n.step + 1} of ${n.steps}` : '']
+  const parts = [
+    n.sent > 1 ? t('reminders.view.sent', { count: n.sent }) : t('reminders.title'),
+    n.snoozes ? tc(n.snoozes, 'reminders.stats.snoozed.one', 'reminders.stats.snoozed.other') : '',
+    n.steps > 1 ? t('reminders.view.stepOf', { step: n.step + 1, total: n.steps }) : '',
+  ]
   return parts.filter(Boolean).join(' · ')
 })
 /** Snoozes left before snoozing climbs a step. */
-const snoozeCost = computed(() => {
+const snoozeLeft = computed(() => {
   const n = nag.value
-  if (!n?.climbAfter || n.steps <= 1 || n.step >= n.steps - 1) return ''
-  const left = n.climbAfter - (n.snoozes % n.climbAfter)
-  return left === 1 ? 'This snooze climbs a step.' : `${left} more snoozes climb a step.`
+  if (!n?.climbAfter || n.steps <= 1 || n.step >= n.steps - 1) return 0
+  return n.climbAfter - (n.snoozes % n.climbAfter)
 })
+const snoozeCost = computed(() => (snoozeLeft.value ? tc(snoozeLeft.value, 'reminders.view.snoozeClimb.one', 'reminders.view.snoozeClimb.other') : ''))
 
 // Typing or saying the text, one phrase after another ----------------------------
 const index = ref(0)
@@ -93,7 +98,7 @@ watch(input, () => (typedError.value = ''))
 function submitTyped() {
   if (!current.value || matched.value || saying.value || !input.value.trim()) return
   if (textMatch(current.value, input.value) >= TYPED_MATCH) accept(input.value)
-  else typedError.value = 'Not quite yet: check it and press Enter again.'
+  else typedError.value = t('reminders.view.notQuiteYet')
 }
 
 function accept(text: string) {
@@ -164,22 +169,23 @@ async function answer(kind: NagAnswer, extra: { texts?: string[]; reason?: strin
 
 function finish(view: NagView, kind: NagAnswer | 'elsewhere') {
   listening.value?.stop()
-  const until = new Date(Date.now() + view.snooze * 60_000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const until = new Date(Date.now() + view.snooze * 60_000).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })
   const habit = view.object?.system === 'habit'
+  const snoozeMore = snoozeLeft.value === 1 ? t('reminders.view.snoozeClimbed') : snoozeCost.value
   after.value =
     kind === 'snooze'
-      ? { icon: 'ph:alarm', title: `Snoozed until ${until}`, text: snoozeCost.value ? `It comes back then. ${snoozeCost.value.replace('This snooze climbs', 'It climbed')}` : 'It comes back then.' }
+      ? { icon: 'ph:alarm', title: t('reminders.view.snoozedUntil', { time: until }), text: snoozeMore ? t('reminders.view.comesBackMore', { more: snoozeMore }) : t('reminders.view.comesBack') }
       : view.outcome === 'skipped'
-        ? { icon: 'ph:moon-stars', title: 'Not today', text: 'Noted why. It is back tomorrow.' }
+        ? { icon: 'ph:moon-stars', title: t('reminders.view.notTodayTitle'), text: t('reminders.view.notTodayText') }
         : view.outcome === 'escaped'
-          ? { icon: 'ph:door-open', title: 'Let go for now', text: 'Counted as skipped.' }
+          ? { icon: 'ph:door-open', title: t('reminders.view.letGoTitle'), text: t('reminders.view.letGoText') }
           : view.outcome === 'said'
-            ? { icon: 'ph:microphone', title: 'Said out loud', text: habit ? 'Done for today.' : 'That counts.' }
+            ? { icon: 'ph:microphone', title: t('reminders.view.saidTitle'), text: habit ? t('reminders.view.doneForToday') : t('reminders.view.thatCounts') }
             : view.outcome === 'typed'
-              ? { icon: 'ph:keyboard', title: 'Written down', text: habit ? 'Done for today.' : 'That counts.' }
+              ? { icon: 'ph:keyboard', title: t('reminders.view.typedTitle'), text: habit ? t('reminders.view.doneForToday') : t('reminders.view.thatCounts') }
               : view.outcome === 'ignored'
-                ? { icon: 'ph:clock-counter-clockwise', title: 'This one is over', text: 'Its day ended before an answer.' }
-                : { icon: 'ph:check-circle', title: view.outcome === 'ok' ? 'Seen' : 'Done', text: kind === 'elsewhere' ? 'Answered somewhere else.' : 'That counts.' }
+                ? { icon: 'ph:clock-counter-clockwise', title: t('reminders.view.overTitle'), text: t('reminders.view.overText') }
+                : { icon: 'ph:check-circle', title: view.outcome === 'ok' ? t('reminders.view.seenTitle') : t('reminders.view.doneTitle'), text: kind === 'elsewhere' ? t('reminders.view.answeredElsewhere') : t('reminders.view.thatCounts') }
   // Answered (not snoozed, skipped or let go): the note it opens afterwards, if it has one.
   const answered = view.outcome === 'ok' || view.outcome === 'done' || view.outcome === 'typed' || view.outcome === 'said'
   const open = answered && view.openAfter ? `o/${view.openAfter.id}` : undefined
@@ -231,18 +237,18 @@ watch(
     <div v-if="takeover" class="fixed inset-x-0 top-0 h-8" data-tauri-drag-region />
 
     <p v-if="error && !nag" class="text-sm text-ink-soft">{{ error }}</p>
-    <p v-else-if="!nag" class="text-sm text-ink-faint">Loading…</p>
+    <p v-else-if="!nag" class="text-sm text-ink-faint">{{ t('common.loading') }}</p>
 
     <!-- Answered: here, or before this page opened. -->
     <div v-else-if="!open" class="w-full max-w-md text-center" data-remind-done>
       <div class="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-full bg-surface text-3xl shadow-sm ring-1 ring-line" :class="tone">
         <AppIcon :fallback="after?.icon ?? 'ph:check-circle'" :size="34" />
       </div>
-      <h1 class="text-2xl font-semibold tracking-tight">{{ after?.title ?? 'Already answered' }}</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ after?.title ?? t('reminders.view.alreadyAnswered') }}</h1>
       <p class="mt-2 text-ink-soft">{{ after?.text ?? nag.reason ?? nag.title }}</p>
       <div v-if="!takeover" class="mt-6 flex justify-center gap-2 text-sm">
-        <RouterLink v-if="nag.object" :to="`/o/${nag.object.id}`" class="rounded-lg border border-line px-3 py-1.5 hover:bg-hover">Open {{ typeLabel.toLowerCase() }}</RouterLink>
-        <RouterLink to="/settings#reminders" class="rounded-lg border border-line px-3 py-1.5 hover:bg-hover">Reminders</RouterLink>
+        <RouterLink v-if="nag.object" :to="`/o/${nag.object.id}`" class="rounded-lg border border-line px-3 py-1.5 hover:bg-hover">{{ t('reminders.view.openType', { type: typeLabel.toLowerCase() }) }}</RouterLink>
+        <RouterLink to="/settings#reminders" class="rounded-lg border border-line px-3 py-1.5 hover:bg-hover">{{ t('reminders.titlePlural') }}</RouterLink>
       </div>
     </div>
 
@@ -272,7 +278,7 @@ watch(
             type="button"
             class="relative grid h-20 w-20 place-items-center rounded-full shadow-lg transition-transform active:scale-95"
             :class="listening ? 'bg-rose-500 text-white' : 'bg-ink text-surface'"
-            :title="listening ? 'Stop listening' : 'Say it'"
+            :title="listening ? t('reminders.view.stopListening') : t('reminders.view.sayIt')"
             :disabled="busy || matched"
             @click="toggleListening"
           >
@@ -281,18 +287,18 @@ watch(
           </button>
           <p class="min-h-6 max-w-md text-center text-ink-soft" aria-live="polite">
             <template v-if="heard">{{ heard }}</template>
-            <template v-else-if="listening">Listening… say it out loud.</template>
-            <template v-else>Tap and say it out loud.</template>
+            <template v-else-if="listening">{{ t('reminders.view.listeningPrompt') }}</template>
+            <template v-else>{{ t('reminders.view.tapToSay') }}</template>
           </p>
           <div v-if="listening && heard" class="h-1 w-40 overflow-hidden rounded-full bg-line"><div class="h-full bg-emerald-500 transition-all" :style="{ width: `${Math.min(100, Math.round((progress / SAID_MATCH) * 100))}%` }" /></div>
           <p v-if="speechError" class="text-sm text-red-600 dark:text-red-400">{{ speechError }}</p>
-          <button type="button" class="text-xs text-ink-faint hover:text-ink" @click="(typing = true), listening?.stop(), (listening = null)">Type it instead</button>
+          <button type="button" class="text-xs text-ink-faint hover:text-ink" @click="(typing = true), listening?.stop(), (listening = null)">{{ t('reminders.view.typeInstead') }}</button>
         </div>
         <form v-else class="mt-6" @submit.prevent="submitTyped">
           <input
             v-model="input"
             class="w-full rounded-xl border border-line bg-surface px-4 py-3 text-center text-lg outline-none focus:border-line-strong"
-            :placeholder="nag.ack === 'say' ? 'Type it (or say it, where the microphone works)' : 'Type it, word for word'"
+            :placeholder="nag.ack === 'say' ? t('reminders.view.typeOrSayPlaceholder') : t('reminders.view.typeWordForWord')"
             autocomplete="off"
             autocapitalize="off"
             spellcheck="false"
@@ -300,9 +306,9 @@ watch(
             autofocus
             data-type-it
           />
-          <p class="mt-2 text-center text-xs" :class="typedError ? 'text-amber-700 dark:text-amber-400' : 'text-ink-faint'" data-type-hint>{{ typedError || 'Press Enter when you are done.' }}</p>
+          <p class="mt-2 text-center text-xs" :class="typedError ? 'text-amber-700 dark:text-amber-400' : 'text-ink-faint'" data-type-hint>{{ typedError || t('reminders.view.pressEnter') }}</p>
           <p v-if="nag.ack === 'say' && whyNoSpeech" class="mt-2 text-center text-xs text-ink-faint">{{ whyNoSpeech }}</p>
-          <button v-else-if="nag.ack === 'say' && typing" type="button" class="mt-2 block w-full text-center text-xs text-ink-faint hover:text-ink" @click="(typing = false), startListening()">Say it instead</button>
+          <button v-else-if="nag.ack === 'say' && typing" type="button" class="mt-2 block w-full text-center text-xs text-ink-faint hover:text-ink" @click="(typing = false), startListening()">{{ t('reminders.view.sayInstead') }}</button>
         </form>
       </section>
 
@@ -316,31 +322,31 @@ watch(
           <li v-for="task in nag.tasks" :key="task.id" class="px-5 py-3">
             <RouterLink :to="`/o/${task.id}`" class="hover:underline">{{ task.title }}</RouterLink>
           </li>
-          <li v-if="!nag.tasks.length" class="px-5 py-3 text-ink-faint">No tasks due today.</li>
+          <li v-if="!nag.tasks.length" class="px-5 py-3 text-ink-faint">{{ t('reminders.view.noTasksDue') }}</li>
         </ul>
       </section>
 
       <div class="mt-8 flex flex-col items-center gap-3">
         <button v-if="nag.ack === 'done' || nag.ack === 'ok'" type="button" class="min-w-48 rounded-xl bg-ink px-6 py-3 text-base font-semibold text-surface shadow-sm hover:opacity-90 disabled:opacity-40" :disabled="busy" data-answer @click="answer(nag.ack)">
-          {{ nag.ack === 'done' ? (nag.object?.system === 'habit' ? 'Done for today' : 'Mark done') : 'OK, got it' }}
+          {{ nag.ack === 'done' ? (nag.object?.system === 'habit' ? t('reminders.view.doneTodayBtn') : t('reminders.view.markDoneBtn')) : t('reminders.view.okGotItBtn') }}
         </button>
 
         <div v-if="!askingWhy" class="flex flex-wrap items-center justify-center gap-2 text-sm">
           <button type="button" class="rounded-lg border border-line px-3 py-1.5 hover:bg-hover disabled:opacity-40" :disabled="busy" :title="snoozeCost || undefined" @click="answer('snooze')">
-            Snooze {{ nag.snooze }} min
+            {{ t('reminders.view.snoozeBtn', { min: nag.snooze }) }}
           </button>
-          <button type="button" class="rounded-lg border border-line px-3 py-1.5 hover:bg-hover disabled:opacity-40" :disabled="busy" @click="askingWhy = true">Not today…</button>
+          <button type="button" class="rounded-lg border border-line px-3 py-1.5 hover:bg-hover disabled:opacity-40" :disabled="busy" @click="askingWhy = true">{{ t('reminders.view.notTodayBtn') }}</button>
         </div>
         <p v-if="snoozeCost && !askingWhy" class="text-xs text-ink-faint">{{ snoozeCost }}</p>
 
         <form v-if="askingWhy" class="w-full max-w-md" @submit.prevent="skip">
           <label class="block text-sm text-ink-soft">
-            Why not today? One line, for your stats.
-            <input v-model="reason" class="mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-line-strong" maxlength="200" placeholder="Sick, travelling, did it another way…" autofocus data-reason />
+            {{ t('reminders.view.whyNotToday') }}
+            <input v-model="reason" class="mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-line-strong" maxlength="200" :placeholder="t('reminders.view.reasonPlaceholder')" autofocus data-reason />
           </label>
           <div class="mt-2 flex justify-end gap-2 text-sm">
-            <button type="button" class="rounded-lg px-3 py-1.5 text-ink-soft hover:bg-hover" @click="askingWhy = false">Back</button>
-            <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 font-medium text-surface disabled:opacity-40" :disabled="busy || !reason.trim()">Skip today</button>
+            <button type="button" class="rounded-lg px-3 py-1.5 text-ink-soft hover:bg-hover" @click="askingWhy = false">{{ t('common.back') }}</button>
+            <button type="submit" class="rounded-lg bg-ink px-3 py-1.5 font-medium text-surface disabled:opacity-40" :disabled="busy || !reason.trim()">{{ t('reminders.view.skipToday') }}</button>
           </div>
         </form>
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
@@ -348,8 +354,8 @@ watch(
 
       <!-- The takeover never traps anyone. -->
       <div v-if="takeover" class="text-center text-xs text-ink-faint" :class="popup ? 'mt-6' : 'mt-10'">
-        <span v-if="escapeIn">You can leave in {{ escapeIn }} s</span>
-        <button v-else type="button" class="underline-offset-2 hover:text-ink hover:underline" data-escape @click="answer('escape')">Let me go (counts as skipped)</button>
+        <span v-if="escapeIn">{{ t('reminders.view.leaveIn', { seconds: escapeIn }) }}</span>
+        <button v-else type="button" class="underline-offset-2 hover:text-ink hover:underline" data-escape @click="answer('escape')">{{ t('reminders.view.letMeGo') }}</button>
       </div>
     </article>
   </div>

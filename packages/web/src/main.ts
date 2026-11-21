@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import './lib/icons.ts'
+import { installI18n } from './lib/i18n.ts'
 import { installLongPress } from './lib/long-press.ts'
 import { installTheme } from './lib/theme.ts'
 import { router, warmRoutes } from './router.ts'
@@ -8,6 +9,7 @@ import { watchForUpdates } from './lib/version.ts'
 import './style.css'
 
 installTheme()
+void installI18n()
 
 // Installed on the home screen it should feel like an app: no pinch or double-tap zoom. iOS ignores
 // user-scalable=no in Safari tabs but not here; the gesture events and touch-action cover the rest.

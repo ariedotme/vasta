@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import { iconTextClasses } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { openDay } from '../lib/actions.ts'
 import { openObject } from '../lib/open.ts'
@@ -38,6 +39,6 @@ function open() {
       :size="14"
       class="relative top-[2px]"
       :class="type?.color ? iconTextClasses[type.color] : 'text-ink-soft'"
-    />{{ label }}<template v-if="blockId"><span class="text-ink-faint">›</span><span class="font-normal">{{ blockLabel || 'a block' }}</span></template>
+    />{{ label }}<template v-if="blockId"><span class="text-ink-faint">›</span><span class="font-normal">{{ blockLabel || t('editor.mention.aBlock') }}</span></template>
   </NodeViewWrapper>
 </template>

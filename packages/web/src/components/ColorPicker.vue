@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ColorName } from '@vasta/core'
 import { colorNames, swatchClasses } from '../lib/colors.ts'
+import { t } from '../lib/i18n.ts'
 
 defineProps<{ color?: ColorName | undefined }>()
 const emit = defineEmits<{ pick: [color: ColorName] }>()
@@ -13,7 +14,7 @@ const emit = defineEmits<{ pick: [color: ColorName] }>()
       :key="name"
       class="h-6 w-6 rounded-full ring-offset-2 ring-offset-surface"
       :class="[swatchClasses[name], color === name ? 'ring-2 ring-ink-soft' : 'hover:ring-2 hover:ring-line-strong']"
-      :title="name"
+      :title="t(`color.${name}`)"
       @click="emit('pick', name)"
     />
   </div>

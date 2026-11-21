@@ -5,6 +5,7 @@ import type { CalendarSource, ColorName } from '@vasta/core'
 import { api } from '../../lib/api.ts'
 import { colorNames, swatchClasses } from '../../lib/colors.ts'
 import { formatRelative } from '../../lib/format.ts'
+import { t } from '../../lib/i18n.ts'
 import { confirmDialog } from '../../lib/overlays.ts'
 import { workspace } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
@@ -48,7 +49,12 @@ const update = (source: CalendarSource, data: Parameters<typeof api.updateCalend
 const sync = (source: CalendarSource) => run(source.id, () => api.syncCalendarSource(source.id))
 
 async function remove(source: CalendarSource) {
-  const ok = await confirmDialog({ title: `Remove “${source.name}”?`, message: 'Its events disappear from the calendar. Nothing changes in the original calendar.', confirmLabel: 'Remove', danger: true })
+  const ok = await confirmDialog({
+    title: t('calendar.sources.removeTitle', { name: source.name }),
+    message: t('calendar.sources.removeMessage'),
+    confirmLabel: t('common.remove'),
+    danger: true,
+  })
   if (!ok) return
   await run(source.id, () => api.deleteCalendarSource(source.id))
   sources.value = sources.value.filter((s) => s.id !== source.id)
@@ -77,16 +83,16 @@ function cycleColor(source: CalendarSource) {
 </script>
 
 <template>
-  <ModalDialog title="Subscribed calendars" width="38rem" @close="emit('close')">
+  <ModalDialog :title="t('calendar.subscribedCalendars')" width="38rem" @close="emit('close')">
     <template #icon><AppIcon fallback="ph:calendar-dots" class="text-ink-soft" /></template>
 
     <p class="text-sm text-ink-soft">
-      Events from these calendars show next to your notes. They are read-only and refresh every 15 minutes.
+      {{ t('calendar.sources.intro') }}
     </p>
 
     <ul v-if="sources.length" class="mt-4 divide-y divide-line rounded-xl border border-line">
       <li v-for="source in sources" :key="source.id" class="flex items-start gap-3 px-3 py-2.5">
-        <button class="mt-1 h-3.5 w-3.5 shrink-0 rounded-full" :class="swatchClasses[source.color ?? 'sky']" title="Change color" @click="cycleColor(source)" />
+        <button class="mt-1 h-3.5 w-3.5 shrink-0 rounded-full" :class="swatchClasses[source.color ?? 'sky']" :title="t('calendar.sources.changeColor')" @click="cycleColor(source)" />
         <div class="min-w-0 flex-1">
           <input
             :value="source.name"
@@ -95,33 +101,33 @@ function cycleColor(source: CalendarSource) {
           />
           <div class="truncate text-xs text-ink-faint" :title="source.url">{{ source.url }}</div>
           <div class="mt-0.5 text-xs" :class="source.error ? 'text-red-600' : 'text-ink-faint'">
-            <template v-if="busy.has(source.id)">Syncing…</template>
+            <template v-if="busy.has(source.id)">{{ t('calendar.sources.syncing') }}</template>
             <template v-else-if="source.error">{{ source.error }}</template>
-            <template v-else-if="source.syncedAt">{{ source.eventCount ?? 0 }} events · synced {{ formatRelative(source.syncedAt) }}</template>
-            <template v-else>Not synced yet</template>
+            <template v-else-if="source.syncedAt">{{ t('calendar.sources.synced', { count: source.eventCount ?? 0, when: formatRelative(source.syncedAt) }) }}</template>
+            <template v-else>{{ t('calendar.sources.notSynced') }}</template>
           </div>
         </div>
-        <label class="flex items-center gap-1.5 pt-0.5 text-xs text-ink-soft" title="Show on the calendar">
+        <label class="flex items-center gap-1.5 pt-0.5 text-xs text-ink-soft" :title="t('calendar.sources.showOnCalendar')">
           <input type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" :checked="source.enabled" @change="update(source, { enabled: ($event.target as HTMLInputElement).checked })" />
         </label>
-        <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink disabled:opacity-40" title="Sync now" :disabled="busy.has(source.id)" @click="sync(source)">
+        <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink disabled:opacity-40" :title="t('calendar.sources.syncNow')" :disabled="busy.has(source.id)" @click="sync(source)">
           <AppIcon fallback="ph:arrows-clockwise" :class="busy.has(source.id) ? 'animate-spin' : ''" />
         </button>
-        <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600" title="Remove" @click="remove(source)">
+        <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600" :title="t('common.remove')" @click="remove(source)">
           <AppIcon fallback="ph:trash" />
         </button>
       </li>
     </ul>
 
     <form class="mt-5 space-y-2" @submit.prevent="add">
-      <h3 class="text-sm font-semibold">Add a calendar</h3>
+      <h3 class="text-sm font-semibold">{{ t('calendar.sources.addHeading') }}</h3>
       <div class="flex gap-2">
-        <input v-model="form.url" class="min-w-0 flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" placeholder="https:// or webcal:// link to an .ics feed" />
-        <input v-model="form.name" class="w-36 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" placeholder="Name (optional)" />
+        <input v-model="form.url" class="min-w-0 flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" :placeholder="t('calendar.sources.urlPlaceholder')" />
+        <input v-model="form.name" class="w-36 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" :placeholder="t('calendar.sources.namePlaceholder')" />
       </div>
       <div v-if="showAuth" class="flex gap-2">
-        <input v-model="form.username" autocomplete="off" class="min-w-0 flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" placeholder="Username" />
-        <input v-model="form.password" type="password" autocomplete="new-password" class="min-w-0 flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" placeholder="Password or app password" />
+        <input v-model="form.username" autocomplete="off" class="min-w-0 flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" :placeholder="t('auth.username')" />
+        <input v-model="form.password" type="password" autocomplete="new-password" class="min-w-0 flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" :placeholder="t('calendar.sources.passwordPlaceholder')" />
       </div>
       <div class="flex items-center gap-2">
         <div class="flex gap-1">
@@ -134,23 +140,23 @@ function cycleColor(source: CalendarSource) {
             @click="form.color = color"
           />
         </div>
-        <button v-if="!showAuth" type="button" class="text-xs text-ink-faint hover:text-ink" @click="showAuth = true">Needs a password?</button>
+        <button v-if="!showAuth" type="button" class="text-xs text-ink-faint hover:text-ink" @click="showAuth = true">{{ t('calendar.sources.needsPassword') }}</button>
         <button type="submit" class="ml-auto rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-40" :disabled="!form.url.trim() || busy.has('new')">
-          {{ busy.has('new') ? 'Adding…' : 'Add' }}
+          {{ busy.has('new') ? t('calendar.sources.adding') : t('common.add') }}
         </button>
       </div>
       <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
     </form>
 
     <details class="mt-5 text-xs text-ink-soft">
-      <summary class="cursor-pointer text-ink-faint hover:text-ink">Where to find the link</summary>
+      <summary class="cursor-pointer text-ink-faint hover:text-ink">{{ t('calendar.sources.whereLink') }}</summary>
       <ul class="mt-2 list-disc space-y-1 pl-5">
-        <li><b>Google Calendar:</b> Settings → your calendar → Integrate calendar → “Secret address in iCal format”.</li>
-        <li><b>iCloud:</b> Calendar app → share the calendar → Public Calendar → copy the webcal:// link.</li>
-        <li><b>Nextcloud / CalDAV:</b> the calendar's “Copy subscription link”, or its export URL (…?export) with your username and an app password.</li>
-        <li><b>Outlook.com:</b> Settings → Shared calendars → Publish a calendar → ICS link.</li>
+        <li><b>Google Calendar:</b> {{ t('calendar.sources.helpGoogle') }}</li>
+        <li><b>iCloud:</b> {{ t('calendar.sources.helpIcloud') }}</li>
+        <li><b>Nextcloud / CalDAV:</b> {{ t('calendar.sources.helpNextcloud') }}</li>
+        <li><b>Outlook.com:</b> {{ t('calendar.sources.helpOutlook') }}</li>
       </ul>
-      <p class="mt-2">Passwords are stored in Vasta's database on your server, in plain text; prefer app passwords.</p>
+      <p class="mt-2">{{ t('calendar.sources.passwordNote') }}</p>
     </details>
   </ModalDialog>
 </template>

@@ -30,6 +30,11 @@ GitHub release page.
   on an object also silences the automatic reminder for it.
 - **Skip empty reminders.** Reminders showing today's tasks now skip days with no due or overdue
   tasks by default (configurable per rule, and available for tag and query reminders too).
+- **Five languages in the app.** Vasta is now available in **English**, **Português**,
+  **Español**, **简体中文** and **日本語**. It follows your browser or system language by default
+  (falling back to English), and you can pick one per device in **Settings › Appearance › Language**;
+  dates, numbers, calendar week start and built-in types/properties follow the chosen language
+  (keeping any built-ins you renamed untouched).
 
 ### Changed
 

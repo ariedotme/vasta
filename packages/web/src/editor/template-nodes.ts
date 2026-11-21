@@ -7,6 +7,7 @@ import { PluginKey } from '@tiptap/pm/state'
 import { VueNodeViewRenderer } from '@tiptap/vue-3'
 import { PLACEHOLDERS } from '@vasta/core'
 import { TemplateBranch, TemplateIf, TemplatePlaceholder } from '@vasta/editor-schema'
+import { t } from '../lib/i18n.ts'
 import { promptDialog } from '../lib/overlays.ts'
 import type { SlashCommand } from './commands.ts'
 import PlaceholderView from './PlaceholderView.vue'
@@ -39,11 +40,19 @@ const ICONS: Record<string, string> = {
 }
 
 /** What to ask before inserting a placeholder that needs more than its name. */
-const ARGUMENTS: Record<string, { title: string; message: string; placeholder: string; optional?: boolean }> = {
-  date: { title: 'Date', message: 'Optional: a shift (+7d, -1w, next monday) and a format after | (D MMM YYYY).', placeholder: '+7d|D MMM', optional: true },
-  ask: { title: 'Ask', message: 'The question asked when an object is made from the template.', placeholder: 'With whom?' },
-  choose: { title: 'Choose', message: 'The question, then the answers, all separated by |.', placeholder: 'Kind|Bug|Feature' },
-  formula: { title: 'Formula', message: 'Its value goes here: if(weekday(date) = 1, "Monday", "").', placeholder: 'if(ask("Kind") = "Bug", "🐞", "✨")' },
+function argumentFor(name: string): { title: string; message: string; placeholder: string; optional?: boolean } | undefined {
+  switch (name) {
+    case 'date':
+      return { title: t('dateEditor.date'), message: t('editor.template.arg.date.message'), placeholder: '+7d|D MMM', optional: true }
+    case 'ask':
+      return { title: t('editor.template.arg.ask.title'), message: t('editor.template.arg.ask.message'), placeholder: t('editor.template.arg.ask.placeholder') }
+    case 'choose':
+      return { title: t('editor.template.arg.choose.title'), message: t('editor.template.arg.choose.message'), placeholder: t('editor.template.arg.choose.placeholder') }
+    case 'formula':
+      return { title: t('propKind.formula'), message: t('editor.template.arg.formula.message'), placeholder: 'if(ask("Kind") = "Bug", "🐞", "✨")' }
+    default:
+      return undefined
+  }
 }
 
 export function insertPlaceholder(editor: Editor, range: Range, value: string) {
@@ -68,9 +77,9 @@ function placeholderCommands(query: string): SlashCommand[] {
     detail: p.description,
     icon: ICONS[p.name] ?? 'ph:brackets-curly',
     run: async (editor, range) => {
-      const argument = ARGUMENTS[p.name]
+      const argument = argumentFor(p.name)
       if (!argument) return insertPlaceholder(editor, range, p.name)
-      const value = await promptDialog({ ...argument, confirmLabel: 'Insert', ...(argument.optional ? { optional: true } : {}) })
+      const value = await promptDialog({ ...argument, confirmLabel: t('editor.template.insert'), ...(argument.optional ? { optional: true } : {}) })
       if (value === null) return
       const sep = p.name === 'date' && value.startsWith('|') ? '' : ':'
       insertPlaceholder(editor, range, value ? `${p.name}${sep}${value}` : p.name)
@@ -79,15 +88,20 @@ function placeholderCommands(query: string): SlashCommand[] {
   if (!q || 'if'.startsWith(q)) {
     items.push({
       id: 'if-inline',
-      label: 'If…',
-      detail: 'One text or another, by a condition',
+      label: t('editor.template.ifInline'),
+      detail: t('editor.template.ifInlineDetail'),
       icon: 'ph:git-branch',
       run: async (editor, range) => {
-        const condition = await promptDialog({ title: 'If…', message: 'The condition, a formula: weekday(date) = 1, ask("Body", "Yes", "No") = "Yes" (asked with buttons).', placeholder: 'weekday(date) = 1', confirmLabel: 'Next' })
+        const condition = await promptDialog({
+          title: t('editor.template.ifInline'),
+          message: t('editor.template.ifConditionMessage'),
+          placeholder: 'weekday(date) = 1',
+          confirmLabel: t('editor.template.next'),
+        })
         if (!condition) return
-        const then = await promptDialog({ title: 'Then', message: 'The text when it holds.', confirmLabel: 'Next', optional: true })
+        const then = await promptDialog({ title: t('editor.template.thenTitle'), message: t('editor.template.thenMessage'), confirmLabel: t('editor.template.next'), optional: true })
         if (then === null) return
-        const otherwise = await promptDialog({ title: 'Otherwise', message: 'The text when it does not (may be empty).', confirmLabel: 'Insert', optional: true })
+        const otherwise = await promptDialog({ title: t('editor.template.otherwiseTitle'), message: t('editor.template.otherwiseMessage'), confirmLabel: t('editor.template.insert'), optional: true })
         if (otherwise === null) return
         const quote = (text: string) => `"${text.replace(/["\\]/g, '\\$&')}"`
         insertPlaceholder(editor, range, `formula:if(${condition}, ${quote(then)}, ${quote(otherwise)})`)

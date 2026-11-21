@@ -6,8 +6,9 @@
 // it was done, snoozed, skipped or ignored, so it can be tuned when it is too much or too easy to
 // ignore. Opened by an object's "Remind me…" and Settings › Reminders (lib/insistent.ts).
 import { computed, onMounted, ref, watch } from 'vue'
-import { habitRemindAt, type ObjectSummary } from '@vasta/core'
+import { addDays, habitRemindAt, type ObjectSummary } from '@vasta/core'
 import { authApi, type AckMode, type LadderStep, type NagChannel, type ReminderSettings, type RuleContent, type RuleInput, type RuleWhen } from '../lib/api.ts'
+import { locale, t, tc, typeName } from '../lib/i18n.ts'
 import { CHANNELS, STYLES, closeReminderEditor, reminderEditor, styleOf } from '../lib/insistent.ts'
 import { desktop } from '../lib/platform.ts'
 import { summaryOf, systemType, typesById, workspace } from '../lib/state.ts'
@@ -30,9 +31,9 @@ const habitTime = computed(() => (isHabit.value && object.value ? habitRemindAt(
 /** A date property with a time (a task's due, a meeting's start), or its own date with one. */
 const hasTime = computed(() => {
   const o = object.value
-  const t = type.value
-  if (!o || !t || isHabit.value) return false
-  return t.properties.some((p) => p.kind === 'date' && o.props[p.id]?.kind === 'date' && (o.props[p.id]!.value as { resolution?: string }).resolution === 'time') || o.date?.resolution === 'time'
+  const typeDef = type.value
+  if (!o || !typeDef || isHabit.value) return false
+  return typeDef.properties.some((p) => p.kind === 'date' && o.props[p.id]?.kind === 'date' && (o.props[p.id]!.value as { resolution?: string }).resolution === 'time') || o.date?.resolution === 'time'
 })
 
 // The form -------------------------------------------------------------------------
@@ -71,17 +72,23 @@ onMounted(async () => {
 function channelGap(id: NagChannel): string {
   const s = settings.value
   if (!s) return ''
-  if (id === 'ntfy') return s.ntfy ? '' : 'Set up ntfy in Settings › Reminder channels'
-  if (id === 'telegram') return s.telegram && s.telegramReady ? '' : 'Turn on Telegram in Settings › Reminder channels'
-  if (id === 'push') return s.push?.devices.length ? '' : 'Turn on notifications on a phone or browser'
-  if (id === 'desktop') return s.desktop ? '' : 'Desktop notifications are off'
-  if (id === 'takeover' || id === 'popup') return s.takeoverApps || desktop.value?.takeover ? '' : `Needs Vasta for desktop ${id === 'popup' ? '0.11' : '0.10'} or later, open`
+  if (id === 'ntfy') return s.ntfy ? '' : t('reminders.gap.ntfy')
+  if (id === 'telegram') return s.telegram && s.telegramReady ? '' : t('reminders.gap.telegram')
+  if (id === 'push') return s.push?.devices.length ? '' : t('reminders.gap.push')
+  if (id === 'desktop') return s.desktop ? '' : t('reminders.gap.desktop')
+  if (id === 'takeover' || id === 'popup') return s.takeoverApps || desktop.value?.takeover ? '' : t('reminders.gap.desktopApp', { version: id === 'popup' ? '0.11' : '0.10' })
   return ''
 }
 
 // When -------------------------------------------------------------------------------
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const WEEKDAYS = computed(() => {
+  const fmt = new Intl.DateTimeFormat(locale.value, { weekday: 'narrow', timeZone: 'UTC' })
+  return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(`${addDays('2026-10-18', i)}T00:00:00.000Z`)))
+})
+const WEEKDAY_NAMES = computed(() => {
+  const fmt = new Intl.DateTimeFormat(locale.value, { weekday: 'long', timeZone: 'UTC' })
+  return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(`${addDays('2026-10-18', i)}T00:00:00.000Z`)))
+})
 const whenKind = computed({
   get: () => when.value.kind,
   set: (kind) => {
@@ -140,10 +147,10 @@ function openPicker(kind: 'tag' | 'query' | 'after', event: MouseEvent) {
 }
 
 const ACKS = computed(() => [
-  ...(isHabit.value || isTask.value ? [{ value: 'done' as const, label: isHabit.value ? 'Doing the habit' : 'Doing the task', icon: 'ph:check-circle', hint: isHabit.value ? 'Done for the day, here or wherever you mark it' : 'Marked done, here or anywhere' }] : []),
-  { value: 'ok' as const, label: 'OK', icon: 'ph:hand-tap', hint: 'A tap says you saw it' },
-  { value: 'type' as const, label: 'Typing it', icon: 'ph:keyboard', hint: 'Word for word: dismissing it becomes the ritual', needsText: true },
-  { value: 'say' as const, label: 'Saying it out loud', icon: 'ph:microphone', hint: 'Speech recognition listens (typing works where it cannot)', needsText: true },
+  ...(isHabit.value || isTask.value ? [{ value: 'done' as const, label: isHabit.value ? t('reminders.ack.doingHabit') : t('reminders.ack.doingTask'), icon: 'ph:check-circle', hint: isHabit.value ? t('reminders.ack.doingHabitHint') : t('reminders.ack.doingTaskHint') }] : []),
+  { value: 'ok' as const, label: t('common.ok'), icon: 'ph:hand-tap', hint: t('reminders.ack.okHint') },
+  { value: 'type' as const, label: t('reminders.ack.typing'), icon: 'ph:keyboard', hint: t('reminders.ack.typingHint'), needsText: true },
+  { value: 'say' as const, label: t('reminders.ack.saying'), icon: 'ph:microphone', hint: t('reminders.ack.sayingHint'), needsText: true },
 ])
 const textAnswer = computed(() => ack.value === 'type' || ack.value === 'say')
 
@@ -215,7 +222,8 @@ async function remove() {
   }
 }
 
-const heading = computed(() => (existing ? 'Reminder' : object.value ? `Remind me of “${object.value.title || 'this'}”` : 'New reminder'))
+const heading = computed(() => (existing ? t('reminders.title') : object.value ? t('reminders.remindMeOf', { title: object.value.title || t('reminders.thisFallback') }) : t('reminders.newTitle')))
+const typeLower = computed(() => (type.value ? typeName(type.value).toLowerCase() : t('object.objectFallback')))
 const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-line text-ink-soft hover:bg-hover')
 </script>
 
@@ -226,40 +234,40 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
       <ReminderStats v-if="existing" :stats="existing.stats" />
 
       <label v-if="!objectId || title" class="block text-xs text-ink-faint">
-        Title
-        <input v-model="title" class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-line-strong" :placeholder="objectId ? object?.title : 'Affirmation, Water, Stretch…'" maxlength="120" />
+        {{ t('object.titleLabel') }}
+        <input v-model="title" class="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-line-strong" :placeholder="objectId ? object?.title : t('reminders.titlePlaceholder')" maxlength="120" />
       </label>
 
       <!-- When -->
       <fieldset class="space-y-2.5">
-        <legend class="mb-2 font-medium">When it starts</legend>
+        <legend class="mb-2 font-medium">{{ t('reminders.section.when') }}</legend>
         <div class="flex flex-wrap gap-1.5">
           <button v-if="habitTime || hasTime" type="button" class="rounded-full border px-3 py-1" :class="chip(whenKind === 'object')" @click="whenKind = 'object'">
-            {{ habitTime ? `At its “Remind at”, ${habitTime}` : 'At its own time' }}
+            {{ habitTime ? t('reminders.when.habitRemindAt', { time: habitTime }) : t('reminders.when.ownTime') }}
           </button>
-          <button type="button" class="rounded-full border px-3 py-1" :class="chip(whenKind === 'daily')" @click="whenKind = 'daily'">At a time of day</button>
-          <button type="button" class="rounded-full border px-3 py-1" :class="chip(whenKind === 'wake')" @click="whenKind = 'wake'">When I'm first at the computer</button>
+          <button type="button" class="rounded-full border px-3 py-1" :class="chip(whenKind === 'daily')" @click="whenKind = 'daily'">{{ t('reminders.when.timeOfDay') }}</button>
+          <button type="button" class="rounded-full border px-3 py-1" :class="chip(whenKind === 'wake')" @click="whenKind = 'wake'">{{ t('reminders.when.firstAtComputer') }}</button>
         </div>
         <div v-if="when.kind === 'object' && !isHabit" class="flex items-center gap-2 text-ink-soft">
-          <select v-model.number="when.before" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Minutes before it starts">
-            <option :value="0">When it starts</option>
-            <option v-for="m in [5, 10, 15, 30, 60, 120]" :key="m" :value="m">{{ m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? 's' : ''}` }} before</option>
+          <select v-model.number="when.before" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.when.minutesBeforeLabel')">
+            <option :value="0">{{ t('reminders.when.whenItStarts') }}</option>
+            <option v-for="m in [5, 10, 15, 30, 60, 120]" :key="m" :value="m">{{ m < 60 ? t('reminders.when.minutesBefore', { min: m }) : tc(m / 60, 'reminders.when.hoursBefore.one', 'reminders.when.hoursBefore.other', { hours: m / 60 }) }}</option>
           </select>
         </div>
-        <p v-if="when.kind === 'object' && isHabit" class="text-xs text-ink-faint">On the days the habit repeats on, while it is not done. Change the time on the habit's page.</p>
+        <p v-if="when.kind === 'object' && isHabit" class="text-xs text-ink-faint">{{ t('reminders.when.habitNote') }}</p>
         <div v-if="when.kind === 'daily'" class="flex flex-wrap items-center gap-2 text-ink-soft">
-          at <input v-model="when.at" type="time" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Time" required />
+          {{ t('reminders.when.at') }} <input v-model="when.at" type="time" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.when.timeLabel')" required />
         </div>
         <div v-if="when.kind === 'wake'" class="space-y-2 text-ink-soft">
           <div class="flex flex-wrap items-center gap-2">
-            the first time after <input v-model="when.after" type="time" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="After" required />
-            <label class="ml-2 flex items-center gap-1.5"><input v-model="latestOn" type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" /> by</label>
-            <input v-if="when.latest" v-model="when.latest" type="time" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="At the latest" />
-            <span v-if="when.latest">anyway</span>
+            {{ t('reminders.when.firstAfter') }} <input v-model="when.after" type="time" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.when.afterLabel')" required />
+            <label class="ml-2 flex items-center gap-1.5"><input v-model="latestOn" type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" /> {{ t('reminders.when.by') }}</label>
+            <input v-if="when.latest" v-model="when.latest" type="time" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.when.latestLabel')" />
+            <span v-if="when.latest">{{ t('reminders.when.anyway') }}</span>
           </div>
-          <p class="text-xs text-ink-faint">The desktop app tells the server when you come back to the computer or it wakes up. Without it open, only “by … anyway” starts it.</p>
+          <p class="text-xs text-ink-faint">{{ t('reminders.when.wakeHint') }}</p>
         </div>
-        <div v-if="when.kind !== 'object'" class="flex gap-1" role="group" aria-label="Weekdays">
+        <div v-if="when.kind !== 'object'" class="flex gap-1" role="group" :aria-label="t('reminders.when.weekdaysLabel')">
           <button
             v-for="(letter, day) in WEEKDAYS"
             :key="day"
@@ -277,23 +285,23 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
 
       <!-- What it shows -->
       <fieldset class="space-y-2.5">
-        <legend class="mb-2 font-medium">What it shows</legend>
+        <legend class="mb-2 font-medium">{{ t('reminders.section.what') }}</legend>
         <div class="flex flex-wrap gap-1.5">
-          <button v-if="objectId" type="button" class="rounded-full border px-3 py-1" :class="chip(contentKind === 'target')" @click="contentKind = 'target'">This {{ type?.name.toLowerCase() ?? 'object' }}</button>
-          <button type="button" class="rounded-full border px-3 py-1" :class="chip(contentKind === 'tag')" @click="contentKind = 'tag'">Random from a tag</button>
-          <button v-if="queryType" type="button" class="rounded-full border px-3 py-1" :class="chip(contentKind === 'query')" @click="contentKind = 'query'">Random from a query</button>
-          <button type="button" class="rounded-full border px-3 py-1" :class="chip(contentKind === 'tasks')" @click="contentKind = 'tasks'">Today's tasks</button>
+          <button v-if="objectId" type="button" class="rounded-full border px-3 py-1" :class="chip(contentKind === 'target')" @click="contentKind = 'target'">{{ t('reminders.what.thisType', { type: typeLower }) }}</button>
+          <button type="button" class="rounded-full border px-3 py-1" :class="chip(contentKind === 'tag')" @click="contentKind = 'tag'">{{ t('reminders.what.randomTag') }}</button>
+          <button v-if="queryType" type="button" class="rounded-full border px-3 py-1" :class="chip(contentKind === 'query')" @click="contentKind = 'query'">{{ t('reminders.what.randomQuery') }}</button>
+          <button type="button" class="rounded-full border px-3 py-1" :class="chip(contentKind === 'tasks')" @click="contentKind = 'tasks'">{{ t('reminders.what.todaysTasks') }}</button>
         </div>
         <div v-if="content.kind === 'tag' || content.kind === 'query'" class="flex flex-wrap items-center gap-2 text-ink-soft">
-          <select v-model.number="count" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="How many">
+          <select v-model.number="count" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.what.howManyLabel')">
             <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
           </select>
-          {{ count === 1 ? 'object' : 'objects' }} from
+          {{ tc(count, 'reminders.what.objectsFrom.one', 'reminders.what.objectsFrom.other') }}
           <button type="button" class="flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-ink hover:bg-hover" @click="openPicker(content.kind, $event)">
             <AppIcon :fallback="content.kind === 'tag' ? 'ph:tag' : 'ph:funnel'" :size="14" />
-            {{ picked?.title || (content.kind === 'tag' ? 'Pick a tag…' : 'Pick a query…') }}
+            {{ picked?.title || (content.kind === 'tag' ? t('reminders.what.pickTag') : t('reminders.what.pickQuery')) }}
           </button>
-          <span class="text-xs text-ink-faint">Picked anew each time, not the ones of last time.</span>
+          <span class="text-xs text-ink-faint">{{ t('reminders.what.pickedAnew') }}</span>
         </div>
         <PopoverMenu :open="!!pickerFor" :anchor="pickerAnchor" width="20rem" @update:open="(open: boolean) => !open && (pickerFor = null)">
           <ObjectPicker v-if="pickerFor === 'after'" no-create @pick="pick" />
@@ -302,9 +310,9 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
         <label v-if="content.kind !== 'target'" class="flex items-start gap-2.5 text-sm">
           <input v-model="skipIfEmpty" type="checkbox" class="mt-0.5 h-4 w-4 accent-[var(--color-accent)]" />
           <span>
-            {{ content.kind === 'tasks' ? 'Skip when there are no tasks due' : 'Skip when nothing matches' }}
+            {{ content.kind === 'tasks' ? t('reminders.what.skipNoTasks') : t('reminders.what.skipNothingMatches') }}
             <span class="block text-xs text-ink-faint">
-              {{ content.kind === 'tasks' ? 'Nothing is sent on days with no due or overdue tasks.' : 'Nothing is sent when no objects are found.' }}
+              {{ content.kind === 'tasks' ? t('reminders.what.skipNoTasksHint') : t('reminders.what.skipNothingMatchesHint') }}
             </span>
           </span>
         </label>
@@ -312,7 +320,7 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
 
       <!-- How it reaches you -->
       <fieldset class="space-y-3">
-        <legend class="mb-2 font-medium">How it reaches me</legend>
+        <legend class="mb-2 font-medium">{{ t('reminders.section.how') }}</legend>
         <div class="grid gap-1.5 sm:grid-cols-3" data-styles>
           <button
             v-for="p in STYLES"
@@ -327,35 +335,35 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
             <span class="block text-xs text-ink-faint">{{ p.description }}</span>
           </button>
           <button type="button" class="rounded-xl border px-3 py-2.5 text-left" :class="style === 'custom' ? 'border-ink' : 'border-line hover:bg-hover'" @click="customizing = true">
-            <span class="flex items-center gap-1.5 font-medium"><AppIcon fallback="ph:sliders-horizontal" :size="14" /> Custom</span>
-            <span class="block text-xs text-ink-faint">Steps and channels of its own.</span>
+            <span class="flex items-center gap-1.5 font-medium"><AppIcon fallback="ph:sliders-horizontal" :size="14" /> {{ t('reminders.style.custom') }}</span>
+            <span class="block text-xs text-ink-faint">{{ t('reminders.style.customDesc') }}</span>
           </button>
         </div>
-        <p v-if="desktopMissing(steps.flatMap((s) => s.channels))" class="text-xs text-ink-faint">The pop-up and full screen need Vasta for desktop open; until then they arrive as notifications of the apps that are.</p>
-        <button v-if="!customizing" type="button" class="text-xs text-accent hover:underline" @click="customizing = true">Customize steps…</button>
+        <p v-if="desktopMissing(steps.flatMap((s) => s.channels))" class="text-xs text-ink-faint">{{ t('reminders.how.desktopFallback') }}</p>
+        <button v-if="!customizing" type="button" class="text-xs text-accent hover:underline" @click="customizing = true">{{ t('reminders.how.customizeSteps') }}</button>
 
         <template v-if="customizing">
         <div class="flex flex-wrap items-center gap-2 text-ink-soft">
-          Repeat
-          <select v-model="repeat" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Repeat every">
-            <option :value="null">only at each step</option>
-            <option v-for="m in [2, 5, 10, 15, 20, 30, 45, 60, 90, 120]" :key="m" :value="m">every {{ m }} minutes</option>
+          {{ t('reminders.how.repeat') }}
+          <select v-model="repeat" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.how.repeatLabel')">
+            <option :value="null">{{ t('reminders.how.onlyAtEachStep') }}</option>
+            <option v-for="m in [2, 5, 10, 15, 20, 30, 45, 60, 90, 120]" :key="m" :value="m">{{ t('reminders.how.everyMinutes', { min: m }) }}</option>
           </select>
-          until answered, or the day ends.
+          {{ t('reminders.how.untilAnswered') }}
         </div>
 
         <ol class="space-y-2" data-ladder>
           <li v-for="(step, i) in steps" :key="i" class="rounded-xl border border-line px-3 py-2.5">
             <div class="flex flex-wrap items-center gap-2">
               <span class="grid h-6 w-6 place-items-center rounded-full bg-hover text-xs font-semibold">{{ i + 1 }}</span>
-              <template v-if="i === 0">At the start</template>
+              <template v-if="i === 0">{{ t('reminders.how.atTheStart') }}</template>
               <template v-else>
-                After <input v-model.number="step.after" type="number" min="1" max="720" class="w-16 rounded-lg border border-line bg-surface px-2 py-1" aria-label="Minutes after the start" /> min
+                {{ t('reminders.how.after') }} <input v-model.number="step.after" type="number" min="1" max="720" class="w-16 rounded-lg border border-line bg-surface px-2 py-1" :aria-label="t('reminders.how.minutesAfterLabel')" /> {{ t('reminders.how.minUnit') }}
               </template>
-              <label class="ml-auto flex items-center gap-1.5 text-xs text-ink-soft" title="ntfy at its highest priority; phone notifications that stay until answered">
-                <input v-model="step.urgent" type="checkbox" class="h-3.5 w-3.5 accent-[var(--color-accent)]" /> Urgent
+              <label class="ml-auto flex items-center gap-1.5 text-xs text-ink-soft" :title="t('reminders.how.urgentTitle')">
+                <input v-model="step.urgent" type="checkbox" class="h-3.5 w-3.5 accent-[var(--color-accent)]" /> {{ t('reminders.how.urgent') }}
               </label>
-              <button v-if="i > 0" type="button" class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="Remove this step" @click="steps.splice(i, 1)"><AppIcon fallback="ph:x" :size="13" /></button>
+              <button v-if="i > 0" type="button" class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="t('reminders.how.removeStep')" @click="steps.splice(i, 1)"><AppIcon fallback="ph:x" :size="13" /></button>
             </div>
             <div class="mt-2 flex flex-wrap gap-1.5">
               <button
@@ -372,14 +380,14 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
             </div>
           </li>
         </ol>
-        <button v-if="steps.length < 6" type="button" class="text-xs text-accent hover:underline" @click="addStep">+ Add a step</button>
-        <p v-if="steps.some((s) => s.channels.some((c) => channelGap(c)))" class="text-xs text-ink-faint">Dashed channels are not set up yet: hover one to see why. Until then that step skips them.</p>
+        <button v-if="steps.length < 6" type="button" class="text-xs text-accent hover:underline" @click="addStep">{{ t('reminders.how.addStep') }}</button>
+        <p v-if="steps.some((s) => s.channels.some((c) => channelGap(c)))" class="text-xs text-ink-faint">{{ t('reminders.how.dashedHint') }}</p>
         </template>
       </fieldset>
 
       <!-- How it is answered -->
       <fieldset>
-        <legend class="mb-2 font-medium">It stops when I answer by</legend>
+        <legend class="mb-2 font-medium">{{ t('reminders.section.ack') }}</legend>
         <div class="grid gap-1.5 sm:grid-cols-2">
           <label
             v-for="option in ACKS"
@@ -395,60 +403,60 @@ const chip = (on: boolean) => (on ? 'border-ink bg-ink text-surface' : 'border-l
             </span>
           </label>
         </div>
-        <p v-if="textAnswer && isHabit" class="mt-2 text-xs text-ink-faint">Saying or typing it also marks the habit done for the day.</p>
-        <p class="mt-2 text-xs text-ink-faint">Swiping a notification away does not count. “Not today” asks for a reason.</p>
+        <p v-if="textAnswer && isHabit" class="mt-2 text-xs text-ink-faint">{{ t('reminders.ack.textMarksHabit') }}</p>
+        <p class="mt-2 text-xs text-ink-faint">{{ t('reminders.ack.swipeHint') }}</p>
       </fieldset>
 
       <!-- Afterwards -->
       <fieldset v-if="usesWindow" class="space-y-2">
-        <legend class="mb-2 font-medium">Once I answer</legend>
+        <legend class="mb-2 font-medium">{{ t('reminders.section.after') }}</legend>
         <div class="flex flex-wrap items-center gap-1.5">
-          <button type="button" class="rounded-full border px-3 py-1" :class="chip(!openAfter)" @click="openAfter = null">Get out of the way</button>
+          <button type="button" class="rounded-full border px-3 py-1" :class="chip(!openAfter)" @click="openAfter = null">{{ t('reminders.after.stayOut') }}</button>
           <button type="button" class="flex items-center gap-1.5 rounded-full border px-3 py-1" :class="chip(!!openAfter)" @click="openPicker('after', $event)">
             <AppIcon fallback="ph:arrow-square-out" :size="13" />
-            {{ openAfter ? `Open “${summaryOf(openAfter)?.title || 'a note'}”` : 'Open a note…' }}
+            {{ openAfter ? t('reminders.after.openNote', { title: summaryOf(openAfter)?.title || t('reminders.after.aNote') }) : t('reminders.after.openNotePlaceholder') }}
           </button>
         </div>
-        <p class="text-xs text-ink-faint">{{ openAfter ? 'Vasta comes forward with it.' : 'Vasta stays hidden; the app you were in comes back.' }}</p>
+        <p class="text-xs text-ink-faint">{{ openAfter ? t('reminders.after.comesForward') : t('reminders.after.staysHidden') }}</p>
       </fieldset>
 
       <!-- Snoozing -->
       <fieldset class="flex flex-wrap items-center gap-2 text-ink-soft">
-        <legend class="mb-2 font-medium text-ink">{{ steps.length > 1 ? 'Snoozing has a cost' : 'Snoozing' }}</legend>
-        Snooze for
-        <select v-model.number="snooze" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Snooze minutes">
-          <option v-for="m in [5, 10, 15, 30, 60]" :key="m" :value="m">{{ m }} min</option>
+        <legend class="mb-2 font-medium text-ink">{{ steps.length > 1 ? t('reminders.section.snoozeCost') : t('reminders.section.snooze') }}</legend>
+        {{ t('reminders.snooze.for') }}
+        <select v-model.number="snooze" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.snooze.minutesLabel')">
+          <option v-for="m in [5, 10, 15, 30, 60]" :key="m" :value="m">{{ t('reminders.snooze.min', { min: m }) }}</option>
         </select>
-        <template v-if="steps.length > 1">; every
-        <select v-model="climbAfter" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Snoozes per step">
-          <option :value="null">— (never climbs)</option>
+        <template v-if="steps.length > 1">{{ t('reminders.snooze.every') }}
+        <select v-model="climbAfter" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.snooze.perStepLabel')">
+          <option :value="null">{{ t('reminders.snooze.neverClimbs') }}</option>
           <option v-for="n in [1, 2, 3, 4, 5]" :key="n" :value="n">{{ n }}</option>
         </select>
-        {{ climbAfter === 1 ? 'snooze climbs' : 'snoozes climb' }} one step of the ladder.</template>
+        {{ tc(climbAfter ?? 2, 'reminders.snooze.climbs.one', 'reminders.snooze.climbs.other') }}</template>
       </fieldset>
 
       <fieldset v-if="usesWindow" class="flex flex-wrap items-center gap-2 text-ink-soft">
-        <legend class="mb-2 font-medium text-ink">The way out</legend>
-        The desktop window stays over everything until you answer. Its way out (counted as skipped) shows after
-        <select v-model.number="escapeAfter" class="rounded-lg border border-line bg-surface px-2 py-1.5" aria-label="Seconds before the way out">
-          <option v-for="n in [5, 10, 20, 30, 60]" :key="n" :value="n">{{ n }} seconds</option>
+        <legend class="mb-2 font-medium text-ink">{{ t('reminders.section.escape') }}</legend>
+        {{ t('reminders.escape.text') }}
+        <select v-model.number="escapeAfter" class="rounded-lg border border-line bg-surface px-2 py-1.5" :aria-label="t('reminders.escape.secondsLabel')">
+          <option v-for="n in [5, 10, 20, 30, 60]" :key="n" :value="n">{{ t('reminders.escape.seconds', { seconds: n }) }}</option>
         </select>
       </fieldset>
 
       <label v-if="existing" class="flex items-start gap-2.5">
         <input v-model="paused" type="checkbox" class="mt-0.5 h-4 w-4 accent-[var(--color-accent)]" />
         <span>
-          Paused
-          <span v-if="when.kind === 'object'" class="block text-xs text-ink-faint">Also silences this space's automatic reminder for this {{ type?.name.toLowerCase() ?? 'object' }}.</span>
+          {{ t('reminders.paused') }}
+          <span v-if="when.kind === 'object'" class="block text-xs text-ink-faint">{{ t('reminders.pausedHint', { type: typeLower }) }}</span>
         </span>
       </label>
     </form>
 
     <template #footer>
-      <button v-if="existing" type="button" class="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-hover dark:text-red-400" :disabled="busy" @click="remove">Delete</button>
+      <button v-if="existing" type="button" class="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-hover dark:text-red-400" :disabled="busy" @click="remove">{{ t('common.delete') }}</button>
       <span v-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</span>
-      <button type="button" class="ml-auto rounded-lg px-3 py-1.5 text-sm text-ink-soft hover:bg-hover" @click="closeReminderEditor">Cancel</button>
-      <button type="submit" form="reminder-form" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90 disabled:opacity-40" :disabled="busy">{{ existing ? 'Save' : 'Remind me' }}</button>
+      <button type="button" class="ml-auto rounded-lg px-3 py-1.5 text-sm text-ink-soft hover:bg-hover" @click="closeReminderEditor">{{ t('common.cancel') }}</button>
+      <button type="submit" form="reminder-form" class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface hover:opacity-90 disabled:opacity-40" :disabled="busy">{{ existing ? t('common.save') : t('reminders.remindMe') }}</button>
     </template>
   </ModalDialog>
 </template>

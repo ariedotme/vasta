@@ -6,6 +6,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { ColorName, Icon, ObjectType } from '@vasta/core'
 import { createObject, isTodayRoute } from '../lib/actions.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t, typePluralName } from '../lib/i18n.ts'
 import { trafficLights } from '../lib/platform.ts'
 import { keysOf, toggleSidebar } from '../lib/shortcuts.ts'
 import { summaryOf, typesById, ui, workspace } from '../lib/state.ts'
@@ -31,14 +32,15 @@ interface Crumb {
 }
 
 const typeCrumb = (type: ObjectType | undefined): Crumb | undefined =>
-  type && { label: type.pluralName, icon: type.icon, fallback: 'ph:cube', typed: true, color: type.color, to: `/t/${type.id}` }
+  type && { label: typePluralName(type), icon: type.icon, fallback: 'ph:cube', typed: true, color: type.color, to: `/t/${type.id}` }
 
-const PAGES: Record<string, Crumb> = {
-  '/inbox': { label: 'Inbox', fallback: 'ph:tray' },
-  '/nutrition': { label: 'Nutrition', fallback: 'ph:chart-bar' },
-  '/calendar': { label: 'Calendar', fallback: 'ph:calendar-dots' },
-  '/settings': { label: 'Settings', fallback: 'ph:gear-six' },
-  '/trash': { label: 'Trash', fallback: 'ph:trash' },
+const pageCrumb = (path: string): Crumb | undefined => {
+  if (path === '/inbox') return { label: t('common.inbox'), fallback: 'ph:tray' }
+  if (path === '/nutrition') return { label: t('common.nutrition'), fallback: 'ph:chart-bar' }
+  if (path === '/calendar') return { label: t('common.calendar'), fallback: 'ph:calendar-dots' }
+  if (path === '/settings') return { label: t('common.settings'), fallback: 'ph:gear-six' }
+  if (path === '/trash') return { label: t('common.trash'), fallback: 'ph:trash' }
+  return undefined
 }
 
 const crumbs = computed((): Crumb[] => {
@@ -50,8 +52,8 @@ const crumbs = computed((): Crumb[] => {
     return [typeCrumb(type), object].filter((c): c is Crumb => !!c)
   }
   if (route.path.startsWith('/t/') && id) return [typeCrumb(typesById.value.get(id))].filter((c): c is Crumb => !!c)
-  if (isTodayRoute(route)) return [{ label: 'Today', fallback: 'ph:calendar-check' }]
-  const page = PAGES[route.path]
+  if (isTodayRoute(route)) return [{ label: t('common.today'), fallback: 'ph:calendar-check' }]
+  const page = pageCrumb(route.path)
   if (page) return [page]
   return [{ label: workspace.space?.name ?? '', fallback: 'ph:planet' }]
 })
@@ -84,18 +86,18 @@ const button = 'grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-fai
     :class="trafficLights && (isPhone || ui.sidebarCollapsed) ? 'pl-20' : ''"
     data-tauri-drag-region="deep"
   >
-    <button v-if="isPhone" :class="button" title="Menu" @click="ui.sidebarOpen = true">
+    <button v-if="isPhone" :class="button" :title="t('common.menu')" @click="ui.sidebarOpen = true">
       <AppIcon fallback="ph:list" :size="22" />
     </button>
-    <button v-else-if="ui.sidebarCollapsed" :class="button" :title="`Show sidebar (${keysOf('sidebar')})`" @click="toggleSidebar">
+    <button v-else-if="ui.sidebarCollapsed" :class="button" :title="t('nav.showSidebar', { keys: keysOf('sidebar') })" @click="toggleSidebar">
       <AppIcon fallback="ph:sidebar-simple" :size="17" />
     </button>
     <template v-if="!isPhone">
-      <button :class="button" title="Back" :disabled="!canBack" @click="router.back()"><AppIcon fallback="ph:caret-left" :size="16" /></button>
-      <button :class="button" title="Forward" :disabled="!canForward" @click="router.forward()"><AppIcon fallback="ph:caret-right" :size="16" /></button>
+      <button :class="button" :title="t('common.back')" :disabled="!canBack" @click="router.back()"><AppIcon fallback="ph:caret-left" :size="16" /></button>
+      <button :class="button" :title="t('common.forward')" :disabled="!canForward" @click="router.forward()"><AppIcon fallback="ph:caret-right" :size="16" /></button>
     </template>
 
-    <nav class="ml-1 flex min-w-0 flex-1 items-center gap-0.5 text-sm" aria-label="Location">
+    <nav class="ml-1 flex min-w-0 flex-1 items-center gap-0.5 text-sm" :aria-label="t('nav.location')">
       <template v-for="(crumb, i) in crumbs" :key="i">
         <AppIcon v-if="i" fallback="ph:caret-right" :size="11" class="shrink-0 text-ink-faint max-md:hidden" />
         <component
@@ -114,9 +116,9 @@ const button = 'grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-fai
     </nav>
 
     <template v-if="isPhone || ui.sidebarCollapsed">
-      <button v-if="!isPhone" ref="newButton" :class="button" title="New" @click="newOpen = !newOpen"><AppIcon fallback="ph:plus" :size="17" /></button>
+      <button v-if="!isPhone" ref="newButton" :class="button" :title="t('common.new')" @click="newOpen = !newOpen"><AppIcon fallback="ph:plus" :size="17" /></button>
       <NotificationBell v-if="isPhone" :button-class="button" :size="21" placement="bottom-end" />
-      <button :class="button" :title="`Search (${keysOf('search')})`" @click="ui.paletteOpen = true">
+      <button :class="button" :title="t('nav.searchShortcut', { keys: keysOf('search') })" @click="ui.paletteOpen = true">
         <AppIcon fallback="ph:magnifying-glass" :size="isPhone ? 21 : 17" />
       </button>
       <PopoverMenu v-model:open="newOpen" :anchor="newButton" placement="bottom-end">

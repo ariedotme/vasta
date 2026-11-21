@@ -3,6 +3,7 @@
 // bottom, then in progress, then to do). A legend names the bands and the last day labels them;
 // hovering (or focusing) a day shows its counts, and the table view holds every day.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { t } from '../../lib/i18n.ts'
 
 export interface FlowDay {
   day: string
@@ -101,7 +102,7 @@ const tip = computed(() => {
         :width="width"
         :height="height"
         role="img"
-        :aria-label="`Cumulative flow over ${days.length} days`"
+        :aria-label="t('charts.cumulativeFlowLabel', { count: days.length })"
         tabindex="0"
         class="block overflow-visible outline-none"
         @pointermove="pointer"
@@ -138,11 +139,11 @@ const tip = computed(() => {
       </div>
     </div>
     <details class="mt-1 text-xs text-ink-faint">
-      <summary class="cursor-pointer select-none hover:text-ink">Show as a table</summary>
+      <summary class="cursor-pointer select-none hover:text-ink">{{ t('charts.showAsTable') }}</summary>
       <table class="mt-1 w-full max-w-md tabular-nums">
         <thead>
           <tr class="border-b border-line text-left">
-            <th class="py-0.5 pr-3 font-medium">Day</th>
+            <th class="py-0.5 pr-3 font-medium">{{ t('calendar.view.day') }}</th>
             <th v-for="band in [...BANDS].reverse()" :key="band.key" class="py-0.5 pr-3 text-right font-medium">{{ labels[band.key] }}</th>
           </tr>
         </thead>

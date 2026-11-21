@@ -2,8 +2,10 @@
 // Settings › Reminders' "New reminder…"), the styles it offers (how a reminder reaches you: a
 // pop-up, the whole screen, notifications, escalating), and how a rule reads in a line.
 import { reactive } from 'vue'
-import type { Id } from '@vasta/core'
+import { addDays, type Id } from '@vasta/core'
 import type { InsistentRule, LadderStep, NagChannel, RuleInput } from './api.ts'
+import { formatWeekday } from './calendar.ts'
+import { t } from './i18n.ts'
 
 /** The editor: a new rule (about an object, or about nothing) or one to change. */
 export const reminderEditor = reactive<{ open: boolean; objectId?: Id; rule?: InsistentRule; saved?: (rule: InsistentRule | null) => void }>({ open: false })
@@ -16,21 +18,21 @@ export function closeReminderEditor() {
   Object.assign(reminderEditor, { open: false, objectId: undefined, rule: undefined, saved: undefined })
 }
 
-export const CHANNELS: { id: NagChannel; label: string; icon: string; hint: string }[] = [
-  { id: 'push', label: 'Phone', icon: 'ph:device-mobile', hint: 'Notifications on the phones and browsers that turned them on' },
-  { id: 'desktop', label: 'Desktop', icon: 'ph:desktop', hint: 'A notification of the desktop app' },
-  { id: 'ntfy', label: 'ntfy', icon: 'ph:bell-ringing', hint: 'Your ntfy topic' },
-  { id: 'telegram', label: 'Telegram', icon: 'ph:telegram-logo', hint: 'A message from the bot, with buttons' },
-  { id: 'popup', label: 'Pop-up', icon: 'ph:app-window', hint: 'A window of the desktop app floating over everything until you answer' },
-  { id: 'takeover', label: 'Full screen', icon: 'ph:frame-corners', hint: 'The desktop app takes the whole screen until you answer' },
+export const CHANNELS: { id: NagChannel; readonly label: string; icon: string; readonly hint: string }[] = [
+  { id: 'push', get label() { return t('reminders.channel.push') }, icon: 'ph:device-mobile', get hint() { return t('reminders.channel.pushHint') } },
+  { id: 'desktop', get label() { return t('reminders.channel.desktop') }, icon: 'ph:desktop', get hint() { return t('reminders.channel.desktopHint') } },
+  { id: 'ntfy', get label() { return t('reminders.channel.ntfy') }, icon: 'ph:bell-ringing', get hint() { return t('reminders.channel.ntfyHint') } },
+  { id: 'telegram', get label() { return t('reminders.channel.telegram') }, icon: 'ph:telegram-logo', get hint() { return t('reminders.channel.telegramHint') } },
+  { id: 'popup', get label() { return t('reminders.channel.popup') }, icon: 'ph:app-window', get hint() { return t('reminders.channel.popupHint') } },
+  { id: 'takeover', get label() { return t('reminders.channel.takeover') }, icon: 'ph:frame-corners', get hint() { return t('reminders.channel.takeoverHint') } },
 ]
 
 /** A reminder's style: how it reaches you (the same as REMINDER_STYLES in server/src/insistent.ts). */
 export interface ReminderStyle {
   id: string
-  label: string
+  readonly label: string
   icon: string
-  description: string
+  readonly description: string
   repeat: number | null
   steps: LadderStep[]
   /** It needs the desktop app open. */
@@ -40,35 +42,35 @@ export interface ReminderStyle {
 export const STYLES: ReminderStyle[] = [
   {
     id: 'popup',
-    label: 'Pop-up',
+    get label() { return t('reminders.channel.popup') },
     icon: 'ph:app-window',
-    description: 'A window floats over everything until you answer.',
+    get description() { return t('reminders.style.popupDesc') },
     repeat: null,
     steps: [{ after: 0, channels: ['popup'] }],
     desktop: true,
   },
   {
     id: 'fullscreen',
-    label: 'Full screen',
+    get label() { return t('reminders.channel.takeover') },
     icon: 'ph:frame-corners',
-    description: 'Takes the whole screen until you answer.',
+    get description() { return t('reminders.style.fullscreenDesc') },
     repeat: null,
     steps: [{ after: 0, channels: ['takeover'] }],
     desktop: true,
   },
   {
     id: 'notification',
-    label: 'Notification',
+    get label() { return t('reminders.style.notification') },
     icon: 'ph:bell',
-    description: 'A notification every 30 minutes, nothing louder.',
+    get description() { return t('reminders.style.notificationDesc') },
     repeat: 30,
     steps: [{ after: 0, channels: ['push', 'desktop', 'ntfy'] }],
   },
   {
     id: 'escalating',
-    label: 'Escalating',
+    get label() { return t('reminders.style.escalating') },
     icon: 'ph:trend-up',
-    description: 'Every 15 minutes, louder at each step, the screen at 45.',
+    get description() { return t('reminders.style.escalatingDesc') },
     repeat: 15,
     steps: [
       { after: 0, channels: ['push', 'desktop', 'ntfy'] },
@@ -79,9 +81,9 @@ export const STYLES: ReminderStyle[] = [
   },
   {
     id: 'relentless',
-    label: 'Relentless',
+    get label() { return t('reminders.style.relentless') },
     icon: 'ph:siren',
-    description: 'Every 5 minutes; Telegram at 10, the screen at 15.',
+    get description() { return t('reminders.style.relentlessDesc') },
     repeat: 5,
     steps: [
       { after: 0, channels: ['push', 'desktop', 'ntfy'], urgent: true },
@@ -96,27 +98,37 @@ export function styleOf(rule: Pick<RuleInput, 'repeat' | 'steps'>): ReminderStyl
   return STYLES.find((p) => p.repeat === rule.repeat && JSON.stringify(p.steps) === JSON.stringify(rule.steps))
 }
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const weekdayShort = (d: number) => formatWeekday(addDays('2026-10-18', d))
 
 export function daysText(days: number[] | undefined): string {
-  if (!days?.length || days.length === 7) return 'every day'
-  if (days.join() === '1,2,3,4,5') return 'on weekdays'
-  if (days.join() === '0,6') return 'on weekends'
-  return `on ${days.map((d) => WEEKDAYS[d]).join(', ')}`
+  if (!days?.length || days.length === 7) return t('reminders.days.everyDay')
+  if (days.join() === '1,2,3,4,5') return t('reminders.days.weekdays')
+  if (days.join() === '0,6') return t('reminders.days.weekends')
+  return t('reminders.days.on', { days: days.map(weekdayShort).join(', ') })
 }
 
 /** "Every day at 09:00", "When I'm first at the computer after 08:00 (by 11:00)". */
 export function whenText(rule: Pick<InsistentRule, 'when'>, objectTime?: string): string {
   const when = rule.when
-  if (when.kind === 'object') return objectTime ? `At its time, ${objectTime}` : when.before ? `${when.before} min before it starts` : 'When it starts'
-  if (when.kind === 'daily') return `${daysText(when.days).replace(/^./, (c) => c.toUpperCase())} at ${when.at}`
-  return `At the computer after ${when.after}${when.latest ? ` (by ${when.latest} anyway)` : ''}, ${daysText(when.days)}`
+  if (when.kind === 'object') {
+    if (objectTime) return t('reminders.when.atObjectTime', { time: objectTime })
+    return when.before ? t('reminders.when.minBefore', { min: when.before }) : t('reminders.when.whenItStarts')
+  }
+  if (when.kind === 'daily') {
+    const days = daysText(when.days).replace(/^./, (c) => c.toUpperCase())
+    return t('reminders.when.daily', { days, at: when.at })
+  }
+  return when.latest
+    ? t('reminders.when.wakeLatest', { after: when.after, latest: when.latest, days: daysText(when.days) })
+    : t('reminders.when.wake', { after: when.after, days: daysText(when.days) })
 }
 
 export function ladderText(rule: Pick<InsistentRule, 'repeat' | 'steps'>): string {
   const style = styleOf(rule)
   if (style) return style.label
+  const base = rule.repeat ? t('reminders.ladder.everyMin', { min: rule.repeat }) : t('reminders.ladder.oncePerStep')
+  if (rule.steps.length <= 1) return base
   const top = rule.steps.at(-1)!
-  const last = rule.steps.length > 1 ? `, up to ${top.channels.map((c) => CHANNELS.find((x) => x.id === c)?.label ?? c).join(' + ')} at ${top.after} min` : ''
-  return `${rule.repeat ? `Every ${rule.repeat} min` : 'Once per step'}${last}`
+  const channels = top.channels.map((c) => CHANNELS.find((x) => x.id === c)?.label ?? c).join(' + ')
+  return t('reminders.ladder.upTo', { base, channels, min: top.after })
 }

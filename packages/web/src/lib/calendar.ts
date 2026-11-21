@@ -5,37 +5,38 @@ import { addDays, daysBetween } from '@vasta/core'
 import type { OccurrenceScope } from '@vasta/core/calendar'
 import { api } from './api.ts'
 import { dayKey } from './actions.ts'
+import { locale, t, tc } from './i18n.ts'
 import { choiceDialog } from './overlays.ts'
 import { primeFromObject } from './state.ts'
 
 export type CalendarView = 'month' | 'week' | 'three-days' | 'day'
 
-export const CALENDAR_VIEWS: { id: CalendarView; label: string; short: string; phoneLabel?: string }[] = [
-  { id: 'month', label: 'Month', short: 'M' },
-  { id: 'week', label: 'Week', short: 'W' },
-  { id: 'three-days', label: 'Three days', short: '3', phoneLabel: '3 days' },
-  { id: 'day', label: 'Day', short: 'D' },
+export const CALENDAR_VIEWS: { id: CalendarView; readonly label: string; short: string; readonly phoneLabel?: string }[] = [
+  { id: 'month', get label() { return t('calendar.view.month') }, short: 'M' },
+  { id: 'week', get label() { return t('calendar.view.week') }, short: 'W' },
+  { id: 'three-days', get label() { return t('calendar.view.threeDays') }, short: '3', get phoneLabel() { return t('calendar.view.threeDaysShort') } },
+  { id: 'day', get label() { return t('calendar.view.day') }, short: 'D' },
 ]
 
 export const viewerTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
 
-const locale = typeof navigator !== 'undefined' ? navigator.language : 'en'
-
-/** 0 = Sunday … 6 = Saturday, from the locale when the browser knows it. */
-export const firstWeekday: number = (() => {
+function firstWeekdayFor(loc: string): number {
   try {
-    const info = (new Intl.Locale(locale) as Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } })
+    const info = new Intl.Locale(loc) as Intl.Locale & { getWeekInfo?: () => { firstDay: number }; weekInfo?: { firstDay: number } }
     const firstDay = info.getWeekInfo?.().firstDay ?? info.weekInfo?.firstDay
     if (firstDay) return firstDay % 7
   } catch {}
   return 0
-})()
+}
+
+/** 0 = Sunday … 6 = Saturday, from the locale when the browser knows it. */
+export const firstWeekday: number = firstWeekdayFor(typeof navigator !== 'undefined' ? navigator.language : 'en')
 
 /** Weekday of a day, 0 = Sunday. */
 export const weekdayOf = (day: string) => new Date(`${day}T00:00:00.000Z`).getUTCDay()
 
 export function startOfWeek(day: string): string {
-  return addDays(day, -((weekdayOf(day) - firstWeekday + 7) % 7))
+  return addDays(day, -((weekdayOf(day) - firstWeekdayFor(locale.value) + 7) % 7))
 }
 
 export const monthOf = (day: string) => day.slice(0, 7)
@@ -67,25 +68,44 @@ export function stepAnchor(view: CalendarView, anchor: string, delta: number): s
   return addDays(anchor, delta * (view === 'week' ? 7 : view === 'three-days' ? 3 : 1))
 }
 
-const titleMonth = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' })
-const titleDay = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
-const shortDay = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' })
-const weekdayShort = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' })
-const timeShort = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' })
+interface CalendarFormatters {
+  titleMonth: Intl.DateTimeFormat
+  titleDay: Intl.DateTimeFormat
+  shortDay: Intl.DateTimeFormat
+  weekdayShort: Intl.DateTimeFormat
+  timeShort: Intl.DateTimeFormat
+}
+const formatterCache = new Map<string, CalendarFormatters>()
+function formatters(): CalendarFormatters {
+  const loc = locale.value
+  let entry = formatterCache.get(loc)
+  if (!entry) {
+    entry = {
+      titleMonth: new Intl.DateTimeFormat(loc, { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+      titleDay: new Intl.DateTimeFormat(loc, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }),
+      shortDay: new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+      weekdayShort: new Intl.DateTimeFormat(loc, { weekday: 'short', timeZone: 'UTC' }),
+      timeShort: new Intl.DateTimeFormat(loc, { hour: 'numeric', minute: '2-digit' }),
+    }
+    formatterCache.set(loc, entry)
+  }
+  return entry
+}
 
 const utc = (day: string) => new Date(`${day}T00:00:00.000Z`)
 
 export function viewTitle(view: CalendarView, days: string[], anchor: string): string {
-  if (view === 'month') return titleMonth.format(utc(anchor))
-  if (view === 'day') return titleDay.format(utc(anchor))
+  const f = formatters()
+  if (view === 'month') return f.titleMonth.format(utc(anchor))
+  if (view === 'day') return f.titleDay.format(utc(anchor))
   const first = days[0]!
   const last = days.at(-1)!
-  return monthOf(first) === monthOf(last) ? titleMonth.format(utc(first)) : `${shortDay.format(utc(first))} – ${shortDay.format(utc(last))}`
+  return monthOf(first) === monthOf(last) ? f.titleMonth.format(utc(first)) : `${f.shortDay.format(utc(first))} – ${f.shortDay.format(utc(last))}`
 }
 
-export const formatWeekday = (day: string) => weekdayShort.format(utc(day))
-export const formatDayShort = (day: string) => shortDay.format(utc(day))
-export const formatClock = (iso: string) => timeShort.format(new Date(iso))
+export const formatWeekday = (day: string) => formatters().weekdayShort.format(utc(day))
+export const formatDayShort = (day: string) => formatters().shortDay.format(utc(day))
+export const formatClock = (iso: string) => formatters().timeShort.format(new Date(iso))
 export const isToday = (day: string) => day === dayKey()
 
 /** "9:00 – 10:30", or "" for all-day entries. */
@@ -230,19 +250,29 @@ export function buildRepeat(rule: RepeatRule): string {
   return parts.join(';')
 }
 
-const UNIT: Record<RepeatFreq, [string, string]> = { DAILY: ['day', 'days'], WEEKLY: ['week', 'weeks'], MONTHLY: ['month', 'months'], YEARLY: ['year', 'years'] }
-const WORD: Record<RepeatFreq, string> = { DAILY: 'Daily', WEEKLY: 'Weekly', MONTHLY: 'Monthly', YEARLY: 'Yearly' }
+const WORD_KEY: Record<RepeatFreq, 'dateEditor.daily' | 'dateEditor.weekly' | 'dateEditor.monthly' | 'dateEditor.yearly'> = {
+  DAILY: 'dateEditor.daily',
+  WEEKLY: 'dateEditor.weekly',
+  MONTHLY: 'dateEditor.monthly',
+  YEARLY: 'dateEditor.yearly',
+}
+const UNIT_KEY: Record<RepeatFreq, 'dateEditor.unit.DAILY.other' | 'dateEditor.unit.WEEKLY.other' | 'dateEditor.unit.MONTHLY.other' | 'dateEditor.unit.YEARLY.other'> = {
+  DAILY: 'dateEditor.unit.DAILY.other',
+  WEEKLY: 'dateEditor.unit.WEEKLY.other',
+  MONTHLY: 'dateEditor.unit.MONTHLY.other',
+  YEARLY: 'dateEditor.unit.YEARLY.other',
+}
 const weekdayName = (code: string) => formatWeekday(addDays('2026-10-18', WEEKDAY_CODES.indexOf(code as (typeof WEEKDAY_CODES)[number]))) // 2026-10-18 is a Sunday
 
 /** "Weekly on Mon, Wed", "Every 2 months, 5 times"… */
 export function describeRepeat(rrule: string | undefined): string {
   if (!rrule) return ''
   const rule = parseRepeat(rrule)
-  if (!rule) return 'Repeats'
-  let text = rule.interval > 1 ? `Every ${rule.interval} ${UNIT[rule.freq][1]}` : WORD[rule.freq]
-  if (rule.byDay.length) text += ` on ${rule.byDay.map(weekdayName).join(', ')}`
-  if (rule.until) text += `, until ${formatDayShort(rule.until)}`
-  else if (rule.count) text += `, ${rule.count} times`
+  if (!rule) return t('calendar.repeats')
+  let text = rule.interval > 1 ? t('calendar.repeatEvery', { interval: rule.interval, unit: t(UNIT_KEY[rule.freq]) }) : t(WORD_KEY[rule.freq])
+  if (rule.byDay.length) text = t('calendar.repeatOn', { base: text, days: rule.byDay.map(weekdayName).join(', ') })
+  if (rule.until) text = t('calendar.repeatUntil', { base: text, date: formatDayShort(rule.until) })
+  else if (rule.count) text = t('calendar.repeatTimes', { base: text, count: rule.count })
   return text
 }
 
@@ -277,12 +307,12 @@ export function movedTimes(entry: CalendarEntry, target: { day: string; minutes?
 /** Ask which occurrences of a repeating date a change is for; null when cancelled. */
 export function askScope(action: 'change' | 'delete') {
   return choiceDialog<OccurrenceScope>({
-    title: action === 'delete' ? 'Delete repeating event' : 'Change repeating event',
-    ...(action === 'delete' ? { message: 'Deleting all events moves the object to the trash.' } : {}),
+    title: action === 'delete' ? t('calendar.deleteRepeatTitle') : t('calendar.changeRepeatTitle'),
+    ...(action === 'delete' ? { message: t('calendar.deleteRepeatMessage') } : {}),
     choices: [
-      { value: 'this', label: 'This event', danger: action === 'delete' },
-      { value: 'following', label: 'This and following events', danger: action === 'delete' },
-      { value: 'all', label: 'All events', danger: action === 'delete' },
+      { value: 'this', label: t('calendar.scopeThis'), danger: action === 'delete' },
+      { value: 'following', label: t('calendar.scopeFollowing'), danger: action === 'delete' },
+      { value: 'all', label: t('calendar.scopeAll'), danger: action === 'delete' },
     ],
   })
 }
@@ -356,24 +386,23 @@ export interface DayMarks {
   events?: number
 }
 
-export const DAY_MARKS: { key: keyof DayMarks; label: string; dot: string }[] = [
-  { key: 'note', label: 'Daily note', dot: 'bg-ink-soft' },
-  { key: 'tasks', label: 'Tasks', dot: 'bg-emerald-500' },
-  { key: 'dated', label: 'Dated objects', dot: 'bg-violet-500' },
-  { key: 'references', label: 'References', dot: 'bg-amber-500' },
-  { key: 'events', label: 'Events', dot: 'bg-sky-500' },
+export const DAY_MARKS: { key: keyof DayMarks; readonly label: string; dot: string }[] = [
+  { key: 'note', get label() { return t('builtin.type.daily-note.one') }, dot: 'bg-ink-soft' },
+  { key: 'tasks', get label() { return t('builtin.type.task.other') }, dot: 'bg-emerald-500' },
+  { key: 'dated', get label() { return t('calendar.datedObjects') }, dot: 'bg-violet-500' },
+  { key: 'references', get label() { return t('calendar.mark.references') }, dot: 'bg-amber-500' },
+  { key: 'events', get label() { return t('calendar.mark.events') }, dot: 'bg-sky-500' },
 ]
 
 /** "Daily note · 2 tasks · 1 reference", for a day's tooltip. */
 export function describeMarks(marks: DayMarks | undefined): string {
   if (!marks) return ''
-  const plural = (n: number | undefined, one: string, many: string) => (n ? `${n} ${n === 1 ? one : many}` : '')
   return [
-    marks.note ? 'Daily note' : '',
-    plural(marks.tasks, 'task', 'tasks'),
-    plural(marks.dated, 'dated object', 'dated objects'),
-    plural(marks.references, 'reference', 'references'),
-    plural(marks.events, 'event', 'events'),
+    marks.note ? t('builtin.type.daily-note.one') : '',
+    marks.tasks ? tc(marks.tasks, 'calendar.mark.task.one', 'calendar.mark.task.other') : '',
+    marks.dated ? tc(marks.dated, 'calendar.mark.dated.one', 'calendar.mark.dated.other') : '',
+    marks.references ? tc(marks.references, 'calendar.mark.reference.one', 'calendar.mark.reference.other') : '',
+    marks.events ? tc(marks.events, 'calendar.mark.event.one', 'calendar.mark.event.other') : '',
   ]
     .filter(Boolean)
     .join(' · ')

@@ -3,6 +3,7 @@
 // the edges and middles of other elements, and the board's clipboard format.
 import { getStroke } from 'perfect-freehand'
 import type { BoardElement, ColorName, ShapeName } from '@vasta/core'
+import { t } from './i18n.ts'
 
 // Colors ------------------------------------------------------------------------------------------
 
@@ -38,7 +39,13 @@ export const STICKY_INK = '#1f1e1c'
 // Shapes ------------------------------------------------------------------------------------------
 
 export const SHAPE_LABELS: Record<ShapeName, string> = {
-  rectangle: 'Rectangle', ellipse: 'Ellipse', diamond: 'Diamond', triangle: 'Triangle', parallelogram: 'Parallelogram', star: 'Star', heart: 'Heart',
+  get rectangle() { return t('whiteboard.shape.rectangle') },
+  get ellipse() { return t('whiteboard.shape.ellipse') },
+  get diamond() { return t('whiteboard.shape.diamond') },
+  get triangle() { return t('whiteboard.shape.triangle') },
+  get parallelogram() { return t('whiteboard.shape.parallelogram') },
+  get star() { return t('whiteboard.shape.star') },
+  get heart() { return t('whiteboard.shape.heart') },
 }
 export const SHAPE_ICONS: Record<ShapeName, string> = {
   rectangle: 'ph:square', ellipse: 'ph:circle', diamond: 'ph:diamond', triangle: 'ph:triangle', parallelogram: 'ph:parallelogram', star: 'ph:star', heart: 'ph:heart',

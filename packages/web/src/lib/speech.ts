@@ -2,6 +2,7 @@
 // views/RemindView.vue), with the browser's speech recognition: Chrome, Edge and Safari (macOS and
 // iOS) have it, Firefox does not. The desktop app offers it only when it says it can (its
 // window needs the microphone and speech recognition permissions declared, or macOS stops it).
+import { locale, t } from './i18n.ts'
 
 interface Recognition {
   lang: string
@@ -26,19 +27,20 @@ function recognitionClass(): RecognitionClass | undefined {
 
 /** Why the user cannot answer by speaking here; undefined when they can. */
 export function speechUnavailable(): string | undefined {
-  if (!recognitionClass()) return 'This browser does not recognize speech: type it instead.'
+  if (!recognitionClass()) return t('reminders.speech.noBrowser')
   const desktop = window.__VASTA_DESKTOP__
-  if (desktop && !desktop.speech) return 'This version of the desktop app does not listen yet: type it instead.'
+  if (desktop && !desktop.speech) return t('reminders.speech.noDesktop')
   return undefined
 }
 
-/** The language to listen in: the text's, guessed from its letters, else the browser's. */
+/** The language to listen in: the text's, guessed from its letters, else the app/browser locale. */
 export function speechLanguage(text: string): string {
-  const browser = navigator.language || 'en-US'
-  // Portuguese and Spanish phrases are common in Vasta; their accents give them away.
-  if (/[ãõç]|ção\b|\bvocê\b|\bnão\b/i.test(text)) return browser.startsWith('pt') ? browser : 'pt-BR'
-  if (/[ñ¿¡]/.test(text)) return browser.startsWith('es') ? browser : 'es-ES'
-  return browser
+  const fallback = locale.value || navigator.language || 'en-US'
+  if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP'
+  if (/[\u4e00-\u9fff]/.test(text)) return 'zh-CN'
+  if (/[ãõç]|ção\b|\bvocê\b|\bnão\b/i.test(text)) return fallback.startsWith('pt') ? fallback : 'pt-BR'
+  if (/[ñ¿¡]/.test(text)) return fallback.startsWith('es') ? fallback : 'es-ES'
+  return fallback
 }
 
 export interface Listening {
@@ -52,7 +54,7 @@ export interface Listening {
 export function listen(lang: string, heard: (text: string) => void, ended: (error?: string) => void): Listening {
   const Class = recognitionClass()
   if (!Class) {
-    ended('no speech recognition')
+    ended(t('reminders.speech.unavailable'))
     return { stop() {} }
   }
   const recognition = new Class()
@@ -75,7 +77,7 @@ export function listen(lang: string, heard: (text: string) => void, ended: (erro
   recognition.onerror = (event) => {
     if (event.error === 'no-speech' || event.error === 'aborted') return
     stopped = true
-    ended(event.error === 'not-allowed' || event.error === 'service-not-allowed' ? 'The microphone is not allowed here: allow it, or type it instead.' : `Speech recognition failed (${event.error}).`)
+    ended(event.error === 'not-allowed' || event.error === 'service-not-allowed' ? t('reminders.speech.micDenied') : t('reminders.speech.failed', { error: event.error }))
   }
   recognition.onend = () => {
     if (!stopped) ended()

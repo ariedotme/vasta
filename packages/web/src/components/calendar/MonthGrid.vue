@@ -8,6 +8,7 @@ import type { CalendarEntry, CalendarSource, Id } from '@vasta/core'
 import { addDays, daysBetween } from '@vasta/core'
 import { formatWeekday, isToday, layoutBars, monthOf } from '../../lib/calendar.ts'
 import { drag } from '../../lib/calendar-drag.ts'
+import { t } from '../../lib/i18n.ts'
 import AppIcon from '../AppIcon.vue'
 import CalendarEntryItem from './CalendarEntryItem.vue'
 
@@ -92,7 +93,7 @@ function onCellClick(event: MouseEvent, day: string) {
             <button
               class="grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums"
               :class="isToday(cell.day) ? 'bg-accent font-semibold text-white' : monthOf(cell.day) !== monthOf(anchor) ? 'text-ink-faint hover:bg-hover' : 'text-ink-soft hover:bg-hover'"
-              title="Open day"
+              :title="t('calendar.month.openDay')"
               @click="emit('openDay', cell.day)"
             >
               {{ Number(cell.day.slice(8)) }}
@@ -100,15 +101,15 @@ function onCellClick(event: MouseEvent, day: string) {
             <button
               v-if="dailyNotes.has(cell.day)"
               class="rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink"
-              title="Daily note"
+              :title="t('builtin.type.daily-note.one')"
               @click="emit('openNote', cell.day)"
             >
               <AppIcon fallback="ph:calendar-check" :size="13" />
             </button>
-            <span v-if="dayKcal?.has(cell.day)" class="text-[11px] tabular-nums text-ink-faint" :title="`${formatKcal(dayKcal.get(cell.day)!)} kcal eaten`" data-day-kcal>{{ formatKcal(dayKcal.get(cell.day)!) }}</span>
+            <span v-if="dayKcal?.has(cell.day)" class="text-[11px] tabular-nums text-ink-faint" :title="t('calendar.month.kcalEaten', { kcal: formatKcal(dayKcal.get(cell.day)!) })" data-day-kcal>{{ formatKcal(dayKcal.get(cell.day)!) }}</span>
             <button
               class="ml-auto hidden rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink group-hover/cell:block"
-              title="New on this day"
+              :title="t('calendar.month.newOnDay')"
               @click="emit('create', cell.day, ($event.currentTarget as HTMLElement).closest('.group\\/cell') as HTMLElement)"
             >
               <AppIcon fallback="ph:plus" :size="13" />
@@ -129,7 +130,7 @@ function onCellClick(event: MouseEvent, day: string) {
             class="shrink-0 rounded px-1.5 text-left text-xs text-ink-faint hover:bg-hover hover:text-ink"
             @click="emit('openDay', cell.day)"
           >
-            {{ cell.more }} more
+            {{ t('calendar.month.more', { count: cell.more }) }}
           </button>
         </div>
         <div class="pointer-events-none absolute inset-x-0" :style="{ top: `${LANES_TOP}px` }">

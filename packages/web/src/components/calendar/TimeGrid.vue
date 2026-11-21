@@ -6,6 +6,7 @@ import type { CalendarEntry, CalendarSource, Id } from '@vasta/core'
 import { HOUR_HEIGHT as HOUR, formatClock, formatWeekday, instantAt, isToday, layoutBars, layoutDay, minutesInto } from '../../lib/calendar.ts'
 import { drag } from '../../lib/calendar-drag.ts'
 import { dayKey } from '../../lib/actions.ts'
+import { locale, t } from '../../lib/i18n.ts'
 import { isPhone } from '../../lib/viewport.ts'
 import AppIcon from '../AppIcon.vue'
 import CalendarEntryItem from './CalendarEntryItem.vue'
@@ -26,8 +27,8 @@ const emit = defineEmits<{
 }>()
 
 const hours = Array.from({ length: 24 }, (_, h) => h)
-const hourFormat = new Intl.DateTimeFormat(typeof navigator !== 'undefined' ? navigator.language : 'en', { hour: 'numeric' })
-const hourLabel = (h: number) => hourFormat.format(new Date(2026, 0, 5, h))
+const hourFormat = computed(() => new Intl.DateTimeFormat(locale.value, { hour: 'numeric' }))
+const hourLabel = (h: number) => hourFormat.value.format(new Date(2026, 0, 5, h))
 
 const isAllDayRow = (entry: CalendarEntry) => entry.allDay || entry.startDay !== entry.endDay
 /** The all-day row: all-day and multi-day entries as bars over the days they cover. */
@@ -102,7 +103,7 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
       <div class="grid flex-1" :style="{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }">
         <div v-for="day in days" :key="day" class="min-w-0 overflow-hidden border-l border-line px-1 pb-1 pt-2 md:px-2">
           <div class="flex min-w-0 items-center gap-1.5">
-            <button class="flex min-w-0 items-baseline gap-1.5 rounded-md px-1 hover:bg-hover" title="Open day" @click="emit('openDay', day)">
+            <button class="flex min-w-0 items-baseline gap-1.5 rounded-md px-1 hover:bg-hover" :title="t('calendar.month.openDay')" @click="emit('openDay', day)">
               <span class="truncate text-xs font-medium uppercase text-ink-faint">{{ formatWeekday(day) }}</span>
               <span
                 class="grid h-7 min-w-7 place-items-center rounded-full text-lg tabular-nums"
@@ -110,7 +111,7 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
                 >{{ Number(day.slice(8)) }}</span
               >
             </button>
-            <button v-if="dailyNotes.has(day)" class="rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink" title="Daily note" @click="emit('openNote', day)">
+            <button v-if="dailyNotes.has(day)" class="rounded p-0.5 text-ink-faint hover:bg-hover hover:text-ink" :title="t('builtin.type.daily-note.one')" @click="emit('openNote', day)">
               <AppIcon fallback="ph:calendar-check" :size="14" />
             </button>
           </div>

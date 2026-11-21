@@ -7,6 +7,7 @@ import { BLOCKED_PROPERTY_ID } from '@vasta/core'
 import { imageOf } from '../lib/media.ts'
 import { chip, iconTextClasses } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
+import { propName, t, typeName } from '../lib/i18n.ts'
 import { formulaValue } from '../lib/properties.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -49,13 +50,13 @@ const shownProps = computed(() =>
     </div>
     <div class="flex flex-1 flex-col gap-1.5 p-3">
       <span v-if="variant !== 'kanban'" class="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium" :class="chip(type?.color)">
-        <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type?.name }}
+        <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type ? typeName(type) : '' }}
       </span>
       <div class="flex items-start gap-1.5 font-semibold leading-snug">
         <AppIcon v-if="object.icon" :icon="object.icon" :class="type?.color ? iconTextClasses[type.color] : ''" class="mt-0.5" />
         <span class="line-clamp-3">{{ displayTitle(object, type) }}</span>
-        <span v-if="blocked" class="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300" title="Blocked">
-          <AppIcon fallback="ph:flag-fill" :size="11" /> Blocked
+        <span v-if="blocked" class="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-md bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300" :title="t('builtin.prop.blocked')">
+          <AppIcon fallback="ph:flag-fill" :size="11" /> {{ t('builtin.prop.blocked') }}
         </span>
       </div>
       <p
@@ -67,7 +68,7 @@ const shownProps = computed(() =>
       </p>
       <div v-for="def in shownProps" :key="def.id" class="flex min-w-0 gap-1 text-xs text-ink-soft">
         <!-- A computed number or text says what it is. -->
-        <span v-if="def.kind === 'formula'" class="shrink-0 text-ink-faint">{{ def.name }}</span>
+        <span v-if="def.kind === 'formula'" class="shrink-0 text-ink-faint">{{ propName(def) }}</span>
         <PropertyDisplay :def="def" :value="object.props[def.id]" :object="object" />
       </div>
       <div v-if="object.tagIds.length" class="mt-auto flex flex-wrap gap-1 pt-1" @click.prevent>

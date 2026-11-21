@@ -2,6 +2,7 @@
 // Sprints in the open space: on (a Sprint type, a Sprint field on tasks, and the views "Current
 // sprint" and "Backlog") or off (hidden; nothing is deleted), and the word the space uses for them.
 import { computed, ref, watch } from 'vue'
+import { t } from '../../lib/i18n.ts'
 import { setSprints, sprintSettings, sprintsOn, sprintTypeId } from '../../lib/sprints.ts'
 import { workspace } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
@@ -15,7 +16,7 @@ const pluralName = ref('')
 // The saved words, not the settings object: a reload of the space (a sync) must not undo typing.
 watch(() => sprintSettings.value?.name, (saved) => (name.value = saved ?? 'Sprint'), { immediate: true })
 watch(() => sprintSettings.value?.pluralName, (saved) => (pluralName.value = saved ?? 'Sprints'), { immediate: true })
-const spaceName = computed(() => workspace.space?.name ?? 'this space')
+const spaceName = computed(() => workspace.space?.name ?? t('settings.thisSpace'))
 const dirty = computed(() => !!sprintSettings.value && (name.value.trim() !== sprintSettings.value.name || pluralName.value.trim() !== sprintSettings.value.pluralName))
 
 async function run(change: () => Promise<unknown>) {
@@ -39,27 +40,27 @@ const rename = () => run(() => setSprints({ name: name.value, pluralName: plural
 </script>
 
 <template>
-  <SettingsSection id="sprints" title="Sprints">
+  <SettingsSection id="sprints" :title="t('settings.section.sprints')">
     <div class="space-y-4">
       <label class="flex items-start gap-2.5 text-sm">
         <input :checked="sprintsOn" type="checkbox" class="mt-0.5 h-4 w-4 accent-[var(--color-accent)]" :disabled="busy" @change="toggle" />
         <span>
-          Plan work in {{ (sprintSettings?.pluralName ?? 'sprints').toLowerCase() }} in {{ spaceName }}
+          {{ t('settings.sprints.planIn', { plural: (sprintSettings?.pluralName ?? 'sprints').toLowerCase(), space: spaceName }) }}
           <span class="block text-xs text-ink-faint">
-            Time boxes with dates and a goal. Tasks get a {{ sprintSettings?.name ?? 'Sprint' }} field, and the Tasks page the views “Current {{ (sprintSettings?.name ?? 'sprint').toLowerCase() }}” (a board) and “Backlog”. Turning them off hides them and keeps everything.
+            {{ t('settings.sprints.description', { singular: sprintSettings?.name ?? 'Sprint', singularLower: (sprintSettings?.name ?? 'sprint').toLowerCase() }) }}
           </span>
         </span>
       </label>
       <form v-if="sprintSettings" class="flex flex-wrap items-end gap-3" @submit.prevent="rename">
         <label :class="label" class="min-w-0 flex-1">
-          Called
+          {{ t('settings.sprints.called') }}
           <input v-model="name" :class="field" placeholder="Sprint" maxlength="40" @input="nameTyped" />
         </label>
         <label :class="label" class="min-w-0 flex-1">
-          Plural
+          {{ t('settings.sprints.plural') }}
           <input v-model="pluralName" :class="field" placeholder="Sprints" maxlength="40" />
         </label>
-        <button type="submit" :class="secondary" class="mb-0.5" :disabled="!dirty || !name.trim() || busy">Rename</button>
+        <button type="submit" :class="secondary" class="mb-0.5" :disabled="!dirty || !name.trim() || busy">{{ t('common.renameAction') }}</button>
       </form>
       <RouterLink v-if="sprintsOn" :to="`/t/${sprintTypeId}`" class="inline-flex items-center gap-1 text-sm text-accent hover:underline">
         {{ sprintSettings?.pluralName }} <AppIcon fallback="ph:arrow-right" :size="13" />

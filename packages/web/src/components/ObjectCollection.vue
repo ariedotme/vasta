@@ -7,6 +7,7 @@ import { addSelectOption, setProperty } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, listFields, MIN_COLUMN_WIDTH, rowFields, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
+import { locale, t, typeName } from '../lib/i18n.ts'
 import { groupObjects, NO_VALUE, typesOf, type Group } from '../lib/query.ts'
 import { lastError, summaryOf, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
@@ -212,7 +213,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                 <span v-if="field.field === 'tags' || field.field === 'collections'" class="flex gap-1 overflow-hidden">
                   <ObjectChip v-for="id in field.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="field.field === 'tags'" />
                 </span>
-                <span v-else-if="field.field === 'type'" class="truncate">{{ typeOf(object)?.name }}</span>
+                <span v-else-if="field.field === 'type'" class="truncate">{{ typeOf(object) ? typeName(typeOf(object)!) : '' }}</span>
                 <span v-else-if="field.field === 'createdAt' || field.field === 'updatedAt'" class="truncate">{{ formatRelative(object[field.field]) }}</span>
                 <span v-else-if="field.field === 'createdVia' || field.field === 'updatedVia'" class="truncate">{{ object[field.field] }}</span>
                 <span v-else-if="field.field === 'date'" class="truncate">{{ object.date ? formatDate(object.date) : '' }}</span>
@@ -242,10 +243,10 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
           <thead class="bg-raised text-left text-xs text-ink-faint">
             <tr>
               <th v-for="column in columns" :key="column.field" class="relative px-3 py-2 font-medium" :data-column="column.field">
-                <span class="block truncate">{{ column.field === 'title' ? 'Title' : column.label }}</span>
+                <span class="block truncate">{{ column.field === 'title' ? t('object.titleLabel') : column.label }}</span>
                 <span
                   class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize touch-none hover:bg-accent/30"
-                  title="Drag to resize"
+                  :title="t('views.dragToResize')"
                   @pointerdown.prevent="startResize($event, column)"
                 />
               </th>
@@ -267,7 +268,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                   <ObjectChip v-for="id in column.field === 'tags' ? object.tagIds : object.collectionIds" :key="id" :id="id" :tag="column.field === 'tags'" />
                 </span>
                 <span v-else-if="column.field === 'type'" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs" :class="chip(typeOf(object)?.color)">
-                  <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object)?.name }}
+                  <AppIcon :icon="typeOf(object)?.icon" fallback="ph:cube" :size="12" />{{ typeOf(object) ? typeName(typeOf(object)!) : '' }}
                 </span>
                 <span v-else-if="column.field === 'createdAt' || column.field === 'updatedAt'" class="text-xs text-ink-faint">{{ formatRelative(object[column.field]) }}</span>
                 <span v-else-if="column.field === 'date'">{{ object.date ? formatDate(object.date) : '' }}</span>
@@ -289,7 +290,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
                   tabindex="0"
                   class="-mx-1.5 -my-0.5 min-h-6 cursor-pointer rounded-md px-1.5 py-0.5 outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/50"
                   :class="column.wrap ? '' : 'overflow-hidden'"
-                  :aria-label="`${column.label}: edit`"
+                  :aria-label="t('views.editCellAria', { label: column.label })"
                   :data-edit="column.field"
                   :data-cell="cellKey(object, column)"
                   @mousedown.stop
@@ -324,7 +325,7 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
         class="mt-2 w-full rounded-lg py-2 text-center text-xs text-ink-faint hover:bg-hover hover:text-ink"
         @click="drawMore(group)"
       >
-        {{ shown(group).length.toLocaleString() }} of {{ group.items.length.toLocaleString() }} · Show more
+        {{ t('views.showMoreCount', { shown: shown(group).length.toLocaleString(locale), total: group.items.length.toLocaleString(locale) }) }}
       </button>
     </section>
   </div>

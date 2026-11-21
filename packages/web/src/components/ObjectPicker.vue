@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { Id, ObjectSummary } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { primeSummaries, typesById, workspace } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
@@ -72,7 +73,7 @@ onMounted(() => {
       ref="input"
       v-model="query"
       class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"
-      placeholder="Search…"
+      :placeholder="t('common.searchPlaceholder')"
       @keydown="onKey"
     />
     <button
@@ -89,9 +90,9 @@ onMounted(() => {
       </template>
       <template v-else>
         <AppIcon fallback="ph:plus-circle" class="text-accent" />
-        <span class="truncate">{{ createLabel ?? 'Create' }} “{{ row.title }}”</span>
+        <span class="truncate">{{ t('picker.createQuoted', { action: createLabel ?? t('common.create'), title: row.title }) }}</span>
       </template>
     </button>
-    <p v-if="!rows.length" class="px-2.5 py-2 text-sm text-ink-faint">Nothing found</p>
+    <p v-if="!rows.length" class="px-2.5 py-2 text-sm text-ink-faint">{{ t('palette.nothingFound') }}</p>
   </div>
 </template>

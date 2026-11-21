@@ -11,6 +11,7 @@ import { api, type Trash } from '../lib/api.ts'
 import { chip, iconTextClasses } from '../lib/colors.ts'
 import { onChange } from '../lib/events.ts'
 import { displayTitle, formatRelative } from '../lib/format.ts'
+import { t, tc, typeName, typePluralName } from '../lib/i18n.ts'
 import { confirmDialog, openContextMenu } from '../lib/overlays.ts'
 import { lastError, loadWorkspace, notice, refreshCounts, typesById, workspace } from '../lib/state.ts'
 import { openObject } from '../lib/open.ts'
@@ -36,15 +37,15 @@ const types = computed(() => new Map<Id, ObjectType>([...typesById.value, ...tra
 
 const entries = computed<Entry[]>(() =>
   [
-    ...trash.value.types.map((t): Entry => ({
+    ...trash.value.types.map((type): Entry => ({
       kind: 'type',
-      id: t.id,
-      title: t.pluralName,
-      ...(t.icon ? { icon: t.icon } : {}),
+      id: type.id,
+      title: typePluralName(type),
+      ...(type.icon ? { icon: type.icon } : {}),
       fallback: 'ph:cube',
-      type: t,
-      detail: t.objectCount ? `Type, with ${t.objectCount} ${t.objectCount === 1 ? 'object' : 'objects'}` : 'Type',
-      deletedAt: t.deletedAt,
+      type,
+      detail: type.objectCount ? tc(type.objectCount, 'trash.typeWithObjects.one', 'trash.typeWithObjects.other') : t('common.type'),
+      deletedAt: type.deletedAt,
     })),
     ...trash.value.objects.map((o): Entry => {
       const type = types.value.get(o.typeId)
@@ -55,7 +56,7 @@ const entries = computed<Entry[]>(() =>
         ...(o.icon ?? type?.icon ? { icon: (o.icon ?? type?.icon)! } : {}),
         fallback: 'ph:file-text',
         ...(type ? { type } : {}),
-        detail: type?.name ?? '',
+        detail: typeName(type),
         deletedAt: o.deletedAt!,
       }
     }),
@@ -109,12 +110,12 @@ function restore(entry: Entry) {
   return run(entry.id, async () => {
     if (entry.kind === 'type') {
       const type = await restoreTypeFlow(entry.id)
-      notice.value = { message: `Restored “${type.pluralName}”`, action: { label: 'Open', run: () => router.push(`/t/${type.id}`) } }
+      notice.value = { message: t('trash.restored', { title: typePluralName(type) }), action: { label: t('common.open'), run: () => router.push(`/t/${type.id}`) } }
     } else {
       const { object, type } = await restoreObjectFlow(entry.id)
       notice.value = {
-        message: type ? `Restored “${entry.title}” and its type “${type.name}”` : `Restored “${entry.title}”`,
-        action: { label: 'Open', run: () => openObject(object.id) },
+        message: type ? t('trash.restoredWithType', { title: entry.title, type: typeName(type) }) : t('trash.restored', { title: entry.title }),
+        action: { label: t('common.open'), run: () => openObject(object.id) },
       }
     }
   })
@@ -123,11 +124,11 @@ function restore(entry: Entry) {
 function deleteForever(entry: Entry) {
   return run(entry.id, async () => {
     if (entry.kind === 'object') return deleteForeverFlow(entry.id, entry.title)
-    const count = trash.value.types.find((t) => t.id === entry.id)?.objectCount ?? 0
+    const count = trash.value.types.find((type) => type.id === entry.id)?.objectCount ?? 0
     const ok = await confirmDialog({
-      title: `Delete “${entry.title}” forever?`,
-      message: `The type${count ? ` and its ${count} ${count === 1 ? 'object' : 'objects'}` : ''} cannot be restored afterwards.`,
-      confirmLabel: 'Delete forever',
+      title: t('trash.deleteTypeTitle', { title: entry.title }),
+      message: count ? tc(count, 'trash.deleteTypeMessageWithObjects.one', 'trash.deleteTypeMessageWithObjects.other') : t('trash.deleteTypeMessage'),
+      confirmLabel: t('trash.deleteForever'),
       danger: true,
     })
     if (!ok) return
@@ -139,9 +140,9 @@ function deleteForever(entry: Entry) {
 async function emptyTrash() {
   if (!workspace.space) return
   const ok = await confirmDialog({
-    title: 'Empty the trash?',
-    message: `${entries.value.length} ${entries.value.length === 1 ? 'item goes' : 'items go'} for good. This cannot be undone.`,
-    confirmLabel: 'Empty trash',
+    title: t('trash.emptyTitle'),
+    message: tc(entries.value.length, 'trash.emptyMessage.one', 'trash.emptyMessage.other'),
+    confirmLabel: t('trash.emptyButton'),
     danger: true,
   })
   if (!ok) return
@@ -158,10 +159,10 @@ function open(entry: Entry) {
 function entryMenu(event: MouseEvent, entry: Entry) {
   openContextMenu(event, [
     { kind: 'heading', label: entry.title },
-    ...(entry.kind === 'object' ? [{ label: 'Open', icon: 'ph:arrow-square-out', run: () => open(entry) }] : []),
-    { label: 'Restore', icon: 'ph:arrow-counter-clockwise', run: () => restore(entry) },
+    ...(entry.kind === 'object' ? [{ label: t('common.open'), icon: 'ph:arrow-square-out', run: () => open(entry) }] : []),
+    { label: t('common.restore'), icon: 'ph:arrow-counter-clockwise', run: () => restore(entry) },
     { kind: 'separator' },
-    { label: 'Delete forever…', icon: 'ph:trash', danger: true, run: () => deleteForever(entry) },
+    { label: t('trash.deleteForeverMenu'), icon: 'ph:trash', danger: true, run: () => deleteForever(entry) },
   ])
 }
 
@@ -169,14 +170,14 @@ function restoreSpace(space: Space) {
   return run(space.id, async () => {
     await api.restoreSpace(space.id)
     await loadWorkspace(workspace.space?.id)
-    notice.value = { message: `Restored the space “${space.name}”`, action: { label: 'Switch to it', run: async () => (await loadWorkspace(space.id), router.push('/')) } }
+    notice.value = { message: t('trash.restoredSpace', { name: space.name }), action: { label: t('trash.switchToSpace'), run: async () => (await loadWorkspace(space.id), router.push('/')) } }
   })
 }
 
 /** "Goes for good in 12 days". */
 function remaining(deletedAt: string) {
   const days = Math.max(0, Math.ceil((Date.parse(deletedAt) + 30 * 86_400_000 - Date.now()) / 86_400_000))
-  return days <= 1 ? 'goes for good within a day' : `goes for good in ${days} days`
+  return days <= 1 ? t('trash.remainingDay') : t('trash.remainingDays', { days })
 }
 </script>
 
@@ -184,22 +185,22 @@ function remaining(deletedAt: string) {
   <div class="mx-auto max-w-3xl px-4 py-8 sm:px-8 md:py-12">
     <div class="flex flex-wrap items-center gap-3">
       <AppIcon fallback="ph:trash" :size="26" class="text-ink-soft" />
-      <h1 class="text-2xl font-semibold">Trash</h1>
+      <h1 class="text-2xl font-semibold">{{ t('common.trash') }}</h1>
       <button
         v-if="entries.length"
         class="ml-auto rounded-lg border border-line px-3 py-1.5 text-sm text-red-600 hover:bg-hover disabled:opacity-40 max-md:py-2"
         :disabled="busy.has('__all')"
         @click="emptyTrash"
       >
-        Empty trash
+        {{ t('trash.emptyButton') }}
       </button>
     </div>
-    <p class="mt-2 text-sm text-ink-soft">Deleted types and objects of {{ workspace.space?.name }} stay here for 30 days, then go for good.</p>
+    <p class="mt-2 text-sm text-ink-soft">{{ t('trash.description', { space: workspace.space?.name ?? '' }) }}</p>
 
-    <p v-if="loading" class="mt-10 text-sm text-ink-faint">Loading…</p>
+    <p v-if="loading" class="mt-10 text-sm text-ink-faint">{{ t('common.loading') }}</p>
     <div v-else-if="!entries.length" class="mt-16 flex flex-col items-center gap-2 text-sm text-ink-faint">
       <AppIcon fallback="ph:trash" :size="36" class="opacity-50" />
-      The trash is empty.
+      {{ t('trash.empty') }}
     </div>
 
     <ul v-else class="mt-6 divide-y divide-line rounded-xl border border-line">
@@ -213,7 +214,7 @@ function remaining(deletedAt: string) {
         <button
           class="flex min-w-0 flex-1 items-center gap-3 text-left"
           :class="entry.kind === 'object' ? 'hover:opacity-80' : 'cursor-default'"
-          :title="entry.kind === 'object' ? 'Open' : undefined"
+          :title="entry.kind === 'object' ? t('common.open') : undefined"
           @click="open(entry)"
         >
           <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-hover">
@@ -230,24 +231,24 @@ function remaining(deletedAt: string) {
         </button>
         <div class="flex shrink-0 items-center gap-1">
           <button class="rounded-lg border border-line px-2.5 py-1 text-sm hover:bg-hover max-md:py-1.5" :disabled="busy.has(entry.id)" @click="restore(entry)">
-            Restore
+            {{ t('common.restore') }}
           </button>
           <button
             class="rounded-lg px-2 py-1 text-sm text-ink-faint hover:bg-hover hover:text-red-600 max-md:py-1.5"
-            title="Delete forever"
+            :title="t('trash.deleteForever')"
             :disabled="busy.has(entry.id)"
             @click="deleteForever(entry)"
           >
             <AppIcon fallback="ph:trash" />
-            <span class="sr-only">Delete forever</span>
+            <span class="sr-only">{{ t('trash.deleteForever') }}</span>
           </button>
         </div>
       </li>
     </ul>
 
     <template v-if="spaces.length">
-      <h2 class="mt-12 text-sm font-semibold text-ink-soft">Deleted spaces</h2>
-      <p class="mt-1 text-sm text-ink-faint">Spaces you owned, with everything in them.</p>
+      <h2 class="mt-12 text-sm font-semibold text-ink-soft">{{ t('trash.deletedSpaces') }}</h2>
+      <p class="mt-1 text-sm text-ink-faint">{{ t('trash.deletedSpacesHint') }}</p>
       <ul class="mt-3 divide-y divide-line rounded-xl border border-line">
         <li v-for="space in spaces" :key="space.id" class="flex items-center gap-3 px-3 py-2.5" :class="busy.has(space.id) ? 'opacity-50' : ''">
           <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-hover">
@@ -257,7 +258,7 @@ function remaining(deletedAt: string) {
             <span class="block truncate text-sm font-medium">{{ space.name }}</span>
             <span class="text-xs text-ink-faint">{{ formatRelative(space.deletedAt) }} · {{ remaining(space.deletedAt) }}</span>
           </span>
-          <button class="rounded-lg border border-line px-2.5 py-1 text-sm hover:bg-hover max-md:py-1.5" :disabled="busy.has(space.id)" @click="restoreSpace(space)">Restore</button>
+          <button class="rounded-lg border border-line px-2.5 py-1 text-sm hover:bg-hover max-md:py-1.5" :disabled="busy.has(space.id)" @click="restoreSpace(space)">{{ t('common.restore') }}</button>
         </li>
       </ul>
     </template>

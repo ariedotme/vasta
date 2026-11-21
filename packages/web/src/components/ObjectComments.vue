@@ -7,6 +7,8 @@ import type { Id, ObjectRecord } from '@vasta/core'
 import { addComment, commentsOf, deleteComment, editComment } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { formatRelative } from '../lib/format.ts'
+import { locale, t } from '../lib/i18n.ts'
+import { mod } from '../lib/shortcuts.ts'
 import { meId, people, personName, sharedSpace } from '../lib/people.ts'
 import { lastError, primeFromObject } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
@@ -150,7 +152,7 @@ function pieces(text: string): Piece[] {
   <!-- A space with nobody else: only once something was said (an agent's note, say). -->
   <section v-if="sharedSpace || comments.length" class="mt-10">
     <h2 class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-ink-soft">
-      Comments <span v-if="comments.length" class="font-normal text-ink-faint">{{ comments.length }}</span>
+      {{ t('comments.title') }} <span v-if="comments.length" class="font-normal text-ink-faint">{{ comments.length }}</span>
     </h2>
     <ol class="space-y-4">
       <li v-for="comment in comments" :key="comment.id" class="group/comment flex gap-2.5">
@@ -158,10 +160,10 @@ function pieces(text: string): Piece[] {
         <div class="min-w-0 flex-1">
           <div class="flex items-baseline gap-2 text-sm">
             <span class="font-medium">{{ personName(comment.author) }}</span>
-            <span class="text-xs text-ink-faint" :title="new Date(comment.at).toLocaleString()">{{ formatRelative(comment.at) }}<template v-if="comment.editedAt"> · edited</template></span>
+            <span class="text-xs text-ink-faint" :title="new Date(comment.at).toLocaleString(locale)">{{ formatRelative(comment.at) }}<template v-if="comment.editedAt">{{ t('comments.edited') }}</template></span>
             <span v-if="comment.author === meId() && editing !== comment.id" class="ml-auto flex gap-0.5 opacity-0 group-hover/comment:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-              <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="Edit" @click="startEdit(comment.id, comment.text)"><AppIcon fallback="ph:pencil-simple" :size="13" /></button>
-              <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600" title="Delete" @click="remove(comment.id)"><AppIcon fallback="ph:trash" :size="13" /></button>
+              <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="t('comments.edit')" @click="startEdit(comment.id, comment.text)"><AppIcon fallback="ph:pencil-simple" :size="13" /></button>
+              <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600" :title="t('common.delete')" @click="remove(comment.id)"><AppIcon fallback="ph:trash" :size="13" /></button>
             </span>
           </div>
           <form v-if="editing === comment.id" class="mt-1" @submit.prevent="saveEdit(comment.id)">
@@ -169,14 +171,14 @@ function pieces(text: string): Piece[] {
               v-model="editText"
               rows="3"
               class="w-full resize-y rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-sm outline-none"
-              aria-label="Edit comment"
+              :aria-label="t('comments.editLabel')"
               @keydown.enter.meta.prevent="saveEdit(comment.id)"
               @keydown.enter.ctrl.prevent="saveEdit(comment.id)"
               @keydown.esc="editing = null"
             />
             <div class="mt-1 flex gap-2 text-sm">
-              <button type="submit" class="rounded-lg bg-ink px-2.5 py-1 font-medium text-surface">Save</button>
-              <button type="button" class="rounded-lg px-2.5 py-1 text-ink-soft hover:bg-hover" @click="editing = null">Cancel</button>
+              <button type="submit" class="rounded-lg bg-ink px-2.5 py-1 font-medium text-surface">{{ t('common.save') }}</button>
+              <button type="button" class="rounded-lg px-2.5 py-1 text-ink-soft hover:bg-hover" @click="editing = null">{{ t('common.cancel') }}</button>
             </div>
           </form>
           <p v-else class="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink"><template v-for="(piece, i) in pieces(comment.text)" :key="i"><a v-if="piece.kind === 'link'" :href="piece.text" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">{{ piece.text }}</a><span v-else-if="piece.kind === 'mention'" class="rounded bg-accent/10 px-0.5 font-medium text-accent">{{ piece.text }}</span><template v-else>{{ piece.text }}</template></template></p>
@@ -191,12 +193,12 @@ function pieces(text: string): Piece[] {
           v-model="draft"
           rows="1"
           class="block w-full resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none placeholder:text-ink-faint focus:border-line-strong"
-          :placeholder="sharedSpace ? 'Write a comment… @ mentions someone' : 'Write a comment…'"
-          aria-label="Write a comment"
+          :placeholder="sharedSpace ? t('comments.placeholderShared') : t('comments.placeholder')"
+          :aria-label="t('comments.writeLabel')"
           @input="typed"
           @keydown="keydown"
         />
-        <ul v-if="mention && offered.length" class="absolute z-20 mt-1 w-64 rounded-lg border border-line bg-surface p-1 shadow-lg" role="listbox" aria-label="People">
+        <ul v-if="mention && offered.length" class="absolute z-20 mt-1 w-64 rounded-lg border border-line bg-surface p-1 shadow-lg" role="listbox" :aria-label="t('comments.people')">
           <li v-for="(person, index) in offered" :key="person.id">
             <button
               type="button"
@@ -211,8 +213,8 @@ function pieces(text: string): Piece[] {
           </li>
         </ul>
         <div v-if="draft.trim()" class="mt-1.5 flex items-center gap-2">
-          <button type="submit" class="rounded-lg bg-ink px-3 py-1 text-sm font-medium text-surface disabled:opacity-40" :disabled="sending">Comment</button>
-          <span class="text-xs text-ink-faint">⌘ Enter</span>
+          <button type="submit" class="rounded-lg bg-ink px-3 py-1 text-sm font-medium text-surface disabled:opacity-40" :disabled="sending">{{ t('comments.submit') }}</button>
+          <span class="text-xs text-ink-faint">{{ mod }}Enter</span>
         </div>
       </div>
     </form>

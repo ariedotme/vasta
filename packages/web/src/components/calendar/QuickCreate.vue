@@ -6,6 +6,8 @@ import type { DateValue, ObjectType } from '@vasta/core'
 import { createObject } from '../../lib/actions.ts'
 import { dateProperties, formatClock, formatDayShort, instantAt } from '../../lib/calendar.ts'
 import { iconTextClasses } from '../../lib/colors.ts'
+import { propName, t, typeName } from '../../lib/i18n.ts'
+import { mod } from '../../lib/shortcuts.ts'
 import { workspace } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
 
@@ -15,8 +17,8 @@ const emit = defineEmits<{ done: [] }>()
 const TYPE_KEY = 'vasta.calendar.createType'
 const types = computed(() =>
   workspace.types
-    .filter((t) => !t.deletedAt && dateProperties(t).length)
-    .sort((a, b) => (a.system === 'task' ? -1 : b.system === 'task' ? 1 : a.name.localeCompare(b.name)))
+    .filter((item) => !item.deletedAt && dateProperties(item).length)
+    .sort((a, b) => (a.system === 'task' ? -1 : b.system === 'task' ? 1 : typeName(a).localeCompare(typeName(b))))
 )
 let remembered = ''
 try {
@@ -68,27 +70,27 @@ onMounted(() => input.value?.focus())
       ref="input"
       v-model="title"
       class="w-full rounded-lg bg-hover px-2.5 py-1.5 outline-none placeholder:text-ink-faint"
-      placeholder="Title"
+      :placeholder="t('object.titleLabel')"
       @keydown.enter.prevent="create($event.metaKey || $event.ctrlKey)"
     />
     <div v-if="types.length" class="flex flex-wrap gap-1">
       <button
-        v-for="t in types"
-        :key="t.id"
+        v-for="item in types"
+        :key="item.id"
         class="flex items-center gap-1 rounded-md px-2 py-1 text-xs"
-        :class="t.id === typeId ? 'bg-ink text-surface' : 'bg-hover text-ink-soft hover:text-ink'"
-        @click="typeId = t.id"
+        :class="item.id === typeId ? 'bg-ink text-surface' : 'bg-hover text-ink-soft hover:text-ink'"
+        @click="typeId = item.id"
       >
-        <AppIcon :icon="t.icon" fallback="ph:cube" :size="12" :class="t.id !== typeId && t.color ? iconTextClasses[t.color] : ''" />{{ t.name }}
+        <AppIcon :icon="item.icon" fallback="ph:cube" :size="12" :class="item.id !== typeId && item.color ? iconTextClasses[item.color] : ''" />{{ typeName(item) }}
       </button>
     </div>
-    <p v-else class="text-xs text-ink-faint">Add a date property to a type to create it from the calendar.</p>
-    <p v-if="type && dateProperties(type).length > 1" class="text-xs text-ink-faint">Goes into “{{ dateProperties(type)[0]!.name }}”.</p>
+    <p v-else class="text-xs text-ink-faint">{{ t('calendar.quick.noDateTypes') }}</p>
+    <p v-if="type && dateProperties(type).length > 1" class="text-xs text-ink-faint">{{ t('calendar.quick.goesInto', { prop: propName(dateProperties(type)[0]!) }) }}</p>
     <p v-if="error" class="text-xs text-red-600">{{ error }}</p>
     <div class="flex gap-1.5">
-      <button class="flex-1 rounded-lg bg-ink px-2.5 py-1.5 text-surface disabled:opacity-40" :disabled="!type || busy" @click="create(false)">Create</button>
-      <button class="rounded-lg bg-hover px-2.5 py-1.5 text-ink-soft hover:text-ink disabled:opacity-40" :disabled="!type || busy" title="Create and open (⌘↩)" @click="create(true)">
-        Open
+      <button class="flex-1 rounded-lg bg-ink px-2.5 py-1.5 text-surface disabled:opacity-40" :disabled="!type || busy" @click="create(false)">{{ t('common.create') }}</button>
+      <button class="rounded-lg bg-hover px-2.5 py-1.5 text-ink-soft hover:text-ink disabled:opacity-40" :disabled="!type || busy" :title="t('calendar.quick.createAndOpen', { mod })" @click="create(true)">
+        {{ t('common.open') }}
       </button>
     </div>
   </div>

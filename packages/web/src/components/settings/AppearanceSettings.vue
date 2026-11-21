@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// Light, dark or the system's, and how type icons look, on this device; and the keyboard shortcuts.
-import { pageWidth, PAGE_WIDTH_OPTIONS } from '../../lib/page-width.ts'
+// Language, theme, block spacing, page width and how type icons look, on this device; and the keyboard shortcuts.
+import { computed } from 'vue'
+import { AVAILABLE_LOCALES, detectedLocale, language, LOCALE_NAMES, t, type MessageKey } from '../../lib/i18n.ts'
+import { pageWidth, PAGE_WIDTH_OPTIONS, type PageWidth } from '../../lib/page-width.ts'
 import { keysOf } from '../../lib/shortcuts.ts'
 import { ui } from '../../lib/state.ts'
 import { blockSpacing, iconStyle, theme, THEME_ICONS, type IconStyle, type Theme } from '../../lib/theme.ts'
@@ -10,29 +12,42 @@ import AppIcon from '../AppIcon.vue'
 import SettingsSection from './SettingsSection.vue'
 import { label, secondary } from './styles.ts'
 
-const ICON_STYLES: { value: IconStyle; label: string }[] = [
-  { value: 'boxed', label: 'In a colored square' },
-  { value: 'plain', label: 'Icon only' },
-]
+const ICON_STYLES = computed<{ value: IconStyle; label: string }[]>(() => [
+  { value: 'boxed', label: t('settings.appearance.iconBoxed') },
+  { value: 'plain', label: t('settings.appearance.iconPlain') },
+])
 const SAMPLE = [
   { icon: 'ph:bookmark-simple', color: 'pink' },
   { icon: 'ph:user', color: 'orange' },
   { icon: 'ph:globe-hemisphere-west', color: 'sky' },
 ] as const
 
-const OPTIONS: { value: Theme; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-]
+const OPTIONS = computed<{ value: Theme; label: string }[]>(() => [
+  { value: 'system', label: t('settings.appearance.themeSystem') },
+  { value: 'light', label: t('settings.appearance.themeLight') },
+  { value: 'dark', label: t('settings.appearance.themeDark') },
+])
+
+const WIDTH_KEYS: Record<PageWidth, MessageKey> = {
+  standard: 'settings.appearance.widthStandard',
+  wide: 'settings.appearance.widthWide',
+  full: 'settings.appearance.widthFull',
+}
 </script>
 
 <template>
-  <SettingsSection id="appearance" title="Appearance">
+  <SettingsSection id="appearance" :title="t('settings.appearance.title')">
     <div class="space-y-5">
+      <label class="block">
+        <span :class="label">{{ t('settings.appearance.language') }}</span>
+        <select v-model="language" class="mt-1.5 block rounded-md border border-line bg-surface px-2 py-1.5 text-sm" :aria-label="t('settings.appearance.language')">
+          <option value="auto">{{ t('settings.appearance.languageAuto', { detected: LOCALE_NAMES[detectedLocale] }) }}</option>
+          <option v-for="code in AVAILABLE_LOCALES" :key="code" :value="code">{{ LOCALE_NAMES[code] }}</option>
+        </select>
+      </label>
       <div>
-        <span :class="label">Theme, on this device</span>
-        <div class="mt-1.5 inline-flex rounded-lg bg-hover p-0.5" role="radiogroup" aria-label="Theme">
+        <span :class="label">{{ t('settings.appearance.theme') }}</span>
+        <div class="mt-1.5 inline-flex rounded-lg bg-hover p-0.5" role="radiogroup" :aria-label="t('settings.appearance.theme')">
           <button
             v-for="option in OPTIONS"
             :key="option.value"
@@ -47,16 +62,16 @@ const OPTIONS: { value: Theme; label: string }[] = [
         </div>
       </div>
       <label class="block">
-        <span :class="label">Editor block spacing</span>
+        <span :class="label">{{ t('settings.appearance.blockSpacing') }}</span>
         <select v-model="blockSpacing" class="mt-1.5 block rounded-md border border-line bg-surface px-2 py-1.5 text-sm">
-          <option value="compact">Compact</option>
-          <option value="comfortable">Comfortable</option>
-          <option value="spacious">Spacious</option>
+          <option value="compact">{{ t('settings.appearance.spacingCompact') }}</option>
+          <option value="comfortable">{{ t('settings.appearance.spacingComfortable') }}</option>
+          <option value="spacious">{{ t('settings.appearance.spacingSpacious') }}</option>
         </select>
       </label>
       <div>
-        <span :class="label">Page width, on this device</span>
-        <div class="mt-1.5 inline-flex max-w-full flex-wrap rounded-lg bg-hover p-0.5" role="radiogroup" aria-label="Page width">
+        <span :class="label">{{ t('settings.appearance.pageWidth') }}</span>
+        <div class="mt-1.5 inline-flex max-w-full flex-wrap rounded-lg bg-hover p-0.5" role="radiogroup" :aria-label="t('settings.appearance.pageWidth')">
           <button
             v-for="option in PAGE_WIDTH_OPTIONS"
             :key="option.value"
@@ -66,13 +81,13 @@ const OPTIONS: { value: Theme; label: string }[] = [
             :class="pageWidth === option.value ? 'bg-surface font-medium text-ink shadow-sm' : 'text-ink-soft hover:text-ink'"
             @click="pageWidth = option.value"
           >
-            {{ option.label }}
+            {{ t(WIDTH_KEYS[option.value]) }}
           </button>
         </div>
       </div>
       <div>
-        <span :class="label">Type icons</span>
-        <div class="mt-1.5 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Type icons">
+        <span :class="label">{{ t('settings.appearance.typeIcons') }}</span>
+        <div class="mt-1.5 grid gap-2 sm:grid-cols-2" role="radiogroup" :aria-label="t('settings.appearance.typeIcons')">
           <button
             v-for="option in ICON_STYLES"
             :key="option.value"
@@ -95,9 +110,9 @@ const OPTIONS: { value: Theme; label: string }[] = [
       </div>
       <div class="flex flex-wrap items-center gap-3 max-md:hidden">
         <button :class="secondary" class="flex items-center gap-2" @click="ui.shortcutsOpen = true">
-          <AppIcon fallback="ph:keyboard" :size="15" /> Keyboard shortcuts
+          <AppIcon fallback="ph:keyboard" :size="15" /> {{ t('nav.keyboardShortcuts') }}
         </button>
-        <span class="text-xs text-ink-faint">{{ keysOf('shortcuts') }} anywhere in the app.</span>
+        <span class="text-xs text-ink-faint">{{ t('settings.appearance.shortcutsHint', { keys: keysOf('shortcuts') }) }}</span>
       </div>
     </div>
   </SettingsSection>

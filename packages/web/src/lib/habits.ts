@@ -25,6 +25,7 @@ import { clone } from './clone.ts'
 import { onChange } from './events.ts'
 import { dayKey } from './actions.ts'
 import { formatLongDay } from './format.ts'
+import { t } from './i18n.ts'
 import { dailyNotesBetween, useGoals } from './nutrition.ts'
 import { promptDialog } from './overlays.ts'
 import { lastError, notice, primeFromObject, primeSummaries, systemType } from './state.ts'
@@ -68,7 +69,7 @@ export function useFoodHabits(habits: Ref<ObjectSummary[]>) {
 /** A habit done from food can't be checked by hand: say so. */
 function fromFood(habit: Pick<ObjectSummary, 'props' | 'title'> | undefined): boolean {
   if (!habit || !habitFoodRule(habit)) return false
-  notice.value = { message: `“${habit.title || 'This habit'}” is done from what you log in Food.` }
+  notice.value = { message: t('habits.fromFoodNotice', { title: habit.title || t('habits.thisHabit') }) }
   return true
 }
 
@@ -142,16 +143,18 @@ export async function askHabitAmount(habit: ObjectSummary, day: string) {
   const target = habitTarget(habit)
   const unit = habitUnit(habit)
   const answer = await promptDialog({
-    title: habit.title || 'Habit',
-    message: target ? `How much on ${formatLongDay(`${day}T00:00:00.000Z`)}? The goal is ${target}${unit ? ` ${unit}` : ''}.` : `Done on ${formatLongDay(`${day}T00:00:00.000Z`)}? 1 for yes, 0 for no.`,
+    title: habit.title || t('builtin.type.habit.one'),
+    message: target
+      ? t('habits.askGoalMessage', { date: formatLongDay(`${day}T00:00:00.000Z`), goal: `${target}${unit ? ` ${unit}` : ''}` })
+      : t('habits.askPlainMessage', { date: formatLongDay(`${day}T00:00:00.000Z`) }),
     value: String(habitValue(habit, day) || ''),
     placeholder: '0',
-    confirmLabel: 'Save',
+    confirmLabel: t('common.save'),
   })
   if (answer === null) return
   const amount = Number(answer.replace(',', '.'))
   if (!Number.isFinite(amount) || amount < 0) {
-    lastError.value = 'Type a number, 0 or more.'
+    lastError.value = t('habits.invalidNumber')
     return
   }
   await setHabitAmount(habit.id, day, target ? amount : amount > 0 ? 1 : 0, habit)

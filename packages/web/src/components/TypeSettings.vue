@@ -8,6 +8,7 @@ import { FORMULA_BUILTIN_FIELDS, FORMULA_FUNCTIONS, checkFormula, formulaFromNam
 import { api } from '../lib/api.ts'
 import { clone } from '../lib/clone.ts'
 import { chip, colorNames, iconTextClasses, swatchClasses } from '../lib/colors.ts'
+import { t, tc, typeName, typePluralName } from '../lib/i18n.ts'
 import { PROPERTY_KINDS, kindIcon, kindLabel, newPropertyDef } from '../lib/properties.ts'
 import { confirmDialog } from '../lib/overlays.ts'
 import { replaceType, workspace } from '../lib/state.ts'
@@ -72,9 +73,11 @@ async function remove(def: PropertyDef) {
   if (def.kind === 'rich-text' && richTextCount.value <= 1) return
   const users = draft.value.properties.filter((p) => p.kind === 'formula' && p.id !== def.id && formulaUses(p.expression, def.id)).map((p) => `“${p.name}”`)
   const ok = await confirmDialog({
-    title: `Delete the property “${def.name}”?`,
-    message: `Values already filled in stay stored but are no longer shown.${users.length ? ` The formula${users.length > 1 ? 's' : ''} ${users.join(', ')} use${users.length > 1 ? '' : 's'} it and will show an error.` : ''}`,
-    confirmLabel: 'Delete property',
+    title: t('typeSettings.deletePropTitle', { name: def.name }),
+    message: users.length
+      ? tc(users.length, 'typeSettings.deletePropFormulas.one', 'typeSettings.deletePropFormulas.other', { names: users.join(', ') })
+      : t('typeSettings.deletePropMessage'),
+    confirmLabel: t('typeSettings.deletePropConfirm'),
     danger: true,
   })
   if (!ok) return
@@ -143,10 +146,9 @@ function setFormula(def: FormulaPropertyDef, text: string) {
 
 const formulaProblem = (def: FormulaPropertyDef) => (def.expression.trim() ? checkFormula(def.expression, draft.value, allTypes.value) : undefined)
 
-const KIND_NAMES = { number: 'a number', text: 'text', checkbox: 'true or false', date: 'a date', list: 'a list' }
 const formulaGives = (def: FormulaPropertyDef) => {
   const kind = formulaKind(def, allTypes.value)
-  return kind ? KIND_NAMES[kind] : undefined
+  return kind ? t(`typeSettings.formulaKind.${kind}`) : undefined
 }
 
 /** Fields a formula can insert: the other properties, then the built-in fields. */
@@ -175,7 +177,7 @@ const otherTypes = computed(() => [...workspace.types].sort((a, b) => a.name.loc
 
 async function save() {
   if (!draft.value.name.trim()) {
-    error.value = 'The type needs a name.'
+    error.value = t('typeSettings.nameRequired')
     return
   }
   saving.value = true
@@ -183,7 +185,7 @@ async function save() {
   try {
     draft.value.name = draft.value.name.trim()
     draft.value.pluralName = draft.value.pluralName.trim() || draft.value.name
-    for (const def of draft.value.properties) def.name = def.name.trim() || 'Untitled'
+    for (const def of draft.value.properties) def.name = def.name.trim() || t('common.untitled')
     replaceType(await api.saveType(draft.value))
     emit('close')
   } catch (e) {
@@ -194,28 +196,28 @@ async function save() {
 }
 
 async function close() {
-  if (dirty.value && !(await confirmDialog({ title: 'Discard your changes to this type?', confirmLabel: 'Discard', danger: true }))) return
+  if (dirty.value && !(await confirmDialog({ title: t('typeSettings.discardTitle'), confirmLabel: t('typeSettings.discardConfirm'), danger: true }))) return
   emit('close')
 }
 
 const router = useRouter()
 /** Leave the settings for a template's page (or for a new one, `path` empty). */
 async function leave(path: string) {
-  if (dirty.value && !(await confirmDialog({ title: 'Discard your changes to this type?', confirmLabel: 'Discard', danger: true }))) return
+  if (dirty.value && !(await confirmDialog({ title: t('typeSettings.discardTitle'), confirmLabel: t('typeSettings.discardConfirm'), danger: true }))) return
   emit('close')
   if (path) await router.push(path)
 }
 </script>
 
 <template>
-  <ModalDialog :title="`${type.name} settings`" width="44rem" @close="close">
+  <ModalDialog :title="t('typeSettings.title', { type: typeName(type) })" width="44rem" @close="close">
     <!-- Identity -->
     <section class="flex gap-4">
       <button
         ref="iconAnchor"
         class="grid h-16 w-16 shrink-0 place-items-center rounded-2xl ring-1 ring-line hover:bg-hover"
         :class="chip(draft.color)"
-        title="Change icon"
+        :title="t('object.changeIcon')"
         @click="iconOpen = !iconOpen"
       >
         <AppIcon :icon="draft.icon" fallback="ph:cube" :size="32" />
@@ -225,48 +227,48 @@ async function leave(path: string) {
       </PopoverMenu>
       <div class="grid flex-1 grid-cols-2 gap-3">
         <label class="text-xs text-ink-faint">
-          Name
+          {{ t('typeSettings.name') }}
           <input v-model="draft.name" class="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-line-strong" />
         </label>
         <label class="text-xs text-ink-faint">
-          Plural name
+          {{ t('typeSettings.pluralName') }}
           <input v-model="draft.pluralName" class="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-line-strong" />
         </label>
         <label class="col-span-2 text-xs text-ink-faint">
-          Description
+          {{ t('typeSettings.description') }}
           <textarea
             v-model="draft.description"
             rows="2"
             class="mt-1 w-full resize-none rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-line-strong"
-            placeholder="What objects of this type are for, and how you want them written"
+            :placeholder="t('typeSettings.descriptionPlaceholder')"
           />
-          <span class="mt-0.5 block">Agents read it too, and follow it when they write {{ (draft.pluralName || 'objects').toLowerCase() }}.</span>
+          <span class="mt-0.5 block">{{ t('typeSettings.descriptionHint', { plural: (draft.pluralName ? typePluralName(draft) : t('object.objectsFallback')).toLowerCase() }) }}</span>
         </label>
       </div>
     </section>
     <section class="mt-4">
-      <div class="mb-1.5 text-xs text-ink-faint">Color</div>
+      <div class="mb-1.5 text-xs text-ink-faint">{{ t('object.color') }}</div>
       <ColorPicker :color="draft.color" @pick="setColor" />
     </section>
     <section class="mt-4">
       <label class="flex items-center gap-2 text-sm">
         <input type="checkbox" class="accent-[var(--color-accent)]" :checked="draft.openIn === 'pane'" @change="setOpenIn(($event.target as HTMLInputElement).checked)" />
-        Open in side pane
+        {{ t('typeSettings.openInPane') }}
       </label>
-      <p class="mt-0.5 pl-6 text-xs text-ink-faint">A click on a {{ (draft.name || 'object').toLowerCase() }} in a list, table, board or query opens it next to the page. A view can choose otherwise.</p>
+      <p class="mt-0.5 pl-6 text-xs text-ink-faint">{{ t('typeSettings.openInPaneHint', { type: (draft.name ? typeName(draft) : t('object.objectFallback')).toLowerCase() }) }}</p>
     </section>
 
     <section class="mt-4">
-      <div class="mb-1 text-xs text-ink-faint">Rules</div>
-      <p class="mb-2 text-xs text-ink-faint">What every {{ (draft.name || 'object').toLowerCase() }} must have; properties are made required in their own settings below. Agents and API scripts can't save one without it; here you see a warning instead.</p>
+      <div class="mb-1 text-xs text-ink-faint">{{ t('typeSettings.rules') }}</div>
+      <p class="mb-2 text-xs text-ink-faint">{{ t('typeSettings.rulesHint', { type: (draft.name ? typeName(draft) : t('object.objectFallback')).toLowerCase() }) }}</p>
       <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
         <label class="flex items-center gap-2">
           <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!!draft.rules?.cover" @change="setRules((r) => (r.cover = ($event.target as HTMLInputElement).checked))" />
-          A cover
+          {{ t('typeSettings.ruleCover') }}
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!!draft.rules?.tags" @change="setRules((r) => (r.tags = ($event.target as HTMLInputElement).checked))" />
-          At least one tag
+          {{ t('typeSettings.ruleTags') }}
         </label>
       </div>
     </section>
@@ -276,17 +278,17 @@ async function leave(path: string) {
     <!-- Properties -->
     <section class="mt-6">
       <div class="mb-2 flex items-baseline gap-2">
-        <h3 class="text-sm font-semibold">Properties</h3>
-        <span class="text-xs text-ink-faint">Title, tags and icon are always there.</span>
+        <h3 class="text-sm font-semibold">{{ t('typeSettings.properties') }}</h3>
+        <span class="text-xs text-ink-faint">{{ t('typeSettings.propertiesHint') }}</span>
       </div>
       <div class="divide-y divide-line rounded-xl border border-line">
         <div v-for="(def, index) in draft.properties" :key="def.id">
           <div class="flex items-center gap-2 px-2 py-1.5">
             <div class="flex flex-col">
-              <button class="text-ink-faint hover:text-ink disabled:opacity-30" :disabled="index === 0" title="Move up" @click="move(index, -1)">
+              <button class="text-ink-faint hover:text-ink disabled:opacity-30" :disabled="index === 0" :title="t('nav.moveUp')" @click="move(index, -1)">
                 <AppIcon fallback="ph:caret-up" :size="12" />
               </button>
-              <button class="text-ink-faint hover:text-ink disabled:opacity-30" :disabled="index === draft.properties.length - 1" title="Move down" @click="move(index, 1)">
+              <button class="text-ink-faint hover:text-ink disabled:opacity-30" :disabled="index === draft.properties.length - 1" :title="t('nav.moveDown')" @click="move(index, 1)">
                 <AppIcon fallback="ph:caret-down" :size="12" />
               </button>
             </div>
@@ -296,7 +298,7 @@ async function leave(path: string) {
             <button
               class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink"
               :class="expanded === def.id ? 'bg-hover text-ink' : ''"
-              title="Options"
+              :title="t('typeSettings.options')"
               @click="expanded = expanded === def.id ? null : def.id"
             >
               <AppIcon fallback="ph:sliders-horizontal" />
@@ -304,7 +306,7 @@ async function leave(path: string) {
             <button
               class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600 disabled:opacity-30 disabled:hover:text-ink-faint"
               :disabled="def.kind === 'rich-text' && richTextCount <= 1"
-              :title="def.kind === 'rich-text' && richTextCount <= 1 ? 'A type keeps at least one text block' : 'Delete property'"
+              :title="def.kind === 'rich-text' && richTextCount <= 1 ? t('typeSettings.keepOneTextBlock') : t('typeSettings.deletePropConfirm')"
               @click="remove(def)"
             >
               <AppIcon fallback="ph:trash" />
@@ -315,22 +317,22 @@ async function leave(path: string) {
           <div v-if="expanded === def.id" class="space-y-3 bg-raised px-4 py-3 text-sm">
             <label class="flex items-center gap-2">
               <input v-model="def.hideWhenEmpty" type="checkbox" class="accent-[var(--color-accent)]" />
-              Hide on the object page when empty
+              {{ t('typeSettings.hideWhenEmpty') }}
             </label>
             <label v-if="def.kind !== 'formula'" class="flex items-center gap-2">
               <input :checked="!!def.required" type="checkbox" class="accent-[var(--color-accent)]" @change="($event.target as HTMLInputElement).checked ? (def.required = true) : delete def.required" />
-              Required
-              <span class="text-xs text-ink-faint">agents and API scripts can't save {{ (draft.pluralName || 'objects').toLowerCase() }} without it; the app warns</span>
+              {{ t('typeSettings.required') }}
+              <span class="text-xs text-ink-faint">{{ t('typeSettings.requiredHint', { plural: (draft.pluralName ? typePluralName(draft) : t('object.objectsFallback')).toLowerCase() }) }}</span>
             </label>
             <label v-if="def.kind === 'date'" class="flex items-center gap-2">
               <input v-model="def.withTime" type="checkbox" class="accent-[var(--color-accent)]" />
-              Include time
+              {{ t('typeSettings.includeTime') }}
             </label>
 
             <template v-if="def.kind === 'select'">
               <label class="flex items-center gap-2">
                 <input v-model="def.multiple" type="checkbox" class="accent-[var(--color-accent)]" />
-                Allow several options
+                {{ t('typeSettings.allowSeveralOptions') }}
               </label>
               <div class="space-y-1">
                 <div v-for="(option, i) in def.options" :key="option.id" class="flex items-center gap-2">
@@ -341,23 +343,23 @@ async function leave(path: string) {
                   <button
                     class="h-5 w-5 shrink-0 rounded-full"
                     :class="swatchClasses[option.color ?? 'gray']"
-                    title="Color"
+                    :title="t('object.color')"
                     @click="colorFor = { option, anchor: $event.currentTarget as HTMLElement }"
                   />
                   <input v-model="option.label" class="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 outline-none focus:border-line-strong" />
-                  <select v-model="option.status" class="rounded-md border border-line bg-surface px-1.5 py-1 text-xs text-ink-soft" title="Status meaning (used by boards and tasks)">
-                    <option :value="undefined">No status</option>
-                    <option value="todo">To do</option>
-                    <option value="doing">In progress</option>
-                    <option value="done">Done</option>
+                  <select v-model="option.status" class="rounded-md border border-line bg-surface px-1.5 py-1 text-xs text-ink-soft" :title="t('typeSettings.statusMeaningTitle')">
+                    <option :value="undefined">{{ t('typeSettings.noStatus') }}</option>
+                    <option value="todo">{{ t('builtin.opt.status.todo') }}</option>
+                    <option value="doing">{{ t('builtin.opt.status.doing') }}</option>
+                    <option value="done">{{ t('builtin.opt.status.done') }}</option>
                   </select>
-                  <button class="text-ink-faint hover:text-red-600" title="Delete option" @click="def.options.splice(i, 1)">
+                  <button class="text-ink-faint hover:text-red-600" :title="t('typeSettings.deleteOption')" @click="def.options.splice(i, 1)">
                     <AppIcon fallback="ph:x" :size="14" />
                   </button>
                 </div>
                 <input
                   class="mt-1 w-full rounded-md border border-dashed border-line bg-transparent px-2 py-1 outline-none placeholder:text-ink-faint focus:border-line-strong"
-                  placeholder="Add an option and press Enter"
+                  :placeholder="t('typeSettings.addOptionPlaceholder')"
                   @keydown.enter.prevent="addOption(def, ($event.target as HTMLInputElement).value), (($event.target as HTMLInputElement).value = '')"
                 />
               </div>
@@ -365,7 +367,7 @@ async function leave(path: string) {
 
             <label v-if="def.kind === 'person'" class="flex items-center gap-2">
               <input v-model="def.multiple" type="checkbox" class="accent-[var(--color-accent)]" />
-              Allow several people
+              {{ t('typeSettings.allowSeveralPeople') }}
             </label>
 
             <template v-if="def.kind === 'formula'">
@@ -380,14 +382,14 @@ async function leave(path: string) {
                   @input="setFormula(def, ($event.target as HTMLTextAreaElement).value)"
                 />
                 <p v-if="formulaProblem(def)" class="mt-1 text-xs text-red-600">{{ formulaProblem(def) }}</p>
-                <p v-else-if="def.expression.trim() && formulaGives(def)" class="mt-1 text-xs text-ink-faint">Gives {{ formulaGives(def) }}.</p>
+                <p v-else-if="def.expression.trim() && formulaGives(def)" class="mt-1 text-xs text-ink-faint">{{ t('typeSettings.formulaGives', { kind: formulaGives(def)! }) }}</p>
                 <p v-else-if="!def.expression.trim()" class="mt-1 text-xs text-ink-faint">
-                  Fields go in braces, a related object's field after a dot: <code>{Author.Country}</code>. Text in quotes; <code>+ - * / %</code>,
+                  {{ t('typeSettings.formulaHelpBefore') }} <code>{Author.Country}</code>. {{ t('typeSettings.formulaHelpMiddle') }} <code>+ - * / %</code>,
                   <code>= != &lt; &gt;</code>, <code>and or not</code>.
                 </p>
               </div>
               <div>
-                <div class="mb-1 text-xs text-ink-faint">Insert a field</div>
+                <div class="mb-1 text-xs text-ink-faint">{{ t('typeSettings.insertField') }}</div>
                 <div class="flex flex-wrap gap-1">
                   <button
                     v-for="name in formulaFields(def)"
@@ -401,58 +403,58 @@ async function leave(path: string) {
                 </div>
               </div>
               <details class="text-xs">
-                <summary class="cursor-pointer text-ink-faint hover:text-ink">Functions</summary>
+                <summary class="cursor-pointer text-ink-faint hover:text-ink">{{ t('typeSettings.functions') }}</summary>
                 <dl class="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                   <template v-for="fn in FORMULA_FUNCTIONS" :key="fn.name">
                     <dt class="font-mono">{{ fn.usage }}</dt>
                     <dd class="text-ink-soft">{{ fn.description }}</dd>
                   </template>
                 </dl>
-                <p class="mt-1.5 text-ink-faint">Dates: <code>{Due} - today()</code> gives days, <code>{Start} + 7</code> a week later.</p>
+                <p class="mt-1.5 text-ink-faint">{{ t('typeSettings.formulaDatesBefore') }} <code>{Due} - today()</code> {{ t('typeSettings.formulaDatesMiddle') }} <code>{Start} + 7</code> {{ t('typeSettings.formulaDatesAfter') }}</p>
               </details>
             </template>
 
             <template v-if="def.kind === 'relation'">
               <label class="flex items-center gap-2">
                 <input v-model="def.multiple" type="checkbox" class="accent-[var(--color-accent)]" />
-                Allow several objects
+                {{ t('typeSettings.allowSeveralObjects') }}
               </label>
               <label class="block">
-                <span class="mb-1.5 block text-xs text-ink-faint">Name on the other side</span>
+                <span class="mb-1.5 block text-xs text-ink-faint">{{ t('typeSettings.reverseName') }}</span>
                 <input
                   :value="def.reverseName ?? ''"
                   class="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint focus:border-line-strong"
                   :placeholder="draft.pluralName || draft.name"
                   @input="setReverseName(def, ($event.target as HTMLInputElement).value)"
                 />
-                <span class="mt-1 block text-xs text-ink-faint">What the objects it links to show this as, e.g. “Wrote” for a book's Author.</span>
+                <span class="mt-1 block text-xs text-ink-faint">{{ t('typeSettings.reverseNameHint') }}</span>
               </label>
               <div>
-                <div class="mb-1.5 text-xs text-ink-faint">Can link to</div>
+                <div class="mb-1.5 text-xs text-ink-faint">{{ t('typeSettings.canLinkTo') }}</div>
                 <div class="mb-2 inline-flex rounded-lg bg-hover p-0.5 text-sm">
                   <button
                     class="rounded-md px-3 py-1"
                     :class="!specific.has(def.id) ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft'"
                     @click="setAnyType(def)"
                   >
-                    Any type
+                    {{ t('typeSettings.anyType') }}
                   </button>
                   <button
                     class="rounded-md px-3 py-1"
                     :class="specific.has(def.id) ? 'bg-surface font-medium shadow-sm' : 'text-ink-soft'"
                     @click="specific.add(def.id)"
                   >
-                    Specific types
+                    {{ t('typeSettings.specificTypes') }}
                   </button>
                 </div>
                 <p v-if="specific.has(def.id) && def.targetTypeIds.length === 0" class="mb-1.5 text-xs text-amber-600">
-                  Pick at least one type; with none picked it links to any type.
+                  {{ t('typeSettings.pickAtLeastOne') }}
                 </p>
                 <div v-if="specific.has(def.id)" class="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                  <label v-for="t in otherTypes" :key="t.id" class="flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-hover">
-                    <input type="checkbox" class="accent-[var(--color-accent)]" :checked="def.targetTypeIds.includes(t.id)" @change="toggleTarget(def, t.id)" />
-                    <AppIcon :icon="t.icon" fallback="ph:cube" :size="14" :class="t.color ? iconTextClasses[t.color] : 'text-ink-soft'" />
-                    <span class="truncate">{{ t.name }}</span>
+                  <label v-for="targetType in otherTypes" :key="targetType.id" class="flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-hover">
+                    <input type="checkbox" class="accent-[var(--color-accent)]" :checked="def.targetTypeIds.includes(targetType.id)" @change="toggleTarget(def, targetType.id)" />
+                    <AppIcon :icon="targetType.icon" fallback="ph:cube" :size="14" :class="targetType.color ? iconTextClasses[targetType.color] : 'text-ink-soft'" />
+                    <span class="truncate">{{ typeName(targetType) }}</span>
                   </label>
                 </div>
               </div>
@@ -465,12 +467,12 @@ async function leave(path: string) {
         <input
           v-model="newName"
           class="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint focus:border-line-strong"
-          placeholder="New property name"
+          :placeholder="t('typeSettings.newPropertyPlaceholder')"
         />
         <select v-model="newKind" class="rounded-lg border border-line bg-surface px-2 text-sm">
           <option v-for="k in PROPERTY_KINDS" :key="k.kind" :value="k.kind">{{ k.label }}</option>
         </select>
-        <button class="rounded-lg border border-line px-3 text-sm hover:bg-hover disabled:opacity-40" :disabled="!newName.trim()">Add</button>
+        <button class="rounded-lg border border-line px-3 text-sm hover:bg-hover disabled:opacity-40" :disabled="!newName.trim()">{{ t('common.add') }}</button>
       </form>
     </section>
 
@@ -482,10 +484,10 @@ async function leave(path: string) {
 
     <template #footer>
       <span v-if="error" class="text-sm text-red-600">{{ error }}</span>
-      <span v-else-if="dirty" class="text-xs text-ink-faint">Unsaved changes</span>
-      <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="close">Cancel</button>
+      <span v-else-if="dirty" class="text-xs text-ink-faint">{{ t('typeSettings.unsavedChanges') }}</span>
+      <button class="ml-auto rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="close">{{ t('common.cancel') }}</button>
       <button class="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-surface disabled:opacity-40" :disabled="!dirty || saving" @click="save">
-        {{ saving ? 'Saving…' : 'Save' }}
+        {{ saving ? t('object.saving') : t('common.save') }}
       </button>
     </template>
   </ModalDialog>

@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import type { Id, QueryDef } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { primeFromObject, summaryOf, typesById } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import QueryEditor from './QueryEditor.vue'
@@ -50,7 +51,7 @@ onBeforeUnmount(() => void save())
         :class="editing ? 'bg-hover text-ink' : 'text-ink-faint hover:bg-hover hover:text-ink'"
         @click="editing = !editing"
       >
-        <AppIcon fallback="ph:sliders-horizontal" :size="13" /> {{ editing ? 'Done' : 'Edit query' }}
+        <AppIcon fallback="ph:sliders-horizontal" :size="13" /> {{ editing ? t('query.done') : t('query.editQuery') }}
       </button>
     </header>
     <div v-if="editing" class="border-t border-line px-3 py-3">

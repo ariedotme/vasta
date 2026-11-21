@@ -6,6 +6,7 @@ import { Extension, type Editor } from '@tiptap/core'
 import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import { api, MAX_UPLOAD_BYTES } from '../lib/api.ts'
+import { t } from '../lib/i18n.ts'
 import { lastError, primeFromObject, refreshCounts, typesById, workspace } from '../lib/state.ts'
 
 type Meta = { add: { id: string; pos: number; file: File; preview?: string } } | { remove: string }
@@ -23,7 +24,7 @@ function placeholder(file: File, preview?: string): HTMLElement {
     box.appendChild(img)
   }
   const label = document.createElement('span')
-  label.textContent = `Uploading ${file.name || 'file'}…`
+  label.textContent = t('editor.upload.uploading', { name: file.name || t('editor.upload.fileFallback') })
   box.appendChild(label)
   return box
 }
@@ -40,7 +41,7 @@ export function uploadFiles(view: EditorView, files: File[], pos: number) {
   if (!spaceId) return
   for (const file of files) {
     if (file.size > MAX_UPLOAD_BYTES) {
-      lastError.value = `${file.name} is larger than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB`
+      lastError.value = t('editor.upload.tooLarge', { name: file.name, mb: MAX_UPLOAD_BYTES / 1024 / 1024 })
       continue
     }
     const id = Math.random().toString(36).slice(2)
@@ -63,7 +64,7 @@ export function uploadFiles(view: EditorView, files: File[], pos: number) {
         view.dispatch(tr)
       })
       .catch((error: Error) => {
-        lastError.value = `Could not upload ${file.name}: ${error.message}`
+        lastError.value = t('editor.upload.failed', { name: file.name, error: error.message })
         if (!view.isDestroyed) view.dispatch(view.state.tr.setMeta(key, { remove: id } satisfies Meta))
       })
       .finally(() => preview && setTimeout(() => URL.revokeObjectURL(preview), 5000))

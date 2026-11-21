@@ -2,6 +2,7 @@
 // Pick a Phosphor icon (searchable) or an emoji. Emits undefined to remove the icon.
 import { computed, onMounted, ref } from 'vue'
 import type { Icon } from '@vasta/core'
+import { t } from '../lib/i18n.ts'
 import { loadPhosphor } from '../lib/icons.ts'
 import AppIcon from './AppIcon.vue'
 
@@ -33,7 +34,7 @@ onMounted(() => {
   input.value?.focus()
   loadPhosphor().then(
     (set) => (names.value = Object.keys(set.icons).filter((name) => !WEIGHTS.test(name)).sort()),
-    () => (loadError.value = 'Could not load the icons. Check the connection and open the picker again.')
+    () => (loadError.value = t('picker.iconsError'))
   )
 })
 </script>
@@ -41,9 +42,9 @@ onMounted(() => {
 <template>
   <div class="w-[22rem]">
     <div class="mb-2 flex items-center gap-1 text-sm">
-      <button class="rounded-md px-2.5 py-1" :class="tab === 'icons' ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'" @click="tab = 'icons'">Icons</button>
-      <button class="rounded-md px-2.5 py-1" :class="tab === 'emoji' ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'" @click="tab = 'emoji'">Emoji</button>
-      <button v-if="allowRemove && icon" class="ml-auto rounded-md px-2.5 py-1 text-ink-soft hover:bg-hover" @click="emit('pick', undefined)">Remove</button>
+      <button class="rounded-md px-2.5 py-1" :class="tab === 'icons' ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'" @click="tab = 'icons'">{{ t('picker.icons') }}</button>
+      <button class="rounded-md px-2.5 py-1" :class="tab === 'emoji' ? 'bg-hover font-medium' : 'text-ink-soft hover:bg-hover'" @click="tab = 'emoji'">{{ t('picker.emoji') }}</button>
+      <button v-if="allowRemove && icon" class="ml-auto rounded-md px-2.5 py-1 text-ink-soft hover:bg-hover" @click="emit('pick', undefined)">{{ t('common.remove') }}</button>
     </div>
 
     <template v-if="tab === 'icons'">
@@ -51,7 +52,7 @@ onMounted(() => {
         ref="input"
         v-model="query"
         class="mb-2 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"
-        placeholder="Search icons (book, star, user…)"
+        :placeholder="t('picker.searchIcons')"
       />
       <div class="grid max-h-64 grid-cols-8 gap-0.5 overflow-y-auto">
         <button
@@ -66,8 +67,8 @@ onMounted(() => {
         </button>
       </div>
       <p v-if="loadError" class="py-6 text-center text-sm text-ink-faint">{{ loadError }}</p>
-      <p v-else-if="!names.length" class="py-6 text-center text-sm text-ink-faint">Loading icons…</p>
-      <p v-else-if="!matches.length" class="py-6 text-center text-sm text-ink-faint">No icon matches “{{ query }}”</p>
+      <p v-else-if="!names.length" class="py-6 text-center text-sm text-ink-faint">{{ t('picker.loadingIcons') }}</p>
+      <p v-else-if="!matches.length" class="py-6 text-center text-sm text-ink-faint">{{ t('picker.noIconMatch', { query }) }}</p>
     </template>
 
     <template v-else>
@@ -77,8 +78,8 @@ onMounted(() => {
         </button>
       </div>
       <form class="mt-2 flex gap-1.5" @submit.prevent="custom.trim() && emit('pick', { kind: 'emoji', value: custom.trim() })">
-        <input v-model="custom" class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" placeholder="Paste any emoji (⌃⌘Space)" />
-        <button class="rounded-lg bg-ink px-3 text-sm text-surface disabled:opacity-40" :disabled="!custom.trim()">Use</button>
+        <input v-model="custom" class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint" :placeholder="t('picker.pasteEmoji')" />
+        <button class="rounded-lg bg-ink px-3 text-sm text-surface disabled:opacity-40" :disabled="!custom.trim()">{{ t('common.use') }}</button>
       </form>
     </template>
   </div>

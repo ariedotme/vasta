@@ -35,6 +35,7 @@ import { api } from './api.ts'
 import { dayKey } from './actions.ts'
 import { clone } from './clone.ts'
 import { onChange } from './events.ts'
+import { t, tc } from './i18n.ts'
 import { primeFromObject, primeSummaries, systemType, workspace } from './state.ts'
 
 export const nutritionOn = computed(() => isNutritionOn(workspace.space ?? undefined))
@@ -238,17 +239,18 @@ export async function foodSourcesOf(types: ObjectType[]): Promise<ObjectSummary[
  * panel: "Logs in Lunch: White bread 2 slices, Rice 150 g. New food: Tapioca."
  */
 export function previewFoodLine(text: string, space: Pick<Space, 'name' | 'nutrition'>, sources: ObjectSummary[], today: string): { text: string; problem?: string } {
-  if (!isNutritionOn(space)) return { text: '', problem: `${space.name} does not track food (Settings › Food tracking).` }
+  if (!isNutritionOn(space)) return { text: '', problem: t('nutrition.line.spaceDisabled', { space: space.name }) }
   const lookup = (id: Id) => sources.find((s) => s.id === id)
   const parsed = parseFoodLine(text, { sources, meals: space.nutrition?.meals ?? DEFAULT_MEALS, today, lookup })
-  if (!parsed.items.length) return { text: 'What did you eat? e.g. 2 slices of bread, coffee 200 ml at breakfast' }
-  const when = parsed.day === today ? '' : parsed.day === addDays(today, -1) ? ' yesterday' : ` on ${parsed.day}`
+  if (!parsed.items.length) return { text: t('nutrition.line.prompt') }
+  const when = parsed.day === today ? '' : parsed.day === addDays(today, -1) ? t('nutrition.line.yesterday') : t('nutrition.line.onDay', { day: parsed.day })
   const known = parsed.items.flatMap((i) =>
     i.nutrients ? [`${i.name ? `${i.name} ` : ''}${formatKcal(i.nutrients.kcal)} kcal`] : i.source ? [`${i.source.title}${i.amount ? ` ${i.amount}` : ''}`] : []
   )
   const fresh = parsed.items.filter((i) => !i.source && !i.ambiguous && !i.nutrients).map((i) => i.name)
   const unclear = parsed.items.filter((i) => i.ambiguous).map((i) => `“${i.name}” (${i.ambiguous!.slice(0, 3).map((s) => s.title).join(', ')})`)
-  const parts = [`Logs${when}${parsed.meal ? ` in ${parsed.meal.name}` : ''}: ${[...known, ...fresh].join(', ') || 'nothing yet'}.`]
-  if (fresh.length) parts.push(`New ${fresh.length === 1 ? 'food' : 'foods'}, without nutrition data: ${fresh.join(', ')}.`)
-  return { text: parts.join(' '), ...(unclear.length ? { problem: `Which one? ${unclear.join('; ')}` } : {}) }
+  const meal = parsed.meal ? t('nutrition.line.inMeal', { meal: parsed.meal.name }) : ''
+  const parts = [t('nutrition.line.logs', { when, meal, items: [...known, ...fresh].join(', ') || t('nutrition.line.nothingYet') })]
+  if (fresh.length) parts.push(tc(fresh.length, 'nutrition.line.newFoods.one', 'nutrition.line.newFoods.other', { names: fresh.join(', ') }))
+  return { text: parts.join(' '), ...(unclear.length ? { problem: t('nutrition.line.whichOne', { items: unclear.join('; ') }) } : {}) }
 }

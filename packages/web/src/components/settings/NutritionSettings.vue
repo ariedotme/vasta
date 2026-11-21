@@ -5,6 +5,7 @@ import { newId } from '@vasta/core'
 // usual times. Meals save as soon as they change.
 import { computed, ref, watch } from 'vue'
 import type { Meal } from '@vasta/core'
+import { t } from '../../lib/i18n.ts'
 import { meals, nutritionOn, saveMeals, setNutrition } from '../../lib/nutrition.ts'
 import { workspace } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
@@ -15,7 +16,7 @@ const busy = ref(false)
 const error = ref('')
 const draft = ref<Meal[]>([])
 watch(meals, (value) => (draft.value = value.map((m) => ({ ...m }))), { immediate: true })
-const spaceName = computed(() => workspace.space?.name ?? 'this space')
+const spaceName = computed(() => workspace.space?.name ?? t('settings.thisSpace'))
 
 async function run(change: () => Promise<unknown>) {
   busy.value = true
@@ -38,7 +39,7 @@ function save() {
 }
 
 function add() {
-  draft.value.push({ id: newId().slice(0, 8), name: 'Meal' })
+  draft.value.push({ id: newId().slice(0, 8), name: t('settings.nutrition.defaultMealName') })
   return save()
 }
 
@@ -55,29 +56,29 @@ function move(index: number, delta: number) {
 </script>
 
 <template>
-  <SettingsSection id="nutrition" title="Food tracking">
+  <SettingsSection id="nutrition" :title="t('settings.section.nutrition')">
     <div class="space-y-4">
       <label class="flex items-start gap-2.5 text-sm">
         <input :checked="nutritionOn" type="checkbox" class="mt-0.5 h-4 w-4 accent-[var(--color-accent)]" :disabled="busy" @change="toggle" />
         <span>
-          Track food in {{ spaceName }}
-          <span class="block text-xs text-ink-faint">Each day gets a Food block to log meals against a goal, with Foods, Recipes and Nutrition goals as types. Turning it off hides it and keeps everything.</span>
+          {{ t('settings.nutrition.trackIn', { space: spaceName }) }}
+          <span class="block text-xs text-ink-faint">{{ t('settings.nutrition.trackHint') }}</span>
         </span>
       </label>
 
       <div v-if="nutritionOn">
-        <RouterLink to="/nutrition" class="mb-4 inline-flex items-center gap-1 text-sm text-accent hover:underline">Nutrition: the week, the last days and goals <AppIcon fallback="ph:arrow-right" :size="13" /></RouterLink>
-        <div class="mb-1.5 text-xs text-ink-faint">Meals, in the order of the day. Food logged without one goes to the meal nearest its time.</div>
+        <RouterLink to="/nutrition" class="mb-4 inline-flex items-center gap-1 text-sm text-accent hover:underline">{{ t('settings.nutrition.pageLink') }} <AppIcon fallback="ph:arrow-right" :size="13" /></RouterLink>
+        <div class="mb-1.5 text-xs text-ink-faint">{{ t('settings.nutrition.mealsHint') }}</div>
         <div class="space-y-1.5">
           <div v-for="(meal, index) in draft" :key="meal.id" class="flex items-center gap-2">
-            <input v-model="meal.name" :class="field" class="!mt-0 min-w-0 flex-1" :aria-label="`Meal ${index + 1}`" @change="save" />
-            <input v-model="meal.time" type="time" :class="field" class="!mt-0 !w-36 shrink-0" :aria-label="`${meal.name} usual time`" @change="save" />
-            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink disabled:opacity-30" title="Earlier" :disabled="index === 0" @click="move(index, -1)"><AppIcon fallback="ph:caret-up" :size="14" /></button>
-            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink disabled:opacity-30" title="Later" :disabled="index === draft.length - 1" @click="move(index, 1)"><AppIcon fallback="ph:caret-down" :size="14" /></button>
-            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600 disabled:opacity-30" title="Remove" :disabled="draft.length === 1" @click="remove(index)"><AppIcon fallback="ph:x" :size="14" /></button>
+            <input v-model="meal.name" :class="field" class="!mt-0 min-w-0 flex-1" :aria-label="t('settings.nutrition.mealAria', { index: index + 1 })" @change="save" />
+            <input v-model="meal.time" type="time" :class="field" class="!mt-0 !w-36 shrink-0" :aria-label="t('settings.nutrition.usualTimeAria', { name: meal.name })" @change="save" />
+            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink disabled:opacity-30" :title="t('settings.nutrition.earlier')" :disabled="index === 0" @click="move(index, -1)"><AppIcon fallback="ph:caret-up" :size="14" /></button>
+            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink disabled:opacity-30" :title="t('settings.nutrition.later')" :disabled="index === draft.length - 1" @click="move(index, 1)"><AppIcon fallback="ph:caret-down" :size="14" /></button>
+            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600 disabled:opacity-30" :title="t('common.remove')" :disabled="draft.length === 1" @click="remove(index)"><AppIcon fallback="ph:x" :size="14" /></button>
           </div>
         </div>
-        <button :class="secondary" class="mt-2 flex items-center gap-1" @click="add"><AppIcon fallback="ph:plus" :size="13" /> Add meal</button>
+        <button :class="secondary" class="mt-2 flex items-center gap-1" @click="add"><AppIcon fallback="ph:plus" :size="13" /> {{ t('settings.nutrition.addMeal') }}</button>
       </div>
       <p v-if="error" :class="errorText">{{ error }}</p>
     </div>

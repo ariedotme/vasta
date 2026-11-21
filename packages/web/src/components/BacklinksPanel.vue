@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import type { Backlink, Id } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { displayTitle, formatRelative } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { primeSummaries, typesById } from '../lib/state.ts'
 import { objectColor } from '../lib/tags.ts'
 import AppIcon from './AppIcon.vue'
@@ -24,12 +25,12 @@ watch(
   { immediate: true }
 )
 
-const LABELS: Record<Backlink['kind'], string> = {
-  mention: 'Mentioned in',
-  embed: 'Embedded in',
-  relation: 'Related',
-  tag: 'Tagged',
-  collection: 'In this collection',
+const LABEL_KEYS: Record<Backlink['kind'], 'backlinks.mention' | 'backlinks.embed' | 'backlinks.relation' | 'backlinks.tag' | 'backlinks.collection'> = {
+  mention: 'backlinks.mention',
+  embed: 'backlinks.embed',
+  relation: 'backlinks.relation',
+  tag: 'backlinks.tag',
+  collection: 'backlinks.collection',
 }
 
 const groups = computed(() => {
@@ -39,14 +40,14 @@ const groups = computed(() => {
     if (!list.some((l) => l.object.id === link.object.id)) list.push(link)
     byKind.set(link.kind, list)
   }
-  return [...byKind].map(([kind, items]) => ({ label: LABELS[kind as Backlink['kind']] ?? kind, items }))
+  return [...byKind].map(([kind, items]) => ({ label: LABEL_KEYS[kind as Backlink['kind']] ? t(LABEL_KEYS[kind as Backlink['kind']]) : kind, items }))
 })
 </script>
 
 <template>
   <section v-if="links.length" class="mt-14 border-t border-line pt-6">
     <h2 class="mb-3 flex items-center gap-2 text-sm font-semibold text-ink-soft">
-      <AppIcon fallback="ph:arrow-bend-down-left" /> {{ title ?? 'Backlinks' }}
+      <AppIcon fallback="ph:arrow-bend-down-left" /> {{ title ?? t('backlinks.title') }}
       <span class="font-normal text-ink-faint">{{ links.length }}</span>
     </h2>
     <div v-for="group in groups" :key="group.label" class="mb-4">

@@ -7,6 +7,7 @@ import { SPRINT_DATES_PROPERTY_ID, SPRINT_PROPERTY_ID, builtinTypeId, daysBetwee
 import { createObject, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
+import { t, tc, typePluralName } from '../lib/i18n.ts'
 import { confirmDialog } from '../lib/overlays.ts'
 import { runServerQuery } from '../lib/query.ts'
 import { sprintSettings, sprints } from '../lib/sprints.ts'
@@ -17,7 +18,7 @@ const props = defineProps<{ sprint: ObjectRecord }>()
 
 const taskType = computed(() => typesById.value.get(builtinTypeId(props.sprint.spaceId, 'task')))
 const statusDef = computed(() => taskType.value?.properties.find((p): p is SelectPropertyDef => p.id === 'status' && p.kind === 'select'))
-const word = computed(() => sprintSettings.value?.name ?? 'Sprint')
+const word = computed(() => sprintSettings.value?.name ?? t('builtin.type.sprint.one'))
 
 const tasks = ref<ObjectSummary[]>([])
 async function load() {
@@ -51,23 +52,23 @@ const share = (n: number) => (tasks.value.length ? `${(n / tasks.value.length) *
 const days = computed(() => sprintDays(props.sprint))
 const when = computed(() => {
   const span = days.value
-  if (!span) return `Give this ${word.value.toLowerCase()} its dates to see the days left.`
+  if (!span) return t('sprint.giveDates', { word: word.value.toLowerCase() })
   const today = dayKey()
-  if (today < span.start) return `Starts in ${daysBetween(today, span.start)} days`
-  if (today > span.end) return `Ended ${daysBetween(span.end, today)} days ago`
+  if (today < span.start) return tc(daysBetween(today, span.start), 'sprint.startsIn.one', 'sprint.startsIn.other')
+  if (today > span.end) return tc(daysBetween(span.end, today), 'sprint.endedAgo.one', 'sprint.endedAgo.other')
   const left = daysBetween(today, span.end)
-  return left === 0 ? 'Last day' : `${left + 1} days left, today included`
+  return left === 0 ? t('sprint.lastDay') : t('sprint.daysLeft', { count: left + 1 })
 })
 const next = computed(() => nextSprint(sprints.value, props.sprint))
 
 async function finish() {
   const target = next.value
   const count = unfinished.value.length
-  const where = target ? `to “${target.title || word.value}”` : 'back to the backlog'
+  const where = target ? t('sprint.toSprint', { name: target.title || word.value }) : t('sprint.toBacklog')
   const ok = await confirmDialog({
-    title: `Finish “${props.sprint.title || word.value}”?`,
-    message: count ? `${count} unfinished ${count === 1 ? 'task moves' : 'tasks move'} ${where}. Done tasks stay in it.` : 'Every task in it is done.',
-    confirmLabel: count ? `Move ${count} ${count === 1 ? 'task' : 'tasks'}` : 'OK',
+    title: t('sprint.finishTitle', { name: props.sprint.title || word.value }),
+    message: count ? tc(count, 'sprint.finishMessage.one', 'sprint.finishMessage.other', { where }) : t('sprint.allDone'),
+    confirmLabel: count ? tc(count, 'sprint.moveConfirm.one', 'sprint.moveConfirm.other') : t('common.ok'),
   })
   if (!ok || !count) return
   try {
@@ -77,7 +78,7 @@ async function finish() {
       else delete object.props[SPRINT_PROPERTY_ID]
       primeFromObject(await api.saveObject(object))
     }
-    notice.value = { message: `Moved ${count} ${count === 1 ? 'task' : 'tasks'} ${where}.` }
+    notice.value = { message: tc(count, 'sprint.movedNotice.one', 'sprint.movedNotice.other', { where }) }
     await load()
   } catch (error) {
     lastError.value = (error as Error).message
@@ -98,22 +99,22 @@ async function planNext() {
 <template>
   <section class="mt-6 rounded-xl border border-line p-4">
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-      <span class="font-medium">{{ tasks.length }} {{ tasks.length === 1 ? 'task' : 'tasks' }}</span>
-      <span class="text-ink-soft">{{ counts.done }} done · {{ counts.doing }} in progress · {{ counts.todo }} to do</span>
+      <span class="font-medium">{{ tc(tasks.length, 'sprint.taskCount.one', 'sprint.taskCount.other') }}</span>
+      <span class="text-ink-soft">{{ t('sprint.statusBreakdown', { done: counts.done, doing: counts.doing, todo: counts.todo }) }}</span>
       <span class="ml-auto text-ink-faint">{{ when }}</span>
     </div>
-    <div class="mt-3 flex h-2 overflow-hidden rounded-full bg-hover" role="img" :aria-label="`${counts.done} of ${tasks.length} done`">
+    <div class="mt-3 flex h-2 overflow-hidden rounded-full bg-hover" role="img" :aria-label="t('sprint.progressAria', { done: counts.done, total: tasks.length })">
       <div class="bg-green-500" :style="{ width: share(counts.done) }" />
       <div class="bg-blue-500" :style="{ width: share(counts.doing) }" />
     </div>
     <div class="mt-3 flex flex-wrap gap-2">
       <button class="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-hover" @click="finish">
-        <AppIcon fallback="ph:flag-checkered" :size="14" /> Finish {{ word.toLowerCase() }}…
+        <AppIcon fallback="ph:flag-checkered" :size="14" /> {{ t('sprint.finishButton', { word: word.toLowerCase() }) }}
       </button>
       <button v-if="!next" class="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-hover" @click="planNext">
-        <AppIcon fallback="ph:plus" :size="14" /> Next {{ word.toLowerCase() }}
+        <AppIcon fallback="ph:plus" :size="14" /> {{ t('sprint.nextButton', { word: word.toLowerCase() }) }}
       </button>
-      <RouterLink v-if="taskType" :to="`/t/${taskType.id}`" class="ml-auto self-center text-sm text-accent hover:underline">Tasks</RouterLink>
+      <RouterLink v-if="taskType" :to="`/t/${taskType.id}`" class="ml-auto self-center text-sm text-accent hover:underline">{{ typePluralName(taskType) }}</RouterLink>
     </div>
   </section>
 </template>

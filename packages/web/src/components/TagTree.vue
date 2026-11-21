@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue'
 import type { Id, ObjectSummary } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { chip } from '../lib/colors.ts'
+import { t } from '../lib/i18n.ts'
 import { promptDialog } from '../lib/overlays.ts'
 import { lastError, systemType } from '../lib/state.ts'
 import { tagColor } from '../lib/tags.ts'
@@ -85,7 +86,7 @@ const rows = computed(() => {
 
 async function newSubTag(parent: ObjectSummary) {
   const tagType = systemType('tag')
-  const title = await promptDialog({ title: `New tag under ${parent.title}`, placeholder: 'breakfast', confirmLabel: 'Create' })
+  const title = await promptDialog({ title: t('tags.newUnder', { name: parent.title }), placeholder: t('tags.placeholder'), confirmLabel: t('common.create') })
   if (!title?.trim() || !tagType) return
   try {
     await createObject(tagType.id, { title: title.trim(), parentId: parent.id }, false)
@@ -108,7 +109,7 @@ async function newSubTag(parent: ObjectSummary) {
       <button
         class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-faint hover:bg-surface hover:text-ink"
         :class="row.hasChildren ? '' : 'invisible'"
-        :title="folded.has(row.tag.id) ? 'Unfold' : 'Fold'"
+        :title="folded.has(row.tag.id) ? t('tags.unfold') : t('tags.fold')"
         :aria-expanded="!folded.has(row.tag.id)"
         @click="toggle(row.tag.id)"
       >
@@ -116,16 +117,16 @@ async function newSubTag(parent: ObjectSummary) {
       </button>
       <AppIcon :icon="row.tag.icon" :fallback="row.hasChildren ? (folded.has(row.tag.id) && !shownIds ? 'ph:folder-simple' : 'ph:folder-open') : 'ph:hash'" :size="15" class="shrink-0 text-ink-faint" />
       <ObjectLink :id="row.tag.id" class="min-w-0 truncate rounded-md px-2 py-0.5 text-sm font-medium hover:brightness-95" :class="chip(tagColor(row.tag))">
-        {{ row.tag.title || 'Untitled' }}
+        {{ row.tag.title || t('common.untitled') }}
       </ObjectLink>
       <span v-if="row.hasChildren" class="text-xs text-ink-faint">{{ row.count }}</span>
       <button
         class="ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-ink-faint opacity-0 hover:bg-surface hover:text-ink group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
         @click="newSubTag(row.tag)"
       >
-        <AppIcon fallback="ph:plus" :size="12" /> Sub-tag
+        <AppIcon fallback="ph:plus" :size="12" /> {{ t('tags.subTag') }}
       </button>
     </div>
-    <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">No tags match the filter.</p>
+    <p v-if="!rows.length" class="py-10 text-center text-sm text-ink-faint">{{ t('tags.noMatch') }}</p>
   </div>
 </template>

@@ -5,6 +5,7 @@
 // after it the foods and recipes are offered.
 import { defaultTemplate, describeValue, findProperty, findTemplate, foodCommand, foodPortions, isCapturable, leadingTemplate, leadingType, lineAnswers, parseCaptureLine, parseDay, readQuickEntry, templateAsks, typeTemplates, type Icon, type Id, type ObjectRecord, type ObjectSummary, type ObjectType, type Person, type PropertyDef } from '@vasta/core'
 import { formatLongDay } from './format.ts'
+import { t, typeName } from './i18n.ts'
 
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim()
 
@@ -112,12 +113,12 @@ export async function complete(text: string, cursor: number, source: CompletionS
     const rest = text.slice(end).replace(/^[ \t]+/, '')
     const wanted = fold(named[2]!)
     return typeTemplates(source.templates?.() ?? [], namedType.type.id)
-      .filter((t) => fold(t.template!.name).startsWith(wanted))
+      .filter((item) => fold(item.template!.name).startsWith(wanted))
       .slice(0, LIMIT)
-      .map((t) => {
-        const name = /\s/.test(t.template!.name) ? `"${t.template!.name}"` : t.template!.name
+      .map((item) => {
+        const name = /\s/.test(item.template!.name) ? `"${item.template!.name}"` : item.template!.name
         const head = `/${named[1]}:${name} `
-        return { label: t.template!.name, detail: `${namedType.type.name} template`, icon: { kind: 'icon', value: 'ph:copy-simple' } as Icon, text: head + rest, cursor: head.length }
+        return { label: item.template!.name, detail: t('typedLine.templateDetail', { type: typeName(namedType.type) }), icon: { kind: 'icon', value: 'ph:copy-simple' } as Icon, text: head + rest, cursor: head.length }
       })
   }
   if (/^\/\S*$/.test(before)) {
@@ -126,7 +127,7 @@ export async function complete(text: string, cursor: number, source: CompletionS
     const word = fold(text.slice(1, end))
     const commands = tracksFood(source.types) ? FOOD_COMMANDS.filter((c) => c.startsWith(word)) : []
     return [
-      ...commands.map((command) => ({ label: `/${command}`, detail: 'Log food', icon: FOOD_ICON, text: `/${command} ${rest}`, cursor: command.length + 2 })),
+      ...commands.map((command) => ({ label: `/${command}`, detail: t('typedLine.logFood'), icon: FOOD_ICON, text: `/${command} ${rest}`, cursor: command.length + 2 })),
       ...typeSuggestions(source.types, text.slice(0, end)).map((type) => {
         const head = `/${type.name} `
         return { label: type.name, ...(type.icon ? { icon: type.icon } : {}), text: head + rest, cursor: head.length }
@@ -183,7 +184,7 @@ export async function complete(text: string, cursor: number, source: CompletionS
       if (noteDay && (!wanted || fold(formatLongDay(note.date!.start)).includes(wanted) || noteDay.includes(partial))) days.add(noteDay)
       if (days.size >= LIMIT) break
     }
-    for (const d of days) items.push(pick(formatLongDay(`${d}T00:00:00.000Z`), d, { detail: daily.name, ...(daily.icon ? { icon: daily.icon } : {}) }))
+    for (const d of days) items.push(pick(formatLongDay(`${d}T00:00:00.000Z`), d, { detail: typeName(daily), ...(daily.icon ? { icon: daily.icon } : {}) }))
   }
   const others = def.targetTypeIds.filter((id) => id !== daily?.id)
   if (!daily || others.length) {
@@ -193,7 +194,7 @@ export async function complete(text: string, cursor: number, source: CompletionS
       if (!object.title.trim() || object.typeId === daily?.id || taken) continue
       const type = typesById.get(object.typeId)
       const icon = object.icon ?? type?.icon
-      items.push(pick(object.title, object.title, { ...(type ? { detail: type.name } : {}), ...(icon ? { icon } : {}) }))
+      items.push(pick(object.title, object.title, { ...(type ? { detail: typeName(type) } : {}), ...(icon ? { icon } : {}) }))
       if (items.length >= LIMIT) break
     }
   }
@@ -235,7 +236,7 @@ async function completeFood(text: string, cursor: number, source: CompletionSour
     const type = types.get(o.typeId)
     return {
       label: o.title,
-      detail: portion ? `1 ${portion.name} = ${portion.grams} g` : (type?.name ?? ''),
+      detail: portion ? `1 ${portion.name} = ${portion.grams} g` : (type ? typeName(type) : ''),
       icon: o.icon ?? type?.icon ?? FOOD_ICON,
       text: text.slice(0, nameStart) + written + text.slice(end).replace(/^[ \t]+/, ''),
       cursor: nameStart + written.length,

@@ -9,6 +9,7 @@ import BoardEmbed from '../components/whiteboard/BoardEmbed.vue'
 import { chip, iconTextClasses } from '../lib/colors.ts'
 import { embedFor } from '../lib/embeds.ts'
 import { displayTitle } from '../lib/format.ts'
+import { typeName } from '../lib/i18n.ts'
 import { imageOf } from '../lib/media.ts'
 import { PAGE_OBJECT_ID } from '../lib/page.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
@@ -96,7 +97,7 @@ const player = computed(() => (display.value === 'embed' && type.value?.system =
       />
       <div class="min-w-0 flex-1 p-3">
         <span class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium" :class="chip(type?.color)">
-          <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type?.name }}
+          <AppIcon :icon="type?.icon" fallback="ph:cube" :size="12" />{{ type ? typeName(type) : '' }}
         </span>
         <div class="mt-1.5 truncate font-semibold">{{ title }}</div>
         <p v-if="summary?.preview" class="mt-1 line-clamp-3 text-sm text-ink-soft">{{ summary.preview }}</p>

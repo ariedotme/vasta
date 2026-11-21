@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ARTICLE_PROPERTY_ID, type ObjectRecord } from '@vasta/core'
 import { api, mediaUrl } from '../lib/api.ts'
 import { embedFor } from '../lib/embeds.ts'
+import { t, tc } from '../lib/i18n.ts'
 import { promptDialog } from '../lib/overlays.ts'
 import { notice } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
@@ -53,22 +54,25 @@ async function run(label: string, call: () => Promise<ObjectRecord>) {
 
 function saveAddress() {
   const url = address.value.trim()
-  if (url) void run('Loading the page…', () => api.setWeblinkUrl(props.object.id, url)).then(() => !error.value && (address.value = ''))
+  if (url) void run(t('weblink.loadingPage'), () => api.setWeblinkUrl(props.object.id, url)).then(() => !error.value && (address.value = ''))
 }
 
 async function changeAddress() {
-  const url = await promptDialog({ title: 'Change address', value: media.value.url ?? '', placeholder: 'https://…', confirmLabel: 'Save' })
-  if (url && url !== media.value.url) await run('Loading the page…', () => api.setWeblinkUrl(props.object.id, url))
+  const url = await promptDialog({ title: t('weblink.changeAddress'), value: media.value.url ?? '', placeholder: 'https://…', confirmLabel: t('common.save') })
+  if (url && url !== media.value.url) await run(t('weblink.loadingPage'), () => api.setWeblinkUrl(props.object.id, url))
 }
 
-const refresh = () => run('Refreshing…', () => api.refreshWeblink(props.object.id))
+const refresh = () => run(t('weblink.refreshing'), () => api.refreshWeblink(props.object.id))
 const saveReadable = () =>
-  run('Saving readable text…', async () => {
+  run(t('weblink.savingReadable'), async () => {
     const { lostHighlights, ...object } = await api.saveReadable(props.object.id)
     // Highlights of quotes are found again by their text; the page may have dropped some passages.
     if (lostHighlights?.length) {
-      const count = lostHighlights.length === 1 ? 'One highlight is' : `${lostHighlights.length} highlights are`
-      notice.value = { message: `${count} no longer in the page's text (the quotes are kept): “${lostHighlights[0]!.slice(0, 60)}”${lostHighlights.length > 1 ? '…' : ''}` }
+      notice.value = {
+        message: tc(lostHighlights.length, 'weblink.lostHighlights.one', 'weblink.lostHighlights.other', {
+          sample: lostHighlights[0]!.slice(0, 60),
+        }),
+      }
     }
     return object
   })
@@ -89,10 +93,10 @@ async function copy() {
         ref="input"
         v-model="address"
         class="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-ink-faint"
-        placeholder="Paste a link to save this page"
+        :placeholder="t('weblink.pastePlaceholder')"
         :disabled="!!busy"
       />
-      <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-40" :disabled="!address.trim() || !!busy">Save</button>
+      <button class="rounded-lg bg-ink px-3 py-1.5 text-sm text-surface disabled:opacity-40" :disabled="!address.trim() || !!busy">{{ t('common.save') }}</button>
     </form>
 
     <template v-else>
@@ -109,16 +113,16 @@ async function copy() {
       </a>
       <div class="mt-2 flex flex-wrap items-center gap-1 text-xs text-ink-faint">
         <button class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink" @click="copy">
-          <AppIcon :fallback="copied ? 'ph:check' : 'ph:copy'" :size="13" /> {{ copied ? 'Copied' : 'Copy link' }}
+          <AppIcon :fallback="copied ? 'ph:check' : 'ph:copy'" :size="13" /> {{ copied ? t('weblink.copied') : t('weblink.copyLink') }}
         </button>
         <button class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink disabled:opacity-40" :disabled="!!busy" @click="changeAddress">
-          <AppIcon fallback="ph:pencil-simple" :size="13" /> Change address
+          <AppIcon fallback="ph:pencil-simple" :size="13" /> {{ t('weblink.changeAddress') }}
         </button>
-        <button class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink disabled:opacity-40" :disabled="!!busy" title="Fetch the title, description and preview again" @click="refresh">
-          <AppIcon fallback="ph:arrow-clockwise" :size="13" /> Refresh
+        <button class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink disabled:opacity-40" :disabled="!!busy" :title="t('weblink.refreshTitle')" @click="refresh">
+          <AppIcon fallback="ph:arrow-clockwise" :size="13" /> {{ t('weblink.refresh') }}
         </button>
-        <button class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink disabled:opacity-40" :disabled="!!busy" title="Keep a copy of the page's text in this weblink" @click="saveReadable">
-          <AppIcon fallback="ph:article" :size="13" /> {{ hasArticle ? 'Update readable text' : 'Save readable text' }}
+        <button class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink disabled:opacity-40" :disabled="!!busy" :title="t('weblink.readableTitle')" @click="saveReadable">
+          <AppIcon fallback="ph:article" :size="13" /> {{ hasArticle ? t('weblink.updateReadable') : t('weblink.saveReadable') }}
         </button>
       </div>
     </template>

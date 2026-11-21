@@ -4,6 +4,7 @@
 import { computed, ref } from 'vue'
 import type { FilterGroup, Id, QueryDef, SortRule, TableSettings, ViewLayout } from '@vasta/core'
 import { chip } from '../lib/colors.ts'
+import { t, typePluralName } from '../lib/i18n.ts'
 import { fieldOptions, groupOptions } from '../lib/query.ts'
 import { workspace } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
@@ -15,14 +16,14 @@ import PopoverMenu from './PopoverMenu.vue'
 const props = defineProps<{ query: QueryDef }>()
 const emit = defineEmits<{ update: [query: QueryDef] }>()
 
-const LAYOUTS: { layout: ViewLayout; label: string; icon: string }[] = [
-  { layout: 'list', label: 'List', icon: 'ph:list-dashes' },
-  { layout: 'grid', label: 'Grid', icon: 'ph:grid-four' },
-  { layout: 'wall', label: 'Wall', icon: 'ph:wall' },
-  { layout: 'gallery', label: 'Gallery', icon: 'ph:images' },
-  { layout: 'table', label: 'Table', icon: 'ph:table' },
-  { layout: 'kanban', label: 'Board', icon: 'ph:kanban' },
-]
+const LAYOUTS = computed<{ layout: ViewLayout; label: string; icon: string }[]>(() => [
+  { layout: 'list', label: t('views.layout.list'), icon: 'ph:list-dashes' },
+  { layout: 'grid', label: t('views.layout.grid'), icon: 'ph:grid-four' },
+  { layout: 'wall', label: t('views.layout.wall'), icon: 'ph:wall' },
+  { layout: 'gallery', label: t('views.layout.gallery'), icon: 'ph:images' },
+  { layout: 'table', label: t('views.layout.table'), icon: 'ph:table' },
+  { layout: 'kanban', label: t('views.layout.kanban'), icon: 'ph:kanban' },
+])
 
 const update = (patch: Partial<QueryDef>) => {
   const next: QueryDef = { ...props.query, ...patch }
@@ -63,41 +64,41 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
 <template>
   <div class="flex flex-col gap-4 text-sm">
     <section>
-      <h3 class="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-faint">Types</h3>
+      <h3 class="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-faint">{{ t('query.types') }}</h3>
       <div class="flex flex-wrap gap-1">
         <button
-          v-for="t in types"
-          :key="t.id"
+          v-for="typeItem in types"
+          :key="typeItem.id"
           class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
-          :class="query.typeIds.includes(t.id) ? chip(t.color) : 'text-ink-faint ring-1 ring-line hover:text-ink'"
-          @click="toggleType(t.id)"
+          :class="query.typeIds.includes(typeItem.id) ? chip(typeItem.color) : 'text-ink-faint ring-1 ring-line hover:text-ink'"
+          @click="toggleType(typeItem.id)"
         >
-          <AppIcon :icon="t.icon" fallback="ph:cube" :size="12" />{{ t.pluralName }}
+          <AppIcon :icon="typeItem.icon" fallback="ph:cube" :size="12" />{{ typePluralName(typeItem) }}
         </button>
       </div>
-      <p v-if="!query.typeIds.length" class="mt-1 text-xs text-ink-faint">No type chosen: the query searches every type.</p>
+      <p v-if="!query.typeIds.length" class="mt-1 text-xs text-ink-faint">{{ t('query.noTypeChosen') }}</p>
     </section>
 
     <section>
-      <h3 class="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-faint">Filters</h3>
+      <h3 class="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-faint">{{ t('query.filters') }}</h3>
       <FilterGroupEditor :group="filter" :type-ids="query.typeIds" @update="setFilter" />
     </section>
 
     <section class="flex flex-wrap items-center gap-x-5 gap-y-2">
       <label class="flex items-center gap-1.5 text-ink-soft">
-        Sort by
+        {{ t('query.sortBy') }}
         <select :value="sort?.field ?? ''" :class="control" @change="setSort(($event.target as HTMLSelectElement).value)">
-          <option value="">Newest first</option>
+          <option value="">{{ t('query.newestFirst') }}</option>
           <option v-for="f in sortFields" :key="f.field" :value="f.field">{{ f.label }}</option>
         </select>
-        <button v-if="sort" class="rounded-md p-1 hover:bg-hover" :title="sort.direction === 'asc' ? 'Ascending' : 'Descending'" @click="flipSort">
+        <button v-if="sort" class="rounded-md p-1 hover:bg-hover" :title="sort.direction === 'asc' ? t('query.ascending') : t('query.descending')" @click="flipSort">
           <AppIcon :fallback="sort.direction === 'asc' ? 'ph:sort-ascending' : 'ph:sort-descending'" />
         </button>
       </label>
       <label class="flex items-center gap-1.5 text-ink-soft">
-        Group by
+        {{ t('query.groupBy') }}
         <select :value="groupField" :class="control" @change="setGroup(($event.target as HTMLSelectElement).value)">
-          <option value="">Nothing</option>
+          <option value="">{{ t('query.nothing') }}</option>
           <option v-for="f in groups" :key="f.field" :value="f.field">{{ f.label }}</option>
         </select>
       </label>
@@ -119,18 +120,18 @@ const control = 'rounded-md bg-hover px-1.5 py-1 text-sm outline-none'
         class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-soft hover:bg-hover hover:text-ink"
         @click="columnsOpen = !columnsOpen"
       >
-        <AppIcon :fallback="query.layout === 'table' ? 'ph:columns' : 'ph:list-dashes'" /> {{ query.layout === 'table' ? 'Columns' : 'Fields' }}
+        <AppIcon :fallback="query.layout === 'table' ? 'ph:columns' : 'ph:list-dashes'" /> {{ query.layout === 'table' ? t('views.columns') : t('views.fields') }}
       </button>
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
         <ColumnsMenu v-if="query.layout === 'table'" :table="query.table" :type-ids="query.typeIds" @update="setTable" />
         <ListFieldsMenu v-else-if="!query.layout || query.layout === 'list'" :list="query.list" :type-ids="query.typeIds" @update="update({ list: $event })" />
       </PopoverMenu>
       <label class="flex items-center gap-1.5 text-ink-soft">
-        Open in
+        {{ t('views.openIn') }}
         <select :value="query.openIn ?? ''" :class="control" @change="setOpenIn(($event.target as HTMLSelectElement).value)">
-          <option value="">As each type says</option>
-          <option value="pane">Side pane</option>
-          <option value="page">Full page</option>
+          <option value="">{{ t('query.asEachTypeSays') }}</option>
+          <option value="pane">{{ t('views.sidePane') }}</option>
+          <option value="page">{{ t('views.fullPage') }}</option>
         </select>
       </label>
     </section>

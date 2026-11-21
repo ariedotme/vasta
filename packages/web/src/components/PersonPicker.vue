@@ -2,6 +2,7 @@
 // Choose space members: the members (the user first, as "Me"), then anyone selected who left.
 import { computed, ref } from 'vue'
 import type { Id } from '@vasta/core'
+import { t } from '../lib/i18n.ts'
 import { meId, people, personName } from '../lib/people.ts'
 import AppIcon from './AppIcon.vue'
 import PersonAvatar from './PersonAvatar.vue'
@@ -26,7 +27,7 @@ const choices = computed(() => {
     v-if="people.list.length > 6"
     v-model="search"
     class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"
-    placeholder="Search people…"
+    :placeholder="t('picker.searchPeople')"
     @keydown.enter.prevent="choices[0] && emit('toggle', choices[0].id)"
   />
   <button
@@ -37,10 +38,10 @@ const choices = computed(() => {
   >
     <PersonAvatar :id="person.id" />
     <span class="min-w-0 truncate">{{ person.name }}</span>
-    <span v-if="person.id === meId()" class="text-xs text-ink-faint">me</span>
+    <span v-if="person.id === meId()" class="text-xs text-ink-faint">{{ t('picker.me') }}</span>
     <span v-else-if="person.username" class="truncate text-xs text-ink-faint">@{{ person.username }}</span>
     <AppIcon v-if="selected.includes(person.id)" fallback="ph:check" class="ml-auto shrink-0 text-accent" />
   </button>
-  <p v-if="!choices.length" class="px-2 py-1.5 text-sm text-ink-faint">Nobody found</p>
-  <p v-if="people.list.length <= 1" class="px-2 pb-1 pt-2 text-xs text-ink-faint">Add people to this space in Settings › Space.</p>
+  <p v-if="!choices.length" class="px-2 py-1.5 text-sm text-ink-faint">{{ t('picker.nobodyFound') }}</p>
+  <p v-if="people.list.length <= 1" class="px-2 pb-1 pt-2 text-xs text-ink-faint">{{ t('picker.addPeopleHint') }}</p>
 </template>

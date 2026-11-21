@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Renders the active prompt/confirm dialog from lib/overlays.ts.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { t } from '../lib/i18n.ts'
 import { activeDialog } from '../lib/overlays.ts'
 
 const text = ref('')
@@ -104,12 +105,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey, true))
           v-model="text"
           class="mt-4 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-line-strong"
           :placeholder="activeDialog.kind === 'prompt' ? activeDialog.placeholder : activeDialog.requireText"
-          :aria-label="activeDialog.kind === 'confirm' ? `Type ${activeDialog.requireText} to confirm` : undefined"
+          :aria-label="activeDialog.kind === 'confirm' && activeDialog.requireText ? t('common.typeToConfirm', { text: activeDialog.requireText }) : undefined"
           autocapitalize="off"
           autocomplete="off"
         />
         <div class="mt-5 flex justify-end gap-2">
-          <button type="button" class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="cancel">Cancel</button>
+          <button type="button" class="rounded-lg px-3 py-1.5 text-sm hover:bg-hover" @click="cancel">{{ t('common.cancel') }}</button>
           <button
             v-if="activeDialog.kind !== 'choice'"
             ref="confirmButton"

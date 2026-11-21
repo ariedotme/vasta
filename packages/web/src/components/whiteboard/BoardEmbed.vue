@@ -8,6 +8,7 @@ import type * as Yjs from 'yjs'
 import { openText, useReplica, type TextSession } from '../../lib/replica.ts'
 import { openRemoteText } from '../../lib/remote-text.ts'
 import { displayTitle } from '../../lib/format.ts'
+import { t } from '../../lib/i18n.ts'
 import { summaryOf, typesById } from '../../lib/state.ts'
 import { openObject } from '../../lib/open.ts'
 import AppIcon from '../AppIcon.vue'
@@ -27,7 +28,7 @@ const onUpdate = () => session.value && readFrames(session.value.doc)
 const cover = computed(() => frames.value.find((f) => f.cover))
 const sceneName = computed(() => {
   const frame = props.frameId ? frames.value.find((f) => f.id === props.frameId) : cover.value
-  return frame ? frame.title?.trim() || 'Frame' : null
+  return frame ? frame.title?.trim() || t('whiteboard.frame') : null
 })
 
 onMounted(async () => {
@@ -57,13 +58,13 @@ const open = () => openObject(props.boardId)
         v-if="editable && frames.length"
         class="ml-auto max-w-[45%] rounded-md bg-hover px-1.5 py-0.5 text-xs text-ink-soft outline-none"
         :value="frameId ?? ''"
-        title="Which part of the board this shows"
+        :title="t('whiteboard.embed.sceneTitle')"
         @change="emit('scene', ($event.target as HTMLSelectElement).value || null)"
       >
-        <option value="">{{ cover ? `Default scene (${cover.title?.trim() || 'Frame'})` : 'Whole board' }}</option>
-        <option v-for="f in frames" :key="f.id" :value="f.id">{{ f.title?.trim() || 'Frame' }}</option>
+        <option value="">{{ cover ? t('whiteboard.embed.defaultScene', { name: cover.title?.trim() || t('whiteboard.frame') }) : t('whiteboard.wholeBoard') }}</option>
+        <option v-for="f in frames" :key="f.id" :value="f.id">{{ f.title?.trim() || t('whiteboard.frame') }}</option>
       </select>
-      <button class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-soft hover:bg-hover hover:text-ink" :class="editable && frames.length ? '' : 'ml-auto'" title="Open the board" @click="open">
+      <button class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-ink-soft hover:bg-hover hover:text-ink" :class="editable && frames.length ? '' : 'ml-auto'" :title="t('whiteboard.embed.openBoard')" @click="open">
         <AppIcon fallback="ph:arrow-square-out" :size="14" />
       </button>
     </div>
@@ -72,7 +73,7 @@ const open = () => openObject(props.boardId)
       <div v-if="session" class="pointer-events-none absolute inset-0">
         <WhiteboardCanvas :doc="session.doc" :board-id="boardId" readonly embedded :focus="frameId" />
       </div>
-      <div v-else class="grid h-full place-items-center text-sm text-ink-faint">{{ failed ? 'This board needs a connection to the server.' : 'Opening the board…' }}</div>
+      <div v-else class="grid h-full place-items-center text-sm text-ink-faint">{{ failed ? t('object.boardNeedsConnection') : t('object.boardOpening') }}</div>
     </div>
   </div>
 </template>

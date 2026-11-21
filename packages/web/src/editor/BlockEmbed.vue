@@ -11,6 +11,7 @@ import { api } from '../lib/api.ts'
 import { iconTextClasses } from '../lib/colors.ts'
 import { onChange } from '../lib/events.ts'
 import { displayTitle } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { BLOCK_EMBED_DEPTH } from '../lib/page.ts'
 import { summaryOf, typesById } from '../lib/state.ts'
 import { createExtensions } from './extensions.ts'
@@ -67,15 +68,15 @@ onBeforeUnmount(() => {
     <div class="flex items-center gap-1.5 border-b border-line px-2.5 py-1 text-xs text-ink-faint">
       <AppIcon :icon="summary?.icon ?? type?.icon" fallback="ph:file-text" :size="13" :class="type?.color ? iconTextClasses[type.color] : ''" />
       <span class="min-w-0 truncate">{{ displayTitle(summary, type) }}</span>
-      <button class="ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 hover:bg-hover hover:text-ink" title="Open the block where it is" @click="open">
-        Open <AppIcon fallback="ph:arrow-up-right" :size="12" />
+      <button class="ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 hover:bg-hover hover:text-ink" :title="t('editor.embed.openBlock')" @click="open">
+        {{ t('common.open') }} <AppIcon fallback="ph:arrow-up-right" :size="12" />
       </button>
     </div>
     <div class="px-3 py-1.5">
       <EditorContent v-if="depth === 0 && found" :editor="editor" class="vasta-block-embed" />
-      <button v-else-if="depth > 0" class="text-sm text-accent hover:underline" @click="open">A block of {{ displayTitle(summary, type) }}</button>
-      <p v-else-if="failed || object" class="text-sm text-ink-faint">{{ failed ? 'This object cannot be opened.' : 'The block is not there any more.' }}</p>
-      <p v-else class="text-sm text-ink-faint">Loading…</p>
+      <button v-else-if="depth > 0" class="text-sm text-accent hover:underline" @click="open">{{ t('editor.embed.blockOf', { title: displayTitle(summary, type) }) }}</button>
+      <p v-else-if="failed || object" class="text-sm text-ink-faint">{{ failed ? t('editor.embed.cannotOpen') : t('editor.embed.blockGone') }}</p>
+      <p v-else class="text-sm text-ink-faint">{{ t('common.loading') }}</p>
     </div>
   </div>
 </template>

@@ -4,6 +4,7 @@
 // properties, and a condition on the object's values. Their text is edited on their own page.
 import { scopeAppliesSomewhere, type ObjectRecord, type PropertyDef, type SnippetScope } from '@vasta/core'
 import { computed, onMounted, ref } from 'vue'
+import { t, typeName, typePluralName } from '../../lib/i18n.ts'
 import { PROPERTY_KINDS } from '../../lib/properties.ts'
 import { workspace } from '../../lib/state.ts'
 import { deleteTemplate, loadTemplates, saveAsSnippet, saveSnippetInfo, snippets } from '../../lib/templates.ts'
@@ -16,7 +17,7 @@ onMounted(() => void loadTemplates())
 const list = computed(() => snippets.value)
 const open = ref<string | null>(null)
 const kinds = PROPERTY_KINDS.filter((k) => k.kind !== 'formula' && k.kind !== 'rich-text')
-const types = computed(() => workspace.types.filter((t) => !t.deletedAt))
+const types = computed(() => workspace.types.filter((item) => !item.deletedAt))
 
 const infoOf = (snippet: ObjectRecord) => (snippet.template?.kind === 'snippet' ? snippet.template : undefined)
 const scopeOf = (snippet: ObjectRecord): SnippetScope => structuredClone(infoOf(snippet)?.scope ?? {})
@@ -24,11 +25,23 @@ const scopeOf = (snippet: ObjectRecord): SnippetScope => structuredClone(infoOf(
 /** In words: "everywhere", "Tasks, Books", "types with Due"… */
 function describe(snippet: ObjectRecord): string {
   const scope = infoOf(snippet)?.scope
-  if (!scope || (!scope.typeIds?.length && !scope.requires?.length && !scope.when?.trim())) return 'Everywhere'
+  if (!scope || (!scope.typeIds?.length && !scope.requires?.length && !scope.when?.trim())) return t('settings.snippets.everywhere')
   const parts: string[] = []
-  if (scope.typeIds?.length) parts.push(scope.typeIds.map((id) => workspace.types.find((t) => t.id === id)?.pluralName ?? '?').join(', '))
-  if (scope.requires?.length) parts.push(`with ${scope.requires.map((r) => `${r.name}${r.set ? ' set' : ''}`).join(' and ')}`)
-  if (scope.when?.trim()) parts.push(`when ${scope.when}`)
+  if (scope.typeIds?.length) {
+    parts.push(
+      scope.typeIds
+        .map((id) => {
+          const found = workspace.types.find((item) => item.id === id)
+          return found ? typePluralName(found) : '?'
+        })
+        .join(', ')
+    )
+  }
+  if (scope.requires?.length) {
+    const props = scope.requires.map((r) => (r.set ? t('settings.snippets.propSet', { name: r.name }) : r.name)).join(t('settings.snippets.andJoin'))
+    parts.push(t('settings.snippets.withProps', { props }))
+  }
+  if (scope.when?.trim()) parts.push(t('settings.snippets.whenFormula', { formula: scope.when }))
   return parts.join(' · ')
 }
 
@@ -72,11 +85,11 @@ function removeRequirement(snippet: ObjectRecord, index: number) {
 </script>
 
 <template>
-  <SettingsSection id="snippets" title="Snippets" description="Pieces of text you insert with / in the editor: a signature, a stand-up, a checklist. They take the same placeholders as templates.">
+  <SettingsSection id="snippets" :title="t('settings.section.snippets')" :description="t('settings.snippets.description')">
     <template #actions>
-      <button :class="secondary" class="ml-auto flex items-center gap-1.5" @click="saveAsSnippet([], true)"><AppIcon fallback="ph:plus" :size="14" /> New snippet</button>
+      <button :class="secondary" class="ml-auto flex items-center gap-1.5" @click="saveAsSnippet([], true)"><AppIcon fallback="ph:plus" :size="14" /> {{ t('settings.snippets.new') }}</button>
     </template>
-    <p v-if="!list.length" class="text-sm text-ink-faint">No snippets yet. Select some text and choose “Save as snippet”, or make one here.</p>
+    <p v-if="!list.length" class="text-sm text-ink-faint">{{ t('settings.snippets.empty') }}</p>
     <div v-else class="divide-y divide-line rounded-xl border border-line">
       <div v-for="snippet in list" :key="snippet.id" class="px-3 py-2">
         <div class="flex items-center gap-2">
@@ -84,49 +97,49 @@ function removeRequirement(snippet: ObjectRecord, index: number) {
           <button class="min-w-0 truncate text-sm font-medium hover:underline" @click="openObject(snippet.id)">{{ snippet.template!.name }}</button>
           <span v-if="infoOf(snippet)?.trigger" class="font-mono text-xs text-ink-faint">/{{ infoOf(snippet)!.trigger }}</span>
           <span class="min-w-0 flex-1 truncate text-xs" :class="scopeAppliesSomewhere(infoOf(snippet)?.scope, workspace.types) ? 'text-ink-faint' : 'text-amber-600'">
-            {{ scopeAppliesSomewhere(infoOf(snippet)?.scope, workspace.types) ? describe(snippet) : 'Applies nowhere' }}
+            {{ scopeAppliesSomewhere(infoOf(snippet)?.scope, workspace.types) ? describe(snippet) : t('settings.snippets.appliesNowhere') }}
           </span>
-          <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="open === snippet.id ? 'Close' : 'Where it applies'" @click="open = open === snippet.id ? null : snippet.id">
+          <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="open === snippet.id ? t('common.close') : t('settings.snippets.whereApplies')" @click="open = open === snippet.id ? null : snippet.id">
             <AppIcon :fallback="open === snippet.id ? 'ph:caret-up' : 'ph:sliders-horizontal'" :size="15" />
           </button>
-          <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600" title="Delete" @click="deleteTemplate(snippet)"><AppIcon fallback="ph:trash" :size="15" /></button>
+          <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-red-600" :title="t('common.delete')" @click="deleteTemplate(snippet)"><AppIcon fallback="ph:trash" :size="15" /></button>
         </div>
         <div v-if="open === snippet.id" class="mt-3 space-y-4 pb-2 pl-6">
           <label :class="label" class="max-w-xs">
-            Trigger
+            {{ t('settings.snippets.trigger') }}
             <input :value="infoOf(snippet)?.trigger ?? ''" :class="field" placeholder="sig" @change="save(snippet, { trigger: ($event.target as HTMLInputElement).value })" />
-            <span class="mt-1 block">Typing /{{ infoOf(snippet)?.trigger || 'sig' }} finds it first.</span>
+            <span class="mt-1 block">{{ t('settings.snippets.triggerHint', { trigger: infoOf(snippet)?.trigger || 'sig' }) }}</span>
           </label>
           <div>
-            <div :class="label">Types (none: any type)</div>
+            <div :class="label">{{ t('settings.snippets.typesLabel') }}</div>
             <div class="mt-1.5 flex flex-wrap gap-1.5">
               <button
-                v-for="t in types"
-                :key="t.id"
+                v-for="typeItem in types"
+                :key="typeItem.id"
                 class="rounded-md px-2 py-0.5 text-xs ring-1"
-                :class="infoOf(snippet)?.scope?.typeIds?.includes(t.id) ? 'bg-ink text-surface ring-ink' : 'text-ink-soft ring-line hover:bg-hover'"
-                @click="toggleType(snippet, t.id)"
+                :class="infoOf(snippet)?.scope?.typeIds?.includes(typeItem.id) ? 'bg-ink text-surface ring-ink' : 'text-ink-soft ring-line hover:bg-hover'"
+                @click="toggleType(snippet, typeItem.id)"
               >
-                {{ t.name }}
+                {{ typeName(typeItem) }}
               </button>
             </div>
           </div>
           <div>
-            <div :class="label">Properties the type has (all of them)</div>
+            <div :class="label">{{ t('settings.snippets.propsLabel') }}</div>
             <div v-for="(r, i) in infoOf(snippet)?.scope?.requires ?? []" :key="i" class="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
-              <input :value="r.name" class="w-36 rounded-lg border border-line bg-surface px-2 py-1 text-sm outline-none focus:border-line-strong" placeholder="Due" @change="setRequirement(snippet, i, { name: ($event.target as HTMLInputElement).value })" />
+              <input :value="r.name" class="w-36 rounded-lg border border-line bg-surface px-2 py-1 text-sm outline-none focus:border-line-strong" :placeholder="t('builtin.prop.due')" @change="setRequirement(snippet, i, { name: ($event.target as HTMLInputElement).value })" />
               <select :value="r.kind" class="rounded-lg border border-line bg-surface px-2 py-1 text-sm" @change="setRequirement(snippet, i, { kind: ($event.target as HTMLSelectElement).value as PropertyDef['kind'] })">
                 <option v-for="k in kinds" :key="k.kind" :value="k.kind">{{ k.label }}</option>
               </select>
               <label class="flex items-center gap-1.5 text-xs text-ink-soft">
-                <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!!r.set" @change="setRequirement(snippet, i, { set: ($event.target as HTMLInputElement).checked })" /> with a value
+                <input type="checkbox" class="accent-[var(--color-accent)]" :checked="!!r.set" @change="setRequirement(snippet, i, { set: ($event.target as HTMLInputElement).checked })" /> {{ t('settings.snippets.withValue') }}
               </label>
-              <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="Remove" @click="removeRequirement(snippet, i)"><AppIcon fallback="ph:x" :size="13" /></button>
+              <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="t('common.remove')" @click="removeRequirement(snippet, i)"><AppIcon fallback="ph:x" :size="13" /></button>
             </div>
-            <button class="mt-1.5 text-xs text-ink-soft hover:underline" @click="addRequirement(snippet)">+ Add a property</button>
+            <button class="mt-1.5 text-xs text-ink-soft hover:underline" @click="addRequirement(snippet)">{{ t('settings.snippets.addProperty') }}</button>
           </div>
           <label :class="label">
-            Only when (a formula on the object’s values)
+            {{ t('settings.snippets.onlyWhen') }}
             <input :value="infoOf(snippet)?.scope?.when ?? ''" :class="field" class="font-mono" placeholder='prop("Status") != "Done"' @change="save(snippet, { scope: { ...scopeOf(snippet), when: ($event.target as HTMLInputElement).value } })" />
           </label>
         </div>

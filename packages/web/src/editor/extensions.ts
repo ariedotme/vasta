@@ -29,6 +29,7 @@ import type * as Y from 'yjs'
 import { groupClasses, highlightClasses } from '../lib/colors.ts'
 import { api } from '../lib/api.ts'
 import { bareUrl, embedFor } from '../lib/embeds.ts'
+import { t } from '../lib/i18n.ts'
 import { openMenuAt } from '../lib/overlays.ts'
 import { lastError, primeFromObject, primeSummaries, refreshCounts, systemType, workspace } from '../lib/state.ts'
 import { createObject } from '../lib/actions.ts'
@@ -253,10 +254,10 @@ function offerWeblink(editor: Editor, url: string, from: number, to: number) {
     }
   }
   openMenuAt(coords.left, coords.bottom + 4, [
-    { kind: 'heading', label: 'Paste as' },
-    { label: 'Link', icon: 'ph:link', run: () => editor.commands.focus(to) },
+    { kind: 'heading', label: t('editor.paste.heading') },
+    { label: t('editor.mark.link'), icon: 'ph:link', run: () => editor.commands.focus(to) },
     {
-      label: 'Mention a weblink',
+      label: t('editor.paste.mentionWeblink'),
       icon: 'ph:at',
       run: async () => {
         const object = await save()
@@ -265,7 +266,7 @@ function offerWeblink(editor: Editor, url: string, from: number, to: number) {
       },
     },
     {
-      label: embeddable ? 'Embed' : 'Weblink card',
+      label: embeddable ? t('editor.block.displayEmbed') : t('editor.paste.weblinkCard'),
       icon: embeddable ? 'ph:play-circle' : 'ph:cards',
       run: async () => {
         const object = await save()

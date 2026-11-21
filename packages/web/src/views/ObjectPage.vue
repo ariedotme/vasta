@@ -42,6 +42,7 @@ import { clone } from '../lib/clone.ts'
 import { chip, iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { colorSource, tagAncestors, tagColor } from '../lib/tags.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
+import { propName, t, tc, typeName, typePluralName } from '../lib/i18n.ts'
 import { PROPERTY_KINDS, formulaValue, kindIcon, newPropertyDef } from '../lib/properties.ts'
 import { lastError, loadWorkspace, primeFromObject, replaceType, systemType, typesById, workspace } from '../lib/state.ts'
 import { personName, sharedSpace } from '../lib/people.ts'
@@ -100,9 +101,13 @@ const authorship = computed(() => {
   const o = object.value
   if (!o) return { by: '', title: '' }
   const shared = sharedSpace.value
-  const via = (agent: string | undefined) => (agent ? ` via ${agent}` : '')
-  const by = `${shared && o.updatedBy ? ` by ${personName(o.updatedBy)}` : ''}${via(o.updatedVia)}`
-  const created = `Created ${formatRelative(o.createdAt)}${shared && o.createdBy ? ` by ${personName(o.createdBy)}` : ''}${via(o.createdVia)}`
+  const via = (agent: string | undefined) => (agent ? t('object.via', { agent }) : '')
+  const by = `${shared && o.updatedBy ? t('object.by', { name: personName(o.updatedBy) }) : ''}${via(o.updatedVia)}`
+  const created = t('object.created', {
+    when: formatRelative(o.createdAt),
+    by: shared && o.createdBy ? t('object.by', { name: personName(o.createdBy) }) : '',
+    via: via(o.createdVia),
+  })
   return { by, title: shared || o.createdVia || o.updatedVia ? created : '' }
 })
 /** Marked as agent context: what agents read first (Settings › Agents). */
@@ -350,10 +355,15 @@ async function uploadCover(event: Event) {
 }
 
 async function coverFromUrl() {
-  const url = await promptDialog({ title: 'Cover from a URL', placeholder: 'https://…/picture.jpg', value: object.value?.coverUrl?.startsWith('http') ? object.value.coverUrl : '', confirmLabel: 'Use' })
+  const url = await promptDialog({
+    title: t('object.coverFromUrl'),
+    placeholder: 'https://…/picture.jpg',
+    value: object.value?.coverUrl?.startsWith('http') ? object.value.coverUrl : '',
+    confirmLabel: t('common.use'),
+  })
   if (url === null) return
   if (!/^https?:\/\/\S+$/i.test(url.trim())) {
-    lastError.value = 'The cover URL must start with http:// or https://'
+    lastError.value = t('object.coverUrlInvalid')
     return
   }
   setCover(url.trim())
@@ -362,9 +372,9 @@ async function coverFromUrl() {
 function coverMenu(x: number, y: number) {
   menuOpen.value = false
   openMenuAt(x, y, [
-    { label: 'Upload a picture…', icon: 'ph:upload-simple', run: () => coverInput.value?.click() },
-    { label: 'Use a URL…', icon: 'ph:link-simple', run: coverFromUrl },
-    ...(object.value?.coverUrl ? [{ kind: 'separator' } as MenuItem, { label: 'Remove cover', icon: 'ph:trash', danger: true, run: () => setCover(undefined) }] : []),
+    { label: t('object.coverUpload'), icon: 'ph:upload-simple', run: () => coverInput.value?.click() },
+    { label: t('object.coverUseUrl'), icon: 'ph:link-simple', run: coverFromUrl },
+    ...(object.value?.coverUrl ? [{ kind: 'separator' } as MenuItem, { label: t('object.coverRemove'), icon: 'ph:trash', danger: true, run: () => setCover(undefined) }] : []),
   ])
 }
 
@@ -511,7 +521,7 @@ function setParent(parent: Pick<ObjectSummary, 'id' | 'parentId'> | undefined) {
   if (!object.value) return
   parentOpen.value = false
   if (parent && (parent.id === object.value.id || tagAncestors(parent).some((t) => t.id === object.value!.id))) {
-    lastError.value = 'That tag is under this one: it cannot be its parent too.'
+    lastError.value = t('object.tagParentLoop')
     return
   }
   if (parent) object.value.parentId = parent.id
@@ -613,7 +623,9 @@ function stepDay(delta: number) {
 
 const titlePlaceholder = computed(() => {
   if (!object.value) return ''
-  if (object.value.template?.kind === 'template') return `Title of new ${type.value?.pluralName.toLowerCase() ?? 'objects'}, may use {{title}}`
+  if (object.value.template?.kind === 'template') {
+    return t('object.templateTitlePlaceholder', { plural: (type.value ? typePluralName(type.value) : t('object.objectsFallback')).toLowerCase() })
+  }
   return displayTitle({ ...object.value, title: '' }, type.value)
 })
 
@@ -637,7 +649,12 @@ const fillable = (def: PropertyDef) => info.value?.kind === 'template' && FILLAB
 async function setFill(def: PropertyDef) {
   if (!object.value || object.value.template?.kind !== 'template') return
   const hints: Record<string, string> = { date: 'date:+7d, date:next monday', person: 'me', select: 'choose:Priority|High|Low, or ask:…', number: 'ask:How many?', checkbox: 'formula:weekday(date) = 1' }
-  const value = await promptDialog({ title: `${def.name} from a placeholder`, message: `What goes between the braces, e.g. ${hints[def.kind] ?? 'ask:…'}.`, value: fills.value[def.id] ?? '', confirmLabel: 'Save' })
+  const value = await promptDialog({
+    title: t('object.fillFromPlaceholderTitle', { prop: propName(def) }),
+    message: t('object.fillFromPlaceholderMessage', { hint: hints[def.kind] ?? 'ask:…' }),
+    value: fills.value[def.id] ?? '',
+    confirmLabel: t('common.save'),
+  })
   if (value === null || object.value.template?.kind !== 'template') return
   object.value.template = { ...object.value.template, fills: { ...object.value.template.fills, [def.id]: value } }
   changed()
@@ -653,7 +670,7 @@ function clearFill(def: PropertyDef) {
 
 async function renameTemplate() {
   if (!object.value?.template) return
-  const name = await promptDialog({ title: 'Rename', value: object.value.template.name, confirmLabel: 'Rename' })
+  const name = await promptDialog({ title: t('common.renameAction'), value: object.value.template.name, confirmLabel: t('common.renameAction') })
   if (!name || !object.value?.template) return
   object.value.template = { ...object.value.template, name }
   if (object.value.template.kind === 'snippet') object.value.title = name
@@ -707,64 +724,64 @@ async function startFrom(template: ObjectRecord) {
 </script>
 
 <template>
-  <div v-if="missing" class="grid h-full place-items-center text-sm text-ink-soft">This object does not exist or was deleted for good.</div>
+  <div v-if="missing" class="grid h-full place-items-center text-sm text-ink-soft">{{ t('object.missing') }}</div>
 
   <article v-else-if="object" ref="article" :class="boardLayout ? 'flex h-full flex-col' : embedded ? '' : inPane ? 'pb-16' : 'pb-32'">
     <div v-if="object.deletedAt && !embedded" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
       <AppIcon fallback="ph:trash" class="shrink-0" />
-      <span class="min-w-0 flex-1 max-sm:min-w-[80%]">In the trash since {{ formatDate({ start: object.deletedAt, resolution: 'time' }) }}. It goes for good 30 days later.</span>
-      <button class="rounded-lg bg-surface px-2.5 py-1 font-medium text-ink shadow-sm ring-1 ring-line hover:bg-hover max-md:py-2" @click="restore">Restore</button>
-      <button class="rounded-lg px-2.5 py-1 font-medium hover:bg-red-100 dark:hover:bg-red-900/40 max-md:py-2" @click="deleteForever">Delete forever</button>
+      <span class="min-w-0 flex-1 max-sm:min-w-[80%]">{{ t('object.inTrashSince', { date: formatDate({ start: object.deletedAt, resolution: 'time' }) }) }}</span>
+      <button class="rounded-lg bg-surface px-2.5 py-1 font-medium text-ink shadow-sm ring-1 ring-line hover:bg-hover max-md:py-2" @click="restore">{{ t('common.restore') }}</button>
+      <button class="rounded-lg px-2.5 py-1 font-medium hover:bg-red-100 dark:hover:bg-red-900/40 max-md:py-2" @click="deleteForever">{{ t('trash.deleteForever') }}</button>
     </div>
     <div v-if="info && !embedded" class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-violet-200 bg-violet-50 px-4 py-2 text-sm text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-200" data-template-banner>
       <AppIcon :fallback="info.kind === 'snippet' ? 'ph:brackets-curly' : 'ph:copy-simple'" class="shrink-0" />
       <span class="min-w-0 flex-1 max-sm:min-w-[70%]">
-        <template v-if="info.kind === 'template'">Template <button class="font-semibold hover:underline" title="Rename" @click="renameTemplate">{{ info.name }}</button> of {{ type?.name }}<template v-if="info.default"> · default</template></template>
-        <template v-else>Snippet <button class="font-semibold hover:underline" title="Rename" @click="renameTemplate">{{ info.name }}</button><template v-if="info.trigger"> · /{{ info.trigger }}</template></template>
-        <span class="text-violet-700/80 dark:text-violet-300/70 max-md:hidden" v-text="' — type {{ for placeholders'" />
+        <template v-if="info.kind === 'template'">{{ t('object.templateBannerLabel') }} <button class="font-semibold hover:underline" :title="t('common.renameAction')" @click="renameTemplate">{{ info.name }}</button> {{ t('object.templateBannerOf', { type: type ? typeName(type) : '' }) }}<template v-if="info.default">{{ t('object.templateDefaultBadge') }}</template></template>
+        <template v-else>{{ t('object.snippetBannerLabel') }} <button class="font-semibold hover:underline" :title="t('common.renameAction')" @click="renameTemplate">{{ info.name }}</button><template v-if="info.trigger"> · /{{ info.trigger }}</template></template>
+        <span class="text-violet-700/80 dark:text-violet-300/70 max-md:hidden" v-text="t('object.templatePlaceholderHint')" />
       </span>
-      <button v-if="info.kind === 'template'" class="rounded-lg px-2.5 py-1 font-medium hover:bg-violet-100 dark:hover:bg-violet-900/40 max-md:py-2" @click="toggleDefault">{{ info.default ? 'Not the default' : 'Make default' }}</button>
-      <button class="rounded-lg bg-surface px-2.5 py-1 font-medium text-ink shadow-sm ring-1 ring-line hover:bg-hover max-md:py-2" @click="previewOpen = true">Preview</button>
-      <RouterLink :to="info.kind === 'snippet' ? '/settings#snippets' : `/t/${object.typeId}?settings=1`" class="rounded-lg px-2.5 py-1 font-medium hover:bg-violet-100 dark:hover:bg-violet-900/40 max-md:py-2">{{ info.kind === 'snippet' ? 'All snippets' : 'All templates' }}</RouterLink>
+      <button v-if="info.kind === 'template'" class="rounded-lg px-2.5 py-1 font-medium hover:bg-violet-100 dark:hover:bg-violet-900/40 max-md:py-2" @click="toggleDefault">{{ info.default ? t('object.notDefault') : t('object.makeDefault') }}</button>
+      <button class="rounded-lg bg-surface px-2.5 py-1 font-medium text-ink shadow-sm ring-1 ring-line hover:bg-hover max-md:py-2" @click="previewOpen = true">{{ t('object.preview') }}</button>
+      <RouterLink :to="info.kind === 'snippet' ? '/settings#snippets' : `/t/${object.typeId}?settings=1`" class="rounded-lg px-2.5 py-1 font-medium hover:bg-violet-100 dark:hover:bg-violet-900/40 max-md:py-2">{{ info.kind === 'snippet' ? t('object.allSnippets') : t('object.allTemplates') }}</RouterLink>
     </div>
-    <ModalDialog v-if="previewOpen && preview" :title="`Preview of ${info?.name ?? ''}`" @close="previewOpen = false">
+    <ModalDialog v-if="previewOpen && preview" :title="t('object.previewTitle', { name: info?.name ?? '' })" @close="previewOpen = false">
       <div class="space-y-4 p-5">
         <h1 v-if="info?.kind === 'template'" class="text-2xl font-bold">{{ preview.title || titlePlaceholder }}</h1>
         <dl v-if="previewProps.length" class="space-y-1 text-sm">
           <div v-for="def in previewProps" :key="def.id" class="flex gap-3">
-            <dt class="w-32 shrink-0 text-ink-soft">{{ def.name }}</dt>
+            <dt class="w-32 shrink-0 text-ink-soft">{{ propName(def) }}</dt>
             <dd class="min-w-0 flex-1"><PropertyDisplay :def="def" :value="preview.props[def.id]" :object="{ ...object, props: preview.props }" wrap /></dd>
           </div>
         </dl>
         <DocPreview v-for="(doc, field) in preview.content" :key="field" :content="doc.content" />
-        <p class="text-xs text-ink-faint">As made now. Questions show their own words; a daily note's template leaves out the time, you and the answers.</p>
+        <p class="text-xs text-ink-faint">{{ t('object.previewHint') }}</p>
       </div>
     </ModalDialog>
     <!-- A board on its own page: a thin bar, the board, and the details beside it -->
     <template v-if="boardLayout">
       <div class="flex h-12 shrink-0 items-center gap-2 border-b border-line px-3 md:px-4">
         <RouterLink :to="`/t/${object.typeId}`" class="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:brightness-95" :class="chip(type?.color)">
-          <AppIcon :icon="type?.icon" fallback="ph:cube" :size="13" /><span class="max-sm:hidden">{{ type?.name }}</span>
+          <AppIcon :icon="type?.icon" fallback="ph:cube" :size="13" /><span class="max-sm:hidden">{{ type ? typeName(type) : '' }}</span>
         </RouterLink>
         <input
           v-model="object.title"
           class="min-w-0 flex-1 truncate rounded-md bg-transparent px-1.5 py-1 text-base font-semibold outline-none placeholder:text-ink-faint/60 hover:bg-hover focus:bg-hover"
           :placeholder="titlePlaceholder"
-          aria-label="Title"
+          :aria-label="t('object.titleLabel')"
           @input="changed()"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
         />
         <span class="shrink-0 text-xs text-ink-faint" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-md:hidden' : ''" :title="authorship.title || undefined">{{
-          status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved'
+          status === 'saved' ? t('object.edited', { when: formatRelative(object.updatedAt), by: '' }) : status === 'saving' ? t('object.saving') : offline ? t('object.notSavedOffline') : t('object.unsaved')
         }}</span>
         <button
           class="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-sm ring-1 ring-line hover:bg-hover"
           :class="detailsOpen ? 'bg-hover text-ink' : 'text-ink-soft'"
           :aria-pressed="detailsOpen"
-          title="Tags, properties, comments and backlinks"
+          :title="t('object.detailsTitle')"
           @click="detailsOpen = !detailsOpen"
         >
-          <AppIcon fallback="ph:sidebar-simple" :size="16" class="-scale-x-100" /><span class="max-sm:hidden">Details</span>
+          <AppIcon fallback="ph:sidebar-simple" :size="16" class="-scale-x-100" /><span class="max-sm:hidden">{{ t('object.details') }}</span>
         </button>
       </div>
       <div class="relative flex min-h-0 flex-1">
@@ -774,8 +791,8 @@ async function startFrom(template: ObjectRecord) {
           class="w-[24rem] shrink-0 overflow-y-auto border-l border-line bg-surface pb-16 max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30 max-md:w-full max-md:max-w-[26rem] max-md:shadow-2xl"
         >
           <div class="flex items-center justify-between px-5 pt-3 md:hidden">
-            <span class="text-sm font-semibold">Details</span>
-            <button class="grid h-9 w-9 place-items-center rounded-lg text-ink-soft hover:bg-hover" aria-label="Close details" @click="detailsOpen = false"><AppIcon fallback="ph:x" :size="16" /></button>
+            <span class="text-sm font-semibold">{{ t('object.details') }}</span>
+            <button class="grid h-9 w-9 place-items-center rounded-lg text-ink-soft hover:bg-hover" :aria-label="t('object.closeDetails')" @click="detailsOpen = false"><AppIcon fallback="ph:x" :size="16" /></button>
           </div>
           <div :id="detailsSlot" />
         </aside>
@@ -788,7 +805,7 @@ async function startFrom(template: ObjectRecord) {
         class="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-surface/90 px-2.5 py-1 text-xs font-medium text-ink shadow-sm ring-1 ring-line backdrop-blur transition-opacity hover:bg-surface md:opacity-0 md:group-hover/cover:opacity-100 md:focus-visible:opacity-100 [@media(hover:none)]:opacity-100 max-md:py-1.5"
         @click="coverMenuFrom"
       >
-        <AppIcon fallback="ph:image" :size="14" /> {{ coverUploading ? 'Uploading…' : 'Change cover' }}
+        <AppIcon fallback="ph:image" :size="14" /> {{ coverUploading ? t('object.coverUploading') : t('object.coverChange') }}
       </button>
     </div>
     <input ref="coverInput" type="file" accept="image/*" class="hidden" @change="uploadCover" />
@@ -800,7 +817,7 @@ async function startFrom(template: ObjectRecord) {
         v-if="object.icon"
         ref="iconAnchor"
         class="mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-surface text-4xl shadow-sm ring-1 ring-line hover:bg-raised"
-        title="Change icon"
+        :title="t('object.changeIcon')"
         @click="iconOpen = !iconOpen"
       >
         <AppIcon :icon="object.icon" :size="40" :class="type?.color && object.icon.kind === 'icon' ? iconTextClasses[type.color] : ''" />
@@ -811,65 +828,65 @@ async function startFrom(template: ObjectRecord) {
 
       <div class="group/header flex min-h-7 flex-wrap items-center gap-1.5">
         <RouterLink v-if="!boardLayout" :to="`/t/${object.typeId}`" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:brightness-95" :class="chip(type?.color)">
-          <AppIcon :icon="type?.icon" fallback="ph:cube" :size="13" />{{ type?.name }}
+          <AppIcon :icon="type?.icon" fallback="ph:cube" :size="13" />{{ type ? typeName(type) : '' }}
         </RouterLink>
         <div v-if="day" class="flex items-center gap-0.5 text-ink-faint">
-          <button class="rounded-md p-1 hover:bg-hover hover:text-ink" title="Previous day" @click="stepDay(-1)"><AppIcon fallback="ph:caret-left" :size="14" /></button>
-          <button v-if="!isToday" class="rounded-md px-1.5 py-0.5 text-xs hover:bg-hover hover:text-ink" @click="openDay(dayKey())">Today</button>
-          <button class="rounded-md p-1 hover:bg-hover hover:text-ink" title="Next day" @click="stepDay(1)"><AppIcon fallback="ph:caret-right" :size="14" /></button>
+          <button class="rounded-md p-1 hover:bg-hover hover:text-ink" :title="t('object.previousDay')" @click="stepDay(-1)"><AppIcon fallback="ph:caret-left" :size="14" /></button>
+          <button v-if="!isToday" class="rounded-md px-1.5 py-0.5 text-xs hover:bg-hover hover:text-ink" @click="openDay(dayKey())">{{ t('common.today') }}</button>
+          <button class="rounded-md p-1 hover:bg-hover hover:text-ink" :title="t('object.nextDay')" @click="stepDay(1)"><AppIcon fallback="ph:caret-right" :size="14" /></button>
         </div>
         <!-- Icon and cover: on hover, so an object without them shows nothing there (always on touch). -->
         <div v-if="!object.deletedAt" class="flex items-center gap-0.5 text-xs text-ink-faint opacity-0 transition-opacity group-hover/header:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           <button v-if="!object.icon" ref="iconAnchor" class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink" @click="iconOpen = !iconOpen">
-            <AppIcon fallback="ph:smiley" :size="14" /> <span class="max-sm:hidden">Icon</span>
+            <AppIcon fallback="ph:smiley" :size="14" /> <span class="max-sm:hidden">{{ t('object.icon') }}</span>
           </button>
           <button v-if="!object.coverUrl" class="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-hover hover:text-ink" @click="coverMenuFrom">
-            <AppIcon fallback="ph:image" :size="14" /> <span class="max-sm:hidden">{{ coverUploading ? 'Uploading…' : 'Cover' }}</span>
+            <AppIcon fallback="ph:image" :size="14" /> <span class="max-sm:hidden">{{ coverUploading ? t('object.coverUploading') : t('object.cover') }}</span>
           </button>
         </div>
         <div class="ml-auto flex items-center gap-1 text-xs text-ink-faint">
-          <span v-if="!boardLayout" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-sm:hidden' : ''" :title="authorship.title || undefined">{{ status === 'saved' ? `Edited ${formatRelative(object.updatedAt)}${authorship.by}` : status === 'saving' ? 'Saving…' : offline ? 'Not saved (offline)' : 'Unsaved' }}</span>
-          <button ref="menuAnchor" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:h-9 max-md:w-9" title="More" @click="menuOpen = !menuOpen">
+          <span v-if="!boardLayout" :class="status === 'unsaved' && offline ? 'text-amber-600' : status === 'saved' ? 'max-sm:hidden' : ''" :title="authorship.title || undefined">{{ status === 'saved' ? t('object.edited', { when: formatRelative(object.updatedAt), by: authorship.by }) : status === 'saving' ? t('object.saving') : offline ? t('object.notSavedOffline') : t('object.unsaved') }}</span>
+          <button ref="menuAnchor" class="grid h-7 w-7 place-items-center rounded-md text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:h-9 max-md:w-9" :title="t('object.more')" @click="menuOpen = !menuOpen">
             <AppIcon fallback="ph:dots-three" :size="17" />
           </button>
           <PopoverMenu v-model:open="menuOpen" :anchor="menuAnchor" placement="bottom-end" width="12rem">
             <RouterLink :to="`/t/${object.typeId}`" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover">
-              <AppIcon fallback="ph:cube" /> Open type
+              <AppIcon fallback="ph:cube" /> {{ t('object.openType') }}
             </RouterLink>
             <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="copyObjectLink(object.id), (menuOpen = false)">
-              <AppIcon fallback="ph:link" /> Copy link to page
+              <AppIcon fallback="ph:link" /> {{ t('nav.copyLink') }}
             </button>
             <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="saveTemplateFrom">
-              <AppIcon fallback="ph:copy-simple" /> Save as template…
+              <AppIcon fallback="ph:copy-simple" /> {{ t('object.saveAsTemplate') }}
             </button>
             <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="pinFrom">
-              <AppIcon fallback="ph:push-pin" /> {{ isInSidebar(object.id) ? 'Pinned in sidebar' : 'Pin to sidebar' }}
+              <AppIcon fallback="ph:push-pin" /> {{ isInSidebar(object.id) ? t('actions.pinnedInSidebar') : t('actions.pinToSidebar') }}
               <AppIcon fallback="ph:caret-right" :size="12" class="ml-auto text-ink-faint" />
             </button>
-            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="A reminder that keeps asking until you answer" data-remind-me @click="remindMe">
-              <AppIcon fallback="ph:bell-ringing" /> {{ reminderRule ? 'Reminder…' : 'Remind me…' }}
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" :title="t('object.remindMeTitle')" data-remind-me @click="remindMe">
+              <AppIcon fallback="ph:bell-ringing" /> {{ reminderRule ? t('object.reminder') : t('object.remindMe') }}
               <AppIcon v-if="reminderRule" fallback="ph:check" :size="13" class="ml-auto text-accent" />
             </button>
-            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" title="What agents read first (the MCP's recall)" @click="toggleAgentContext">
-              <AppIcon fallback="ph:robot" /> Agent context
+            <button v-if="!object.deletedAt && !info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" :title="t('object.agentContextTitle')" @click="toggleAgentContext">
+              <AppIcon fallback="ph:robot" /> {{ t('object.agentContext') }}
               <AppIcon v-if="agentContext" fallback="ph:check" :size="13" class="ml-auto text-accent" />
             </button>
             <button v-if="!object.deletedAt" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="coverMenuFrom">
-              <AppIcon fallback="ph:image" /> {{ coverUploading ? 'Uploading cover…' : object.coverUrl ? 'Change cover…' : 'Add cover…' }}
+              <AppIcon fallback="ph:image" /> {{ coverUploading ? t('object.coverUploadingFull') : object.coverUrl ? t('object.coverChangeMenu') : t('object.coverAddMenu') }}
             </button>
             <template v-if="object.deletedAt">
               <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-ink hover:bg-hover" @click="restore">
-                <AppIcon fallback="ph:arrow-counter-clockwise" /> Restore
+                <AppIcon fallback="ph:arrow-counter-clockwise" /> {{ t('common.restore') }}
               </button>
               <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-red-600 hover:bg-hover" @click="deleteForever">
-                <AppIcon fallback="ph:trash" /> Delete forever…
+                <AppIcon fallback="ph:trash" /> {{ t('trash.deleteForeverMenu') }}
               </button>
             </template>
             <button v-else-if="info" class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-red-600 hover:bg-hover" @click="menuOpen = false, removeTemplate()">
-              <AppIcon fallback="ph:trash" /> Delete {{ info.kind }}…
+              <AppIcon fallback="ph:trash" /> {{ info.kind === 'snippet' ? t('object.deleteSnippet') : t('object.deleteTemplate') }}
             </button>
             <button v-else class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-red-600 hover:bg-hover" @click="remove">
-              <AppIcon fallback="ph:trash" /> Move to trash
+              <AppIcon fallback="ph:trash" /> {{ t('nav.moveToTrash') }}
             </button>
           </PopoverMenu>
         </div>
@@ -889,10 +906,10 @@ async function startFrom(template: ObjectRecord) {
 
       <div v-if="offeredTemplates.length && bodyEmpty" class="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-faint" data-template-offer>
         <AppIcon fallback="ph:copy-simple" :size="14" />
-        <span>Start from a template:</span>
-        <template v-for="(t, i) in offeredTemplates" :key="t.id">
+        <span>{{ t('object.startFromTemplate') }}</span>
+        <template v-for="(tpl, i) in offeredTemplates" :key="tpl.id">
           <span v-if="i" aria-hidden="true">·</span>
-          <button class="rounded px-1 font-medium text-ink-soft hover:bg-hover hover:text-ink" @click="startFrom(t)">{{ t.template!.name }}</button>
+          <button class="rounded px-1 font-medium text-ink-soft hover:bg-hover hover:text-ink" @click="startFrom(tpl)">{{ tpl.template!.name }}</button>
         </template>
       </div>
 
@@ -900,10 +917,10 @@ async function startFrom(template: ObjectRecord) {
         <AppIcon fallback="ph:tag" class="text-ink-faint" />
         <ObjectChip v-for="id in object.tagIds" :key="id" :id="id" tag removable @remove="removeTag(id)" />
         <button ref="tagAnchor" class="rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="tagOpen = !tagOpen">
-          {{ object.tagIds.length ? '+' : 'Add tags' }}
+          {{ object.tagIds.length ? '+' : t('object.addTags') }}
         </button>
         <PopoverMenu v-model:open="tagOpen" :anchor="tagAnchor" width="16rem">
-          <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" create-label="New tag" @pick="addTag" @create="createTag" />
+          <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="object.tagIds" :create-label="t('object.newTag')" @pick="addTag" @create="createTag" />
         </PopoverMenu>
       </div>
 
@@ -911,36 +928,36 @@ async function startFrom(template: ObjectRecord) {
         <div v-if="showOwnDate" class="vasta-prop-row">
           <div class="vasta-prop-name">
             <AppIcon fallback="ph:calendar-blank" class="text-ink-faint" />
-            <span class="truncate">Date</span>
+            <span class="truncate">{{ t('dateEditor.date') }}</span>
           </div>
           <div class="min-h-8 flex min-w-0 flex-1 items-center"><DateValueEditor :value="object.date" @update="setOwnDate" /></div>
         </div>
         <template v-if="isTagObject || isHabit">
           <div class="vasta-prop-row">
-            <div class="vasta-prop-name"><AppIcon fallback="ph:palette" class="text-ink-faint" /><span>Color</span></div>
+            <div class="vasta-prop-name"><AppIcon fallback="ph:palette" class="text-ink-faint" /><span>{{ t('object.color') }}</span></div>
             <div class="flex min-h-8 flex-1 items-center">
               <button ref="colorAnchor" class="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-hover" @click="colorOpen = !colorOpen">
                 <span class="h-3.5 w-3.5 rounded-full" :class="swatchClasses[shownColor]" />
-                <span v-if="object.color" class="capitalize">{{ object.color }}</span>
-                <span v-else class="text-ink-faint">{{ isTagObject && colorSource(object) ? `From ${colorSource(object)!.title}` : 'Default' }}</span>
+                <span v-if="object.color">{{ t(`color.${object.color}`) }}</span>
+                <span v-else class="text-ink-faint">{{ isTagObject && colorSource(object) ? t('object.colorFrom', { name: colorSource(object)!.title }) : t('common.default') }}</span>
               </button>
               <PopoverMenu v-model:open="colorOpen" :anchor="colorAnchor" width="auto">
                 <div class="space-y-2 p-2">
                   <ColorPicker :color="object.color" @pick="setColor" />
-                  <button v-if="object.color" class="w-full rounded-md px-2 py-1 text-left text-xs text-ink-soft hover:bg-hover" @click="setColor(undefined)">{{ object.parentId ? 'Take the parent tag’s color' : 'Use the default color' }}</button>
+                  <button v-if="object.color" class="w-full rounded-md px-2 py-1 text-left text-xs text-ink-soft hover:bg-hover" @click="setColor(undefined)">{{ object.parentId ? t('object.colorParent') : t('object.colorDefault') }}</button>
                 </div>
               </PopoverMenu>
             </div>
           </div>
           <div v-if="isTagObject" class="vasta-prop-row">
-            <div class="vasta-prop-name"><AppIcon fallback="ph:tree-structure" class="text-ink-faint" /><span>Parent tag</span></div>
+            <div class="vasta-prop-name"><AppIcon fallback="ph:tree-structure" class="text-ink-faint" /><span>{{ t('object.parentTag') }}</span></div>
             <div class="flex min-h-9 flex-1 flex-wrap items-center gap-1 py-1">
               <ObjectChip v-if="object.parentId" :id="object.parentId" tag removable @remove="setParent(undefined)" />
               <button ref="parentAnchor" class="rounded-md px-1.5 py-0.5 text-ink-faint hover:bg-hover hover:text-ink" @click="parentOpen = !parentOpen">
-                {{ object.parentId ? 'Change' : 'None' }}
+                {{ object.parentId ? t('object.change') : t('object.none') }}
               </button>
               <PopoverMenu v-model:open="parentOpen" :anchor="parentAnchor" width="16rem">
-                <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="[object.id]" create-label="New tag" @pick="setParent" @create="createParent" />
+                <ObjectPicker :type-ids="tagType ? [tagType.id] : []" :exclude="[object.id]" :create-label="t('object.newTag')" @pick="setParent" @create="createParent" />
               </PopoverMenu>
             </div>
           </div>
@@ -950,7 +967,7 @@ async function startFrom(template: ObjectRecord) {
             <!-- A food's nutrients wear their color, as everywhere else. -->
             <span v-if="isFoodOrRecipe && isNutrientKey(def.id)" class="grid w-4 shrink-0 place-items-center"><span class="h-2.5 w-2.5 rounded-full" :style="{ background: nutrientColor(def.id) }" /></span>
             <AppIcon v-else :icon="def.icon" :fallback="isHabit && def.id === HABIT_REMIND_PROPERTY_ID ? 'ph:alarm' : kindIcon(def.kind)" class="text-ink-faint" />
-            <span class="truncate">{{ def.name }}</span>
+            <span class="truncate">{{ propName(def) }}</span>
           </div>
           <!-- A habit's "Remind at" is a time of day, kept as "HH:MM" text. -->
           <div v-if="isHabit && def.id === HABIT_REMIND_PROPERTY_ID" class="flex min-h-8 flex-1 items-center gap-1">
@@ -961,40 +978,40 @@ async function startFrom(template: ObjectRecord) {
               :class="habitRemindAt(object) ? '' : 'text-ink-faint'"
               @change="setRemindAt(def, ($event.target as HTMLInputElement).value)"
             />
-            <button v-if="habitRemindAt(object)" class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="No reminder" @click="setRemindAt(def, '')">
+            <button v-if="habitRemindAt(object)" class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="t('object.noReminder')" @click="setRemindAt(def, '')">
               <AppIcon fallback="ph:x" :size="13" />
             </button>
-            <span v-else class="text-xs text-ink-faint">No reminder</span>
+            <span v-else class="text-xs text-ink-faint">{{ t('object.noReminder') }}</span>
           </div>
           <!-- A formula is computed: shown, not edited (its expression is in the type's settings). -->
           <div v-else-if="def.kind === 'formula'" class="flex min-h-8 min-w-0 flex-1 items-center py-1 pl-3.5 pr-2" :title="formulaToNames(def.expression, type!, workspace.types)">
             <PropertyDisplay :def="def" :value="undefined" :object="object" wrap />
           </div>
           <div v-else-if="fills[def.id] !== undefined" class="flex min-h-8 flex-1 items-center gap-1 pl-2">
-            <button class="rounded-md bg-violet-50 px-1.5 py-0.5 font-mono text-xs text-violet-700 ring-1 ring-violet-200 hover:brightness-95 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900" title="Edit placeholder" @click="setFill(def)" v-text="braced(fills[def.id]!)" />
-            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" title="A value instead" @click="clearFill(def)"><AppIcon fallback="ph:x" :size="13" /></button>
+            <button class="rounded-md bg-violet-50 px-1.5 py-0.5 font-mono text-xs text-violet-700 ring-1 ring-violet-200 hover:brightness-95 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900" :title="t('object.editPlaceholder')" @click="setFill(def)" v-text="braced(fills[def.id]!)" />
+            <button class="rounded-md p-1 text-ink-faint hover:bg-hover hover:text-ink" :title="t('object.valueInstead')" @click="clearFill(def)"><AppIcon fallback="ph:x" :size="13" /></button>
           </div>
           <div v-else-if="fillable(def)" class="group/fill flex min-w-0 flex-1 items-center">
             <PropertyValueEditor :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
-            <button class="mr-1 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/fill:opacity-100 [@media(hover:none)]:opacity-100" title="Fill from a placeholder (date:+7d, me…)" @click="setFill(def)" v-text="braced(' ')" />
+            <button class="mr-1 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-xs text-ink-faint opacity-0 hover:bg-hover hover:text-ink group-hover/fill:opacity-100 [@media(hover:none)]:opacity-100" :title="t('object.fillFromPlaceholderHint')" @click="setFill(def)" v-text="braced(' ')" />
           </div>
           <PropertyValueEditor v-else :def="def" :value="object.props[def.id]" @update="setProp(def, $event)" @add-option="addOption(def, $event)" />
         </div>
         <ReverseRelations v-if="!info" :object-id="object.id" :type-id="object.typeId" :show-empty="showAllFields" />
-        <p v-if="ruleProblems.length" class="mt-1 flex items-center gap-1.5 px-1 text-xs text-amber-600 dark:text-amber-400" :title="`Agents and scripts can't save a ${type?.name ?? 'object'} like this`">
-          <AppIcon fallback="ph:warning" :size="13" /> {{ type?.name }}: {{ ruleProblems.join('; ') }}
+        <p v-if="ruleProblems.length" class="mt-1 flex items-center gap-1.5 px-1 text-xs text-amber-600 dark:text-amber-400" :title="t('object.ruleProblemsTitle', { type: type ? typeName(type) : t('object.objectFallback') })">
+          <AppIcon fallback="ph:warning" :size="13" /> {{ type ? typeName(type) : '' }}: {{ ruleProblems.join('; ') }}
         </p>
         <div class="mt-1 flex gap-3 text-xs text-ink-faint">
-          <button v-if="hiddenCount" class="rounded px-1 py-1 hover:text-ink" @click="showAllFields = true">Show {{ hiddenCount }} empty properties</button>
+          <button v-if="hiddenCount" class="rounded px-1 py-1 hover:text-ink" @click="showAllFields = true">{{ tc(hiddenCount, 'object.showEmptyProps.one', 'object.showEmptyProps.other') }}</button>
           <button ref="addAnchor" class="flex items-center gap-1 rounded px-1 py-1 hover:text-ink" @click="addOpen = !addOpen">
-            <AppIcon fallback="ph:plus" :size="12" /> Add property to {{ type?.name }}
+            <AppIcon fallback="ph:plus" :size="12" /> {{ t('object.addPropertyTo', { type: type ? typeName(type) : '' }) }}
           </button>
         </div>
         <PopoverMenu v-model:open="addOpen" :anchor="addAnchor" width="15rem">
           <input
             v-model="newProperty.name"
             class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"
-            placeholder="Property name"
+            :placeholder="t('object.propertyName')"
             @keydown.enter.prevent="addProperty"
           />
           <button
@@ -1015,7 +1032,7 @@ async function startFrom(template: ObjectRecord) {
             @keydown.enter.prevent="addProperty"
           />
           <button class="mt-1 w-full rounded-lg bg-ink px-2.5 py-1.5 text-sm text-surface disabled:opacity-40" :disabled="!newProperty.name.trim()" @click="addProperty">
-            Add property
+            {{ t('object.addProperty') }}
           </button>
         </PopoverMenu>
       </div>
@@ -1034,7 +1051,7 @@ async function startFrom(template: ObjectRecord) {
       <section v-if="isQuery" class="mt-8">
         <div class="rounded-xl border border-line">
           <button class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-ink-soft hover:text-ink" @click="queryOpen = !queryOpen">
-            <AppIcon fallback="ph:sliders-horizontal" /> Query settings
+            <AppIcon fallback="ph:sliders-horizontal" /> {{ t('object.querySettings') }}
             <AppIcon :fallback="queryOpen ? 'ph:caret-up' : 'ph:caret-down'" class="ml-auto" :size="14" />
           </button>
           <div v-if="queryOpen" class="border-t border-line px-3 py-3">
@@ -1052,11 +1069,11 @@ async function startFrom(template: ObjectRecord) {
           @keydown.esc="!$event.defaultPrevented && (boardFull = false)"
         >
           <WhiteboardCanvas v-if="board" :doc="board.doc" :board-id="object.id" :title="object.title" :readonly="!!object.deletedAt" />
-          <div v-else class="grid h-full place-items-center text-sm text-ink-faint">{{ boardFailed ? 'This board needs a connection to the server.' : 'Opening the board…' }}</div>
+          <div v-else class="grid h-full place-items-center text-sm text-ink-faint">{{ boardFailed ? t('object.boardNeedsConnection') : t('object.boardOpening') }}</div>
           <button
             class="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-ink-soft shadow-sm hover:bg-hover hover:text-ink"
-            :title="boardFull ? 'Leave full screen (Esc)' : 'Full screen'"
-            :aria-label="boardFull ? 'Leave full screen' : 'Full screen'"
+            :title="boardFull ? t('object.leaveFullScreenEsc') : t('object.fullScreen')"
+            :aria-label="boardFull ? t('object.leaveFullScreen') : t('object.fullScreen')"
             @click="toggleBoardFull"
           >
             <AppIcon :fallback="boardFull ? 'ph:corners-in' : 'ph:corners-out'" :size="16" />
@@ -1066,7 +1083,7 @@ async function startFrom(template: ObjectRecord) {
       </Teleport>
 
       <div v-for="(field, index) in richFields" :key="field.id" :class="embedded && index === 0 ? '' : 'mt-8'">
-        <h2 v-if="richFields.length > 1 || index > 0" class="mb-2 text-sm font-semibold text-ink-soft">{{ field.name }}</h2>
+        <h2 v-if="richFields.length > 1 || index > 0" class="mb-2 text-sm font-semibold text-ink-soft">{{ propName(field) }}</h2>
         <DocEditor
           v-if="editorsReady"
           :key="text ? 'yjs' : 'json'"

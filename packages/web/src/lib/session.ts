@@ -4,6 +4,7 @@ import { reactive } from 'vue'
 import type { User } from '@vasta/core'
 import { authApi, setUnauthorizedHandler } from './api.ts'
 import { connectEvents, disconnectEvents } from './events.ts'
+import { t } from './i18n.ts'
 import { forgetNotifyToken, provideNotifyToken } from './platform.ts'
 import { replicaRefusedByServer, startReplica, stopReplica } from './replica.ts'
 import { people } from './people.ts'
@@ -60,7 +61,7 @@ export async function checkSession() {
     replicaAllowed = replica
     if (user) await start(user)
   } catch (error) {
-    session.error = `Could not reach the Vasta server (${(error as Error).message}).`
+    session.error = t('errors.cannotReachServer', { message: (error as Error).message })
   } finally {
     session.checked = true
   }

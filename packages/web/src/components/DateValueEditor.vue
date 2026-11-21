@@ -7,6 +7,7 @@ import { addDays } from '@vasta/core'
 import { dayKey } from '../lib/actions.ts'
 import { WEEKDAY_CODES, buildRepeat, describeRepeat, formatWeekday, parseRepeat, viewerTimeZone, weekdayOf, type RepeatFreq, type RepeatRule } from '../lib/calendar.ts'
 import { formatDate } from '../lib/format.ts'
+import { t, tc } from '../lib/i18n.ts'
 import AppIcon from './AppIcon.vue'
 import PopoverMenu from './PopoverMenu.vue'
 
@@ -120,23 +121,23 @@ function setToday() {
 <template>
   <button ref="anchor" class="flex min-h-8 items-center gap-1.5 rounded-md px-2 py-1 text-left hover:bg-hover" @click="open = !open">
     <span v-if="value">{{ label }}</span>
-    <span v-else class="text-ink-faint">Empty</span>
+    <span v-else class="text-ink-faint">{{ t('common.empty') }}</span>
     <span v-if="repeatLabel" class="flex items-center gap-1 text-xs text-ink-faint"><AppIcon fallback="ph:repeat" :size="12" />{{ repeatLabel }}</span>
   </button>
   <PopoverMenu v-model:open="open" :anchor="anchor" width="19rem">
     <div class="space-y-3 p-2 text-sm">
       <div v-if="!value" class="flex gap-2">
-        <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="setToday">Today</button>
-        <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="commit({ startDay: addDays(dayKey(), 1) })">Tomorrow</button>
+        <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="setToday">{{ t('common.today') }}</button>
+        <button class="flex-1 rounded-lg bg-hover px-2.5 py-1.5 hover:bg-line" @click="commit({ startDay: addDays(dayKey(), 1) })">{{ t('common.tomorrow') }}</button>
       </div>
 
       <label class="flex items-center justify-between">
-        <span class="text-ink-soft">All day</span>
+        <span class="text-ink-soft">{{ t('dateEditor.allDay') }}</span>
         <input type="checkbox" class="h-4 w-4 accent-[var(--color-accent)]" :checked="allDay" :disabled="!value" @change="commit({ allDay: ($event.target as HTMLInputElement).checked })" />
       </label>
 
       <div class="space-y-1">
-        <div class="text-xs font-medium text-ink-faint">{{ value?.end ? 'Start' : 'Date' }}</div>
+        <div class="text-xs font-medium text-ink-faint">{{ value?.end ? t('dateEditor.start') : t('dateEditor.date') }}</div>
         <div class="flex gap-1.5">
           <input type="date" :value="startDay" class="min-w-0 flex-1 rounded-lg bg-hover px-2 py-1 outline-none" @change="commit({ startDay: ($event.target as HTMLInputElement).value })" />
           <input v-if="!allDay" type="time" :value="startTime" class="w-24 rounded-lg bg-hover px-2 py-1 outline-none" @change="commit({ startTime: ($event.target as HTMLInputElement).value })" />
@@ -145,15 +146,15 @@ function setToday() {
 
       <div v-if="value?.end" class="space-y-1">
         <div class="flex items-center text-xs font-medium text-ink-faint">
-          End
-          <button class="ml-auto rounded px-1 hover:bg-hover hover:text-ink" title="Remove end" @click="commit({ endDay: null })"><AppIcon fallback="ph:x" :size="12" /></button>
+          {{ t('dateEditor.end') }}
+          <button class="ml-auto rounded px-1 hover:bg-hover hover:text-ink" :title="t('dateEditor.removeEnd')" @click="commit({ endDay: null })"><AppIcon fallback="ph:x" :size="12" /></button>
         </div>
         <div class="flex gap-1.5">
           <input type="date" :value="endDay" class="min-w-0 flex-1 rounded-lg bg-hover px-2 py-1 outline-none" @change="commit({ endDay: ($event.target as HTMLInputElement).value })" />
           <input v-if="!allDay" type="time" :value="endTime" class="w-24 rounded-lg bg-hover px-2 py-1 outline-none" @change="commit({ endTime: ($event.target as HTMLInputElement).value })" />
         </div>
       </div>
-      <button v-else-if="value" class="flex items-center gap-1 text-xs text-ink-faint hover:text-ink" @click="addEnd"><AppIcon fallback="ph:plus" :size="12" /> Add end</button>
+      <button v-else-if="value" class="flex items-center gap-1 text-xs text-ink-faint hover:text-ink" @click="addEnd"><AppIcon fallback="ph:plus" :size="12" /> {{ t('dateEditor.addEnd') }}</button>
 
       <div v-if="value" class="space-y-2 border-t border-line pt-3">
         <div class="flex items-center gap-2">
@@ -163,17 +164,17 @@ function setToday() {
             class="flex-1 rounded-lg bg-hover px-2 py-1 outline-none"
             @change="setFreq(($event.target as HTMLSelectElement).value as RepeatFreq | '')"
           >
-            <option value="">Does not repeat</option>
-            <option value="DAILY">Daily</option>
-            <option value="WEEKLY">Weekly</option>
-            <option value="MONTHLY">Monthly</option>
-            <option value="YEARLY">Yearly</option>
-            <option v-if="unknownRule" value="custom" disabled>Custom ({{ value.rrule }})</option>
+            <option value="">{{ t('dateEditor.noRepeat') }}</option>
+            <option value="DAILY">{{ t('dateEditor.daily') }}</option>
+            <option value="WEEKLY">{{ t('dateEditor.weekly') }}</option>
+            <option value="MONTHLY">{{ t('dateEditor.monthly') }}</option>
+            <option value="YEARLY">{{ t('dateEditor.yearly') }}</option>
+            <option v-if="unknownRule" value="custom" disabled>{{ t('dateEditor.custom', { rrule: value.rrule ?? '' }) }}</option>
           </select>
         </div>
         <template v-if="rule">
           <label class="flex items-center gap-2 text-ink-soft">
-            Every
+            {{ t('dateEditor.every') }}
             <input
               type="number"
               min="1"
@@ -181,7 +182,7 @@ function setToday() {
               class="w-14 rounded-lg bg-hover px-2 py-1 outline-none"
               @change="setRule({ ...rule, interval: Math.max(1, Number(($event.target as HTMLInputElement).value) || 1) })"
             />
-            {{ { DAILY: 'day', WEEKLY: 'week', MONTHLY: 'month', YEARLY: 'year' }[rule.freq] }}{{ rule.interval > 1 ? 's' : '' }}
+            {{ tc(rule.interval, `dateEditor.unit.${rule.freq}.one`, `dateEditor.unit.${rule.freq}.other`) }}
           </label>
           <div v-if="rule.freq === 'WEEKLY'" class="flex gap-1">
             <button
@@ -195,11 +196,11 @@ function setToday() {
             </button>
           </div>
           <div class="flex items-center gap-2 text-ink-soft">
-            Ends
+            {{ t('dateEditor.ends') }}
             <select :value="ends" class="rounded-lg bg-hover px-2 py-1 outline-none" @change="setEnds(($event.target as HTMLSelectElement).value as 'never' | 'until' | 'count')">
-              <option value="never">never</option>
-              <option value="until">on</option>
-              <option value="count">after</option>
+              <option value="never">{{ t('dateEditor.endsNever') }}</option>
+              <option value="until">{{ t('dateEditor.endsUntil') }}</option>
+              <option value="count">{{ t('dateEditor.endsCount') }}</option>
             </select>
             <input
               v-if="ends === 'until'"
@@ -216,14 +217,14 @@ function setToday() {
                 class="w-14 rounded-lg bg-hover px-2 py-1 outline-none"
                 @change="setRule({ ...rule, count: Math.max(1, Number(($event.target as HTMLInputElement).value) || 1) })"
               />
-              times
+              {{ t('dateEditor.times') }}
             </template>
           </div>
         </template>
       </div>
 
       <button v-if="value" class="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-red-600 hover:bg-hover" @click="emit('update', undefined), (open = false)">
-        <AppIcon fallback="ph:trash" /> Clear date
+        <AppIcon fallback="ph:trash" /> {{ t('dateEditor.clearDate') }}
       </button>
     </div>
   </PopoverMenu>

@@ -14,6 +14,7 @@ import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import SidePane from './components/SidePane.vue'
 import TopBar from './components/TopBar.vue'
 import { reminderEditor } from './lib/insistent.ts'
+import { t } from './lib/i18n.ts'
 import { closeTakeover, listenToDesktop, trafficLights } from './lib/platform.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
@@ -119,7 +120,7 @@ function onTouchEnd(event: TouchEvent) {
   </div>
   <LoginView v-else-if="session.checked && !session.user && !session.error" />
   <div v-else class="grid h-full place-items-center text-sm text-ink-soft">
-    <p>{{ session.error || workspace.error || 'Loading…' }}</p>
+    <p>{{ session.error || workspace.error || t('common.loading') }}</p>
   </div>
   <!-- macOS desktop app: no title bar, so the top of the login and loading screens moves the window. -->
   <div v-if="trafficLights && !(session.user && workspace.ready)" class="fixed inset-x-0 top-0 h-12" data-tauri-drag-region />

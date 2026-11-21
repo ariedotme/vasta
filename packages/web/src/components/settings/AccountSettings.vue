@@ -2,6 +2,7 @@
 // The logged-in user's name, time zone and capture space; the password opens PasswordDialog.
 import { computed, ref } from 'vue'
 import { authApi } from '../../lib/api.ts'
+import { t } from '../../lib/i18n.ts'
 import { isLocalServer } from '../../lib/platform.ts'
 import { session } from '../../lib/session.ts'
 import { ui, workspace } from '../../lib/state.ts'
@@ -44,37 +45,37 @@ async function save() {
 </script>
 
 <template>
-  <SettingsSection id="account" title="Account">
+  <SettingsSection id="account" :title="t('settings.section.account')">
     <form class="grid gap-4 sm:grid-cols-2" @submit.prevent="save">
       <label :class="label">
-        Name
+        {{ t('typeSettings.name') }}
         <input v-model="name" :class="field" autocomplete="name" />
       </label>
       <label :class="label">
-        Username
+        {{ t('auth.username') }}
         <input :value="user.username" :class="field" class="text-ink-soft" disabled />
       </label>
       <label :class="label">
-        Time zone
-        <input v-model="timeZone" :class="field" list="settings-zones" placeholder="The server's zone" />
+        {{ t('settings.account.timeZone') }}
+        <input v-model="timeZone" :class="field" list="settings-zones" :placeholder="t('settings.account.serverZonePlaceholder')" />
         <datalist id="settings-zones"><option v-for="zone in zones" :key="zone" :value="zone" /></datalist>
         <span class="mt-1 block">
-          Decides which day captures land on.
-          <button v-if="timeZone !== deviceZone" type="button" class="text-accent hover:underline" @click="timeZone = deviceZone">Use {{ deviceZone }}</button>
+          {{ t('settings.account.timeZoneHint') }}
+          <button v-if="timeZone !== deviceZone" type="button" class="text-accent hover:underline" @click="timeZone = deviceZone">{{ t('settings.account.useZone', { zone: deviceZone }) }}</button>
         </span>
       </label>
       <label :class="label">
-        Capture space
+        {{ t('settings.account.captureSpace') }}
         <select v-model="captureSpaceId" :class="field">
-          <option value="">First space ({{ workspace.spaces[0]?.name }})</option>
+          <option value="">{{ t('settings.account.firstSpace', { name: workspace.spaces[0]?.name ?? '' }) }}</option>
           <option v-for="space in workspace.spaces" :key="space.id" :value="space.id">{{ space.name }}</option>
         </select>
-        <span class="mt-1 block">Where Telegram, the browser extension and Shortcuts save. Quick capture uses it too, or the open space when none is chosen.</span>
+        <span class="mt-1 block">{{ t('settings.account.captureSpaceHint') }}</span>
       </label>
       <div class="flex items-center gap-2 sm:col-span-2">
-        <button type="submit" :class="primary" :disabled="!dirty || busy">Save</button>
-        <button v-if="!isLocalServer()" type="button" :class="secondary" @click="ui.passwordOpen = true">Change password…</button>
-        <span v-if="saved" class="text-sm text-ink-soft">Saved</span>
+        <button type="submit" :class="primary" :disabled="!dirty || busy">{{ t('common.save') }}</button>
+        <button v-if="!isLocalServer()" type="button" :class="secondary" @click="ui.passwordOpen = true">{{ t('settings.account.changePassword') }}</button>
+        <span v-if="saved" class="text-sm text-ink-soft">{{ t('settings.saved') }}</span>
         <span v-if="error" :class="errorText">{{ error }}</span>
       </div>
     </form>

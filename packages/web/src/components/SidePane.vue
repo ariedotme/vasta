@@ -4,6 +4,7 @@
 // device. Phones have no room for it, and the page of the same object needs no pane: an address
 // with one opens the page instead.
 import { defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { t } from '../lib/i18n.ts'
 import { closePane, expandPane, pageObjectId, paneBlockId, paneObjectId } from '../lib/open.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -89,7 +90,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', fit))
     v-if="paneObjectId && !isPhone"
     ref="pane"
     tabindex="-1"
-    aria-label="Side pane"
+    :aria-label="t('pane.label')"
     data-side-pane
     class="relative mb-2 mr-2 flex shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-[0_1px_3px_rgb(0_0_0/0.04)] outline-none"
     :style="{ width: `${width}px` }"
@@ -97,7 +98,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', fit))
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize the side pane"
+      :aria-label="t('pane.resize')"
       :aria-valuenow="width"
       tabindex="0"
       class="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize hover:bg-accent/30 focus-visible:bg-accent/40 focus-visible:outline-none"
@@ -108,10 +109,10 @@ onBeforeUnmount(() => window.removeEventListener('resize', fit))
       @keydown="resizeByKey"
     />
     <div class="flex shrink-0 items-center justify-end gap-0.5 border-b border-line px-2 py-1 text-ink-soft">
-      <button class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover hover:text-ink" title="Open full page" @click="expandPane()">
+      <button class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover hover:text-ink" :title="t('pane.expand')" @click="expandPane()">
         <AppIcon fallback="ph:arrows-out-simple" :size="15" />
       </button>
-      <button class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover hover:text-ink" title="Close (Esc)" @click="closePane()">
+      <button class="grid h-7 w-7 place-items-center rounded-md hover:bg-hover hover:text-ink" :title="t('pane.closeEsc')" @click="closePane()">
         <AppIcon fallback="ph:x" :size="15" />
       </button>
     </div>

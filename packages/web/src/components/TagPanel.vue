@@ -8,6 +8,7 @@ import { api } from '../lib/api.ts'
 import { viewerTimeZone } from '../lib/calendar.ts'
 import { onChange } from '../lib/events.ts'
 import { displayTitle, formatRelative } from '../lib/format.ts'
+import { t } from '../lib/i18n.ts'
 import { promptDialog } from '../lib/overlays.ts'
 import { lastError, primeSummaries, systemType, typesById, workspace } from '../lib/state.ts'
 import { descendantsOf, objectColor } from '../lib/tags.ts'
@@ -54,7 +55,7 @@ onBeforeUnmount(() => {
 
 async function newSubTag() {
   const tagType = systemType('tag')
-  const title = await promptDialog({ title: 'New sub-tag', placeholder: 'breakfast', confirmLabel: 'Create' })
+  const title = await promptDialog({ title: t('tags.newSubTag'), placeholder: t('tags.placeholder'), confirmLabel: t('common.create') })
   if (!title?.trim() || !tagType) return
   try {
     await createObject(tagType.id, { title: title.trim(), parentId: props.tagId }, false)
@@ -71,21 +72,21 @@ const heading = 'mb-2 flex items-center gap-2 text-sm font-semibold text-ink-sof
 <template>
   <section class="mt-10">
     <h2 :class="heading">
-      <AppIcon fallback="ph:tree-structure" /> Sub-tags <span v-if="children.length" class="font-normal text-ink-faint">{{ children.length }}</span>
+      <AppIcon fallback="ph:tree-structure" /> {{ t('tags.subTags') }} <span v-if="children.length" class="font-normal text-ink-faint">{{ children.length }}</span>
     </h2>
     <div class="flex flex-wrap items-center gap-1.5">
       <ObjectChip v-for="child in children" :key="child.id" :id="child.id" tag />
       <button class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-ink-faint hover:bg-hover hover:text-ink" @click="newSubTag">
-        <AppIcon fallback="ph:plus" :size="13" /> New sub-tag
+        <AppIcon fallback="ph:plus" :size="13" /> {{ t('tags.newSubTag') }}
       </button>
     </div>
   </section>
 
   <section class="mt-10">
     <h2 :class="heading">
-      <AppIcon fallback="ph:tag" /> Tagged <span class="font-normal text-ink-faint">{{ tagged.length }}</span>
+      <AppIcon fallback="ph:tag" /> {{ t('backlinks.tag') }} <span class="font-normal text-ink-faint">{{ tagged.length }}</span>
     </h2>
-    <p v-if="!tagged.length" class="text-sm text-ink-faint">Nothing has this tag{{ children.length ? ' or its sub-tags' : '' }} yet.</p>
+    <p v-if="!tagged.length" class="text-sm text-ink-faint">{{ children.length ? t('tags.nothingTaggedFamily') : t('tags.nothingTagged') }}</p>
     <ObjectLink v-for="object in tagged" :key="object.id" :id="object.id" class="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-hover">
       <TypeIcon :icon="object.icon ?? typeOf(object)?.icon" fallback="ph:file-text" :color="objectColor(object, typeOf(object))" />
       <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ displayTitle(object, typeOf(object)) }}</span>

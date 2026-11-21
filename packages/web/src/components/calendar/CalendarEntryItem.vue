@@ -9,6 +9,7 @@ import { entryTime, isDone, setTaskDone } from '../../lib/calendar.ts'
 import { ENTRY_DRAGGING, drag, pressEntry } from '../../lib/calendar-drag.ts'
 import { chip } from '../../lib/colors.ts'
 import { displayTitle } from '../../lib/format.ts'
+import { propName, t, typeName } from '../../lib/i18n.ts'
 import { summaryOf, typesById } from '../../lib/state.ts'
 import AppIcon from '../AppIcon.vue'
 import ObjectLink from '../ObjectLink.vue'
@@ -36,10 +37,14 @@ const checkable = computed(() => isTask.value && (!props.entry.recurring || !!pr
 const done = computed(() => isTask.value && isDone(type.value, summary.value?.props.status?.kind === 'select' ? summary.value.props.status.value : undefined))
 const title = computed(() => (props.entry.kind === 'external' ? (props.entry.title ?? '') : displayTitle(summary.value, type.value)))
 const color = computed(() => (props.entry.kind === 'external' ? (props.source?.color ?? 'sky') : (type.value?.color ?? 'gray')))
-const fieldName = computed(() => (props.entry.field && props.entry.field !== 'date' ? type.value?.properties.find((p) => p.id === props.entry.field)?.name : undefined))
+const fieldName = computed(() => {
+  if (!props.entry.field || props.entry.field === 'date') return undefined
+  const def = type.value?.properties.find((p) => p.id === props.entry.field)
+  return def ? propName(def) : undefined
+})
 const time = computed(() => entryTime(props.entry))
 const tooltip = computed(() =>
-  [title.value, time.value, props.entry.kind === 'external' ? props.source?.name : [type.value?.name, fieldName.value].filter(Boolean).join(' · ')].filter(Boolean).join('\n')
+  [title.value, time.value, props.entry.kind === 'external' ? props.source?.name : [type.value ? typeName(type.value) : '', fieldName.value].filter(Boolean).join(' · ')].filter(Boolean).join('\n')
 )
 const lifted = computed(() => drag.active && drag.entry?.key === props.entry.key)
 
@@ -96,7 +101,7 @@ function onContextMenu(event: MouseEvent) {
       <button
         v-if="checkable"
         class="shrink-0 rounded-sm hover:opacity-70"
-        :title="done ? 'Mark as to do' : 'Mark as done'"
+        :title="done ? t('calendar.markAsTodo') : t('calendar.markAsDone')"
         @click.prevent.stop="toggleDone"
       >
         <AppIcon :fallback="done ? 'ph:check-circle-fill' : 'ph:circle'" :size="13" />
@@ -112,7 +117,7 @@ function onContextMenu(event: MouseEvent) {
     <span
       v-if="resizable"
       class="vasta-resize absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize max-md:h-3"
-      title="Drag to change the end"
+      :title="t('calendar.dragEnd')"
       @pointerdown.stop="onPointerDown($event, 'resize')"
       @click.prevent.stop
     />

@@ -7,6 +7,7 @@ import { habitFoodRule, habitProgress, habitTarget, isHabitDone, type ObjectSumm
 import { dayKey } from '../lib/actions.ts'
 import { iconTextClasses, swatchClasses } from '../lib/colors.ts'
 import { askHabitAmount, habitAmountLabel, habitColor, stepHabit } from '../lib/habits.ts'
+import { locale, t } from '../lib/i18n.ts'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{ habit: ObjectSummary; day: string; size?: number; square?: boolean }>()
@@ -17,13 +18,16 @@ const progress = computed(() => habitProgress(props.habit, props.day))
 const goal = computed(() => !!habitTarget(props.habit))
 const future = computed(() => props.day > dayKey())
 const color = computed(() => habitColor(props.habit))
-const longDay = new Intl.DateTimeFormat(typeof navigator !== 'undefined' ? navigator.language : 'en', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+const longDay = computed(() => new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }))
 const title = computed(() => {
-  const date = longDay.format(new Date(`${props.day}T00:00:00.000Z`))
-  if (future.value) return `${date} · not yet`
-  if (habitFoodRule(props.habit)) return `${date} · ${goal.value ? habitAmountLabel(props.habit, props.day) : done.value ? 'done' : 'not done'} · from what you log in Food`
-  if (goal.value) return `${date} · ${habitAmountLabel(props.habit, props.day)} (${Math.round(progress.value * 100)}%) · click to add 1, right click to type the amount`
-  return `${date} · ${done.value ? 'done · click to undo' : 'click to mark as done'}`
+  const date = longDay.value.format(new Date(`${props.day}T00:00:00.000Z`))
+  if (future.value) return t('habits.check.notYet', { date })
+  if (habitFoodRule(props.habit)) {
+    const state = goal.value ? habitAmountLabel(props.habit, props.day) : done.value ? t('habits.check.doneLower') : t('habits.check.notDoneLower')
+    return t('habits.check.fromFood', { date, state })
+  }
+  if (goal.value) return t('habits.check.goal', { date, amount: habitAmountLabel(props.habit, props.day), pct: Math.round(progress.value * 100) })
+  return done.value ? t('habits.check.doneUndo', { date }) : t('habits.check.markDone', { date })
 })
 const radius = computed(() => size.value / 2 - 2)
 const circumference = computed(() => 2 * Math.PI * radius.value)

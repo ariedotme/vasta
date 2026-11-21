@@ -6,6 +6,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { Backlink, Id, ObjectSummary, RelationPropertyDef } from '@vasta/core'
 import { api } from '../lib/api.ts'
 import { onChange } from '../lib/events.ts'
+import { propName, t, typePluralName } from '../lib/i18n.ts'
 import { primeFromObject, primeSummaries, typesById, workspace } from '../lib/state.ts'
 import AppIcon from './AppIcon.vue'
 import ObjectChip from './ObjectChip.vue'
@@ -83,12 +84,12 @@ async function unlink(row: Row, other: ObjectSummary) {
 
 <template>
   <div v-for="row in rows" :key="row.key" class="vasta-prop-row">
-    <div class="vasta-prop-name" :title="`${typesById.get(row.typeId)?.pluralName} whose “${row.def.name}” is this object`">
+    <div class="vasta-prop-name" :title="t('reverse.tooltip', { plural: typesById.get(row.typeId) ? typePluralName(typesById.get(row.typeId)!) : '', prop: propName(row.def) })">
       <AppIcon :icon="typesById.get(row.typeId)?.icon" fallback="ph:arrows-left-right" class="text-ink-faint" />
       <span v-if="row.def.reverseName?.trim()" class="truncate">{{ row.def.reverseName.trim() }}</span>
       <template v-else>
-        <span class="truncate">{{ typesById.get(row.typeId)?.pluralName }}</span>
-        <span class="shrink-0 truncate text-xs text-ink-faint">· {{ row.def.name }}</span>
+        <span class="truncate">{{ typesById.get(row.typeId) ? typePluralName(typesById.get(row.typeId)!) : '' }}</span>
+        <span class="shrink-0 truncate text-xs text-ink-faint">· {{ propName(row.def) }}</span>
       </template>
     </div>
     <div class="flex min-h-9 flex-1 flex-wrap items-center gap-1 py-1.5">
@@ -98,7 +99,7 @@ async function unlink(row: Row, other: ObjectSummary) {
         class="rounded-md px-1.5 py-0.5 text-ink-faint hover:bg-hover hover:text-ink"
         @click="openKey = openKey === row.key ? null : row.key"
       >
-        {{ row.objects.length ? '+' : 'Add' }}
+        {{ row.objects.length ? '+' : t('common.add') }}
       </button>
       <PopoverMenu :open="openKey === row.key" :anchor="anchors[row.key]" width="16rem" @update:open="(v) => (openKey = v ? row.key : null)">
         <ObjectPicker :type-ids="[row.typeId]" :exclude="row.objects.map((o) => o.id)" @pick="link(row, $event)" />

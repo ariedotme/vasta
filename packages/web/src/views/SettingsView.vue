@@ -22,6 +22,7 @@ import TelegramSettings from '../components/settings/TelegramSettings.vue'
 import TokenSettings from '../components/settings/TokenSettings.vue'
 import AgentSettings from '../components/settings/AgentSettings.vue'
 import { SECTIONS } from '../components/settings/sections.ts'
+import { t } from '../lib/i18n.ts'
 import { isDesktop } from '../lib/platform.ts'
 
 const root = ref<HTMLElement | null>(null)
@@ -58,8 +59,8 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
 
 <template>
   <div ref="root" class="mx-auto flex max-w-5xl gap-10 px-4 py-8 sm:px-8 md:py-12">
-    <nav class="sticky top-12 hidden h-fit w-48 shrink-0 lg:block" aria-label="Settings sections">
-      <h1 class="mb-4 px-2.5 text-2xl font-bold tracking-tight">Settings</h1>
+    <nav class="sticky top-12 hidden h-fit w-48 shrink-0 lg:block" :aria-label="t('settings.sectionsAria')">
+      <h1 class="mb-4 px-2.5 text-2xl font-bold tracking-tight">{{ t('common.settings') }}</h1>
       <button
         v-for="section in SECTIONS"
         :key="section.id"
@@ -75,7 +76,7 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
 
     <div class="min-w-0 max-w-2xl flex-1 space-y-6 max-md:space-y-0">
       <div class="lg:hidden">
-        <h1 class="text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 class="text-2xl font-bold tracking-tight">{{ t('common.settings') }}</h1>
         <nav class="-mx-1 mt-3 mb-6 flex flex-wrap gap-1 text-sm">
           <button v-for="section in SECTIONS" :key="section.id" class="flex items-center gap-1.5 rounded-md px-2 py-1 text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:py-1.5" @click="jump(section.id)">
             <AppIcon :fallback="section.icon" :size="14" class="text-ink-faint" /> {{ section.label }}

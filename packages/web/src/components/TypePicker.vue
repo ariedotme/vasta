@@ -2,6 +2,7 @@
 // Filterable list of types; emits the chosen one.
 import { computed, onMounted, ref } from 'vue'
 import type { ObjectType } from '@vasta/core'
+import { t, typeName, typePluralName } from '../lib/i18n.ts'
 import { workspace } from '../lib/state.ts'
 import TypeIcon from './TypeIcon.vue'
 
@@ -17,8 +18,15 @@ const types = computed(() => {
   const q = filter.value.trim().toLowerCase()
   return workspace.types
     .filter((t) => !(props.exclude ?? []).includes(t.id))
-    .filter((t) => (q ? t.name.toLowerCase().includes(q) || t.pluralName.toLowerCase().includes(q) : !HIDDEN.has(t.system ?? '')))
-    .sort((a, b) => (workspace.counts[b.id] ?? 0) - (workspace.counts[a.id] ?? 0) || a.name.localeCompare(b.name))
+    .filter((t) =>
+      q
+        ? typeName(t).toLowerCase().includes(q) ||
+          typePluralName(t).toLowerCase().includes(q) ||
+          t.name.toLowerCase().includes(q) ||
+          t.pluralName.toLowerCase().includes(q)
+        : !HIDDEN.has(t.system ?? '')
+    )
+    .sort((a, b) => (workspace.counts[b.id] ?? 0) - (workspace.counts[a.id] ?? 0) || typeName(a).localeCompare(typeName(b)))
 })
 
 function onKey(event: KeyboardEvent) {
@@ -38,7 +46,7 @@ onMounted(() => input.value?.focus())
       ref="input"
       v-model="filter"
       class="mb-1 w-full rounded-lg bg-hover px-2.5 py-1.5 text-sm outline-none placeholder:text-ink-faint"
-      placeholder="Type…"
+      :placeholder="t('picker.typePlaceholder')"
       @input="active = 0"
       @keydown="onKey"
     />
@@ -51,8 +59,8 @@ onMounted(() => input.value?.focus())
       @click="emit('pick', type)"
     >
       <TypeIcon :icon="type.icon" fallback="ph:cube" :color="type.color" />
-      <span class="truncate">{{ type.name }}</span>
+      <span class="truncate">{{ typeName(type) }}</span>
     </button>
-    <p v-if="!types.length" class="px-2.5 py-2 text-sm text-ink-faint">No matching type</p>
+    <p v-if="!types.length" class="px-2.5 py-2 text-sm text-ink-faint">{{ t('picker.noType') }}</p>
   </div>
 </template>
