@@ -8,6 +8,9 @@ GitHub release page.
 
 ### Added
 
+- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
+  view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
+  of Tasks, in the sidebar; its row opens the type on that view.
 - **Group by a date.** Views and queries can group by a date field: Earlier, Today, Tomorrow,
   This week, Next week, Later and No date. Boards show the date groups as columns or swimlanes,
   without moving or adding cards between them.
@@ -18,6 +21,11 @@ GitHub release page.
 - **Page width, on this device.** Settings › Appearance offers **Standard**, **Wide** or **Full
   width** for object pages and daily notes. Standard keeps text at its usual width and gives
   notes built with columns more room; side panes and whiteboards keep their own layout.
+
+### Fixed
+
+- **A type opens on the view you last picked in it** only once you pick one: the view it opened
+  on by default was remembered too, so reordering views later didn't change where it opened.
 
 ## 0.11.0 (2026-11-17)
 
@@ -100,9 +108,6 @@ GitHub release page.
   type view or query results, and the ⋯ More menu of an object's page and side pane now have a
   "Copy link to page" action. It copies `<server>/o/<id>` in the browser and `vasta://o/<id>`
   in the desktop app, matching existing block-link behaviour.
-- **Pin a view to the sidebar.** "Pin view to sidebar" in a type's "…" menu, a right-click on the
-  view's tab, or the tab dragged into a sidebar section puts that one view, such as a "Today" view
-  of Tasks, in the sidebar; its row opens the type on that view.
 
 ### Changed
 
@@ -115,8 +120,6 @@ GitHub release page.
   have their own row at the top. Pinned to a section, Tasks now show there too. New spaces no
   longer pin Tasks, since they have that row; in an older space, Tasks may show once under Pinned
   (Remove from Pinned takes it away).
-- **A type opens on the view you last picked in it** only once you pick one: the view it opened
-  on by default was remembered too, so reordering views later didn't change where it opened.
 
 ## 0.8.0 (2026-11-08)
 
