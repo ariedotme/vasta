@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.13.0 (2026-11-23)
+
 ### Added
 
 - **Manage object types in Settings & create types from templates.** **Settings › Object types**
