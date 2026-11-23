@@ -1,32 +1,61 @@
-// Moving and resizing calendar entries with pointer events, the same way for a mouse and a
-// finger: a mouse drags as soon as it moves, a finger after a long press (a short swipe still
-// scrolls). HTML5 drag and drop does not work on touch screens.
+// Moving, resizing and scheduling calendar entries with pointer events, the same way for a mouse
+// and a finger: a mouse drags as soon as it moves, a finger after a long press (a short swipe
+// still scrolls). HTML5 drag and drop does not work on touch screens.
 //
-// Drop targets are found under the pointer by their data attributes: `data-day` on day cells and
-// columns, plus `data-timed` on the hour columns, where the pointer's height gives the time.
+// Drop targets are found under the pointer by their data attributes:
+// - `data-day` on day cells and columns
+// - `data-timed` on hour columns, where the pointer's height gives the time
+// - `data-allday` on the TimeGrid's all-day cells (explicitly sets a day-only date)
+// - `data-unschedule-drop` on the tasks sidebar (clears a dropped entry's date)
 import { reactive, type InjectionKey } from 'vue'
-import type { CalendarEntry } from '@vasta/core'
+import type { CalendarEntry, ColorName, DateValue, Icon, Id } from '@vasta/core'
 import { HOUR_HEIGHT, minutesInto } from './calendar.ts'
 
 const LONG_PRESS = 400
 const SLOP = 8
 const SNAP = 15
 
-/** Where a moved entry would start, or (resizing) where it would end on its first day. */
-export interface DropTarget {
-  day: string
-  /** Minutes after midnight, over an hour column; absent over a day cell (the time stays). */
-  minutes?: number
+/** Where a moved/scheduled item would land, or (resizing) where it would end on its first day. */
+export type DropTarget =
+  | {
+      day: string
+      /** Minutes after midnight, over an hour column; absent over a day cell. */
+      minutes?: number
+      /** Explicitly over the TimeGrid's all-day row. */
+      allDay?: boolean
+      unschedule?: false
+    }
+  | {
+      unschedule: true
+      day?: undefined
+      minutes?: undefined
+      allDay?: undefined
+    }
+
+/** An object dragged from the calendar's scheduling sidebar onto the grid. */
+export interface ScheduleDragItem {
+  objectId: Id
+  field: Id
+  title: string
+  color?: ColorName | undefined
+  icon?: Icon | undefined
+  fallbackIcon?: string | undefined
+  currentDate?: DateValue | undefined
+  durationMinutes: number
 }
 
 export const drag = reactive({
   active: false,
-  mode: 'move' as 'move' | 'resize',
+  mode: 'move' as 'move' | 'resize' | 'schedule',
   entry: null as CalendarEntry | null,
+  scheduleItem: null as ScheduleDragItem | null,
   target: null as DropTarget | null,
+  x: 0,
+  y: 0,
 })
 
 export type DropHandler = (entry: CalendarEntry, mode: 'move' | 'resize', target: DropTarget) => void
+export type ScheduleDropHandler = (item: ScheduleDragItem, target: Extract<DropTarget, { day: string }>) => void
 
 /** What the calendar page gives its entries: which can move or be resized, and what a drop does. */
 export interface EntryDragging {
@@ -36,8 +65,9 @@ export interface EntryDragging {
 }
 export const ENTRY_DRAGGING: InjectionKey<EntryDragging> = Symbol('entry-dragging')
 
-let press:
+type PressState =
   | {
+      kind: 'entry'
       entry: CalendarEntry
       mode: 'move' | 'resize'
       pointerId: number
@@ -50,7 +80,17 @@ let press:
       timer?: ReturnType<typeof setTimeout>
       onDrop: DropHandler
     }
-  | undefined
+  | {
+      kind: 'schedule'
+      item: ScheduleDragItem
+      pointerId: number
+      x: number
+      y: number
+      timer?: ReturnType<typeof setTimeout>
+      onDrop: ScheduleDropHandler
+    }
+
+let press: PressState | undefined
 let scrollFrame = 0
 let lastPoint = { x: 0, y: 0 }
 
@@ -60,12 +100,26 @@ function cellAt(x: number, y: number): HTMLElement | undefined {
   return document.elementsFromPoint(x, y).find((element): element is HTMLElement => element instanceof HTMLElement && !!element.dataset.day)
 }
 
+function unscheduleZoneAt(x: number, y: number): boolean {
+  return document.elementsFromPoint(x, y).some((element) => element instanceof HTMLElement && element.dataset.unscheduleDrop !== undefined)
+}
+
+function attachListeners() {
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', cancel)
+  window.addEventListener('keydown', onKey, true)
+  // Once a finger drags, the page must not scroll under it.
+  window.addEventListener('touchmove', onTouchMove, { passive: false })
+}
+
 /** Start following a press on an entry (pointerdown). Clicks that never become a drag go on as clicks. */
 export function pressEntry(event: PointerEvent, entry: CalendarEntry, mode: 'move' | 'resize', onDrop: DropHandler) {
   if (event.button !== 0 || press) return
   const block = (event.currentTarget as HTMLElement).closest<HTMLElement>('.vasta-entry') ?? (event.currentTarget as HTMLElement)
   const cell = cellAt(event.clientX, event.clientY)
   press = {
+    kind: 'entry',
     entry,
     mode,
     pointerId: event.pointerId,
@@ -79,12 +133,23 @@ export function pressEntry(event: PointerEvent, entry: CalendarEntry, mode: 'mov
   if (mode === 'resize') event.stopPropagation()
   if (event.pointerType === 'touch') press.timer = setTimeout(begin, LONG_PRESS)
   else if (mode === 'resize') begin()
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-  window.addEventListener('pointercancel', cancel)
-  window.addEventListener('keydown', onKey, true)
-  // Once a finger drags, the page must not scroll under it.
-  window.addEventListener('touchmove', onTouchMove, { passive: false })
+  attachListeners()
+}
+
+/** Start following a press on a sidebar task/object to schedule it onto the calendar. */
+export function pressScheduleItem(event: PointerEvent, item: ScheduleDragItem, onDrop: ScheduleDropHandler) {
+  if (event.button !== 0 || press) return
+  press = {
+    kind: 'schedule',
+    item,
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    onDrop,
+  }
+  lastPoint = { x: event.clientX, y: event.clientY }
+  if (event.pointerType === 'touch') press.timer = setTimeout(begin, LONG_PRESS)
+  attachListeners()
 }
 
 const daysFrom = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
@@ -94,10 +159,20 @@ function begin() {
   clearTimeout(press.timer)
   press.timer = undefined
   drag.active = true
-  drag.mode = press.mode
-  drag.entry = press.entry
+  drag.x = lastPoint.x
+  drag.y = lastPoint.y
+  if (press.kind === 'schedule') {
+    drag.mode = 'schedule'
+    drag.entry = null
+    drag.scheduleItem = press.item
+    document.documentElement.classList.add('vasta-dragging')
+  } else {
+    drag.mode = press.mode
+    drag.entry = press.entry
+    drag.scheduleItem = null
+    document.documentElement.classList.add(press.mode === 'resize' ? 'vasta-resizing' : 'vasta-dragging')
+  }
   navigator.vibrate?.(10)
-  document.documentElement.classList.add(press.mode === 'resize' ? 'vasta-resizing' : 'vasta-dragging')
   update(lastPoint.x, lastPoint.y)
 }
 
@@ -112,12 +187,33 @@ function onMove(event: PointerEvent) {
     begin()
     return
   }
+  drag.x = event.clientX
+  drag.y = event.clientY
   update(event.clientX, event.clientY)
 }
 
 function update(x: number, y: number) {
   if (!press) return
   autoScroll(x, y)
+
+  if (press.kind === 'schedule') {
+    const cell = cellAt(x, y)
+    const day = cell?.dataset.day
+    if (!cell || !day) {
+      drag.target = null
+      return
+    }
+    if (cell.dataset.timed !== undefined) {
+      const maxStart = Math.max(0, 1440 - press.item.durationMinutes)
+      drag.target = { day, minutes: snap(((y - cell.getBoundingClientRect().top) / HOUR_HEIGHT) * 60, maxStart) }
+    } else if (cell.dataset.allday !== undefined) {
+      drag.target = { day, allDay: true }
+    } else {
+      drag.target = { day }
+    }
+    return
+  }
+
   const entry = press.entry
   if (press.mode === 'resize') {
     const column = document.querySelector<HTMLElement>(`[data-timed][data-day="${entry.startDay}"]`)
@@ -127,15 +223,30 @@ function update(x: number, y: number) {
     drag.target = { day: entry.startDay, minutes: Math.max(start + SNAP, minutes) }
     return
   }
+
+  // Dragging a non-recurring property entry back onto the tasks sidebar unschedules it.
+  if (entry.kind === 'property' && !entry.recurring && unscheduleZoneAt(x, y)) {
+    drag.target = { unschedule: true }
+    return
+  }
+
   const cell = cellAt(x, y)
   const day = cell?.dataset.day
   if (!cell || !day) {
     drag.target = null
     return
   }
-  // All-day entries stay all-day: over the hours they go to that day.
-  if (cell.dataset.timed !== undefined && !entry.allDay) {
-    drag.target = { day, minutes: snap(((y - press.offsetY - cell.getBoundingClientRect().top) / HOUR_HEIGHT) * 60) }
+  if (cell.dataset.timed !== undefined) {
+    if (!entry.allDay) {
+      drag.target = { day, minutes: snap(((y - press.offsetY - cell.getBoundingClientRect().top) / HOUR_HEIGHT) * 60) }
+    } else if (entry.startDay === entry.endDay && !entry.recurring) {
+      // Single-day all-day entry dragged onto an hour column promotes to a timed block.
+      drag.target = { day, minutes: snap(((y - cell.getBoundingClientRect().top) / HOUR_HEIGHT) * 60, 1440 - 60) }
+    } else {
+      drag.target = { day: shiftDay(day, -press.dayOffset) }
+    }
+  } else if (cell.dataset.allday !== undefined && !entry.allDay && !entry.recurring) {
+    drag.target = { day, allDay: true }
   } else {
     drag.target = { day: shiftDay(day, -press.dayOffset) }
   }
@@ -165,10 +276,17 @@ function autoScroll(x: number, y: number) {
 
 function onUp(event: PointerEvent) {
   if (!press || event.pointerId !== press.pointerId) return
-  const done = drag.active && drag.target ? { entry: press.entry, mode: press.mode, target: drag.target, onDrop: press.onDrop } : undefined
-  if (drag.active) swallowClick()
+  const active = drag.active
+  const target = drag.target
+  const current = press
+  if (active) swallowClick()
   cancel()
-  if (done) done.onDrop(done.entry, done.mode, done.target)
+  if (!active || !target) return
+  if (current.kind === 'schedule') {
+    if (!target.unschedule) current.onDrop(current.item, target)
+  } else {
+    current.onDrop(current.entry, current.mode, target)
+  }
 }
 
 function onKey(event: KeyboardEvent) {
@@ -208,6 +326,7 @@ function cancel() {
   press = undefined
   drag.active = false
   drag.entry = null
+  drag.scheduleItem = null
   drag.target = null
   document.documentElement.classList.remove('vasta-dragging', 'vasta-resizing')
   window.removeEventListener('pointermove', onMove)

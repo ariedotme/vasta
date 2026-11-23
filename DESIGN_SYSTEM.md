@@ -73,11 +73,15 @@ what is scheduled that day, the daily note edited in place (`ObjectPage` with `e
 refers to the day, and what was created that day. Today's note is started on open; other days wait
 for "Start the daily note", so browsing does not litter empty notes.
 
-**The month beside the calendar**: week, three-day and day views have a small month on the right
-(toggle in the header, remembered per device). Dots under a day say what it holds, one color each
-(`DAY_MARKS` in `lib/calendar.ts`): a daily note with text, tasks due, dated objects, references
-(objects linking to the day's note or date objects), events. A legend sits under it and the day's
-tooltip gives the counts. The dots follow the calendar's Show filters.
+**The side panel beside the calendar**: the calendar's right column (`w-[17.5rem]`, remembered per
+device) switches between the small month (week, three-day and day views) and the **Tasks**
+scheduling sidebar (all views; desktop). Under the small month, dots say what each day holds, one
+color each (`DAY_MARKS` in `lib/calendar.ts`): a daily note with text, tasks due, dated objects,
+references (objects linking to the day's note or date objects), events. A legend sits under it and
+the day's tooltip gives the counts; the dots follow the calendar's Show filters. The Tasks sidebar
+shows overdue, unscheduled and scheduled items (Tasks by default, with other dated types opted in
+from its options menu and marked with a colored type chip when mixed), lets you drag items straight
+onto the grid (or back onto the panel to clear the date), and quick-add inline.
 
 **Fixed views**: some built-in types open on a view of their own before their saved views (`FIXED_VIEWS`
 in `TypePage`): Tags a Tree (sub-tags fold under their parent like folders, folding remembered per

@@ -6,6 +6,7 @@
 import { computed, inject } from 'vue'
 import type { CalendarEntry, CalendarSource } from '@vasta/core'
 import { entryTime, isDone, setTaskDone } from '../../lib/calendar.ts'
+import { canComplete, primaryDateProperty, statusIdsOf } from '../../lib/calendar-tasks.ts'
 import { ENTRY_DRAGGING, drag, pressEntry } from '../../lib/calendar-drag.ts'
 import { chip } from '../../lib/colors.ts'
 import { displayTitle } from '../../lib/format.ts'
@@ -31,10 +32,10 @@ const resizable = computed(() => props.variant === 'block' && !!dragging?.resiza
 
 const summary = computed(() => (props.entry.objectId ? summaryOf(props.entry.objectId) : undefined))
 const type = computed(() => typesById.value.get(summary.value?.typeId ?? ''))
-const isTask = computed(() => type.value?.system === 'task' && props.entry.field === 'due')
+const isCompletable = computed(() => canComplete(type.value) && props.entry.field === primaryDateProperty(type.value)?.id)
 // A repeating task is done one occurrence at a time, the one it is at (completeRepeat): the others have no checkbox.
-const checkable = computed(() => isTask.value && (!props.entry.recurring || !!props.entry.current))
-const done = computed(() => isTask.value && isDone(type.value, summary.value?.props.status?.kind === 'select' ? summary.value.props.status.value : undefined))
+const checkable = computed(() => isCompletable.value && (!props.entry.recurring || !!props.entry.current))
+const done = computed(() => isCompletable.value && isDone(type.value, statusIdsOf(summary.value, type.value)))
 const title = computed(() => (props.entry.kind === 'external' ? (props.entry.title ?? '') : displayTitle(summary.value, type.value)))
 const color = computed(() => (props.entry.kind === 'external' ? (props.source?.color ?? 'sky') : (type.value?.color ?? 'gray')))
 const fieldName = computed(() => {

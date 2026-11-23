@@ -3,7 +3,7 @@
 // (edited in place, with what refers to the day), and what was created that day.
 import { computed, provide, ref, watch } from 'vue'
 import { defaultTemplate, type CalendarEntry, type CalendarSource, type Id, type ObjectSummary } from '@vasta/core'
-import { ENTRY_DRAGGING } from '../../lib/calendar-drag.ts'
+import { ENTRY_DRAGGING, drag } from '../../lib/calendar-drag.ts'
 import { formatClock, isToday, isoWeek } from '../../lib/calendar.ts'
 import { displayTitle } from '../../lib/format.ts'
 import { locale, t, typeName } from '../../lib/i18n.ts'
@@ -71,7 +71,11 @@ const heading = 'flex items-center gap-2 text-sm font-semibold text-ink-soft'
     <HabitChecklist v-if="habits" :day="day" variant="inline" class="mt-8" />
     <FoodDay :key="day" :day="day" class="mt-8" />
 
-    <section class="mt-8">
+    <section
+      class="mt-8 rounded-xl transition-colors"
+      :class="drag.active && drag.mode === 'schedule' && drag.target && !drag.target.unschedule && drag.target.day === day ? 'bg-accent/10 p-2 -mx-2 ring-1 ring-accent/40' : ''"
+      :data-day="day"
+    >
       <div class="mb-2 flex items-center">
         <h2 :class="heading"><AppIcon fallback="ph:clock" /> {{ t('calendar.day.onThisDay') }}</h2>
         <button class="ml-auto flex items-center gap-1 rounded-md px-2 py-1 text-xs text-ink-soft ring-1 ring-line hover:bg-hover hover:text-ink max-md:py-1.5" @click="emit('create', $event.currentTarget as HTMLElement)">

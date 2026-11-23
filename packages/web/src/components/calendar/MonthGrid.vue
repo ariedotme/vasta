@@ -59,12 +59,14 @@ const weeks = computed(() =>
   })
 )
 
-/** Days a moved entry would cover. */
+/** Days a moved or scheduled entry would cover. */
 const dropDays = computed(() => {
+  if (!drag.active || !drag.target || drag.target.unschedule) return new Set<string>()
+  if (drag.mode === 'schedule' && drag.scheduleItem) return new Set([drag.target.day])
   const entry = drag.entry
-  if (!drag.active || drag.mode !== 'move' || !entry || !drag.target) return new Set<string>()
+  if (drag.mode !== 'move' || !entry) return new Set<string>()
   const length = daysBetween(entry.startDay, entry.endDay)
-  return new Set(Array.from({ length: length + 1 }, (_, i) => addDays(drag.target!.day, i)))
+  return new Set(Array.from({ length: length + 1 }, (_, i) => addDays(drag.target!.day!, i)))
 })
 
 function onCellClick(event: MouseEvent, day: string) {

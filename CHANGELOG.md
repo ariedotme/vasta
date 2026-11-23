@@ -6,6 +6,15 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Schedule tasks from the calendar sidebar.** The calendar's right panel now switches between the
+  mini month and a **Tasks** sidebar (available in Month, Week, Three-day and Day views). Drag open,
+  overdue or all-day tasks straight onto an hour slot to timeblock them as a 1-hour resizable block
+  (or onto the all-day row or a month cell for a day-only date), drag blocks back onto the sidebar
+  to clear their date, add tasks inline, filter by saved views or "Mine", and opt in custom types
+  that have a date property — shown with a colored type chip when multiple types are enabled.
+
 ## 0.12.0 (2026-11-21)
 
 ### Added

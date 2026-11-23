@@ -68,19 +68,26 @@ function onColumnClick(event: MouseEvent, day: string) {
   emit('create', day, snap(minutesAt(event, event.currentTarget as HTMLElement) - 15, 30))
 }
 
-/** Over the hours: the slot a moved entry would take, or the new end of a resized one. */
+/** Over the hours: the slot a moved/scheduled entry would take, or the new end of a resized one. */
 const ghost = computed(() => {
-  const entry = drag.entry
   const target = drag.target
-  if (!drag.active || !entry || target?.minutes === undefined) return null
+  if (!drag.active || !target || target.unschedule || target.minutes === undefined) return null
+  if (drag.scheduleItem) {
+    const length = Math.max(15, drag.scheduleItem.durationMinutes)
+    return { day: target.day, top: target.minutes, height: Math.min(length, 1440 - target.minutes), label: formatClock(instantAt(target.day, target.minutes)) }
+  }
+  const entry = drag.entry
+  if (!entry) return null
   if (drag.mode === 'resize') {
     const top = minutesInto(entry.startDay, entry.start)
     return { day: entry.startDay, top, height: target.minutes - top, label: formatClock(instantAt(entry.startDay, target.minutes)) }
   }
-  const length = entry.end ? Math.max(15, Math.round((Date.parse(entry.end) - Date.parse(entry.start)) / 60_000)) : 30
+  const length = entry.allDay ? 60 : entry.end ? Math.max(15, Math.round((Date.parse(entry.end) - Date.parse(entry.start)) / 60_000)) : 30
   return { day: target.day, top: target.minutes, height: Math.min(length, 1440 - target.minutes), label: formatClock(instantAt(target.day, target.minutes)) }
 })
-const dropDay = computed(() => (drag.active && drag.mode === 'move' && drag.target && drag.target.minutes === undefined ? drag.target.day : ''))
+const dropDay = computed(() =>
+  drag.active && (drag.mode === 'move' || drag.mode === 'schedule') && drag.target && !drag.target.unschedule && drag.target.minutes === undefined ? drag.target.day : ''
+)
 
 const style = (item: { top: number; height: number; column: number; columns: number }) => ({
   top: `${(item.top / 60) * HOUR}px`,
@@ -129,6 +136,7 @@ const pendingStyle = computed(() => (props.pending?.minutes !== undefined ? { to
           :class="dropDay === day ? 'bg-accent/10' : ''"
           :style="{ gridColumn: `${i + 1}`, gridRow: '1 / -1' }"
           :data-day="day"
+          data-allday
         />
         <div
           v-for="bar in allDayBars"

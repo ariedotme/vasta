@@ -1,10 +1,11 @@
 // Calendar page helpers: visible ranges per view, the week's first day, repeat rules, and the
 // edits the calendar makes to objects (move a date, tick a task, create something on a day).
 import type { CalendarEntry, DateValue, Id, ObjectType, PropertyDef } from '@vasta/core'
-import { addDays, daysBetween } from '@vasta/core'
+import { addDays, daysBetween, statusProperty } from '@vasta/core'
 import type { OccurrenceScope } from '@vasta/core/calendar'
 import { api } from './api.ts'
-import { dayKey } from './actions.ts'
+import { dayKey, setProperty } from './actions.ts'
+import { movedEntryTimes } from './calendar-tasks.ts'
 import { locale, t, tc } from './i18n.ts'
 import { choiceDialog } from './overlays.ts'
 import { primeFromObject } from './state.ts'
@@ -299,10 +300,7 @@ export function moveDate(value: DateValue, start: { day: string; minutes?: numbe
 }
 
 /** An entry's times after moving it to a day (and a time, over the hour grid), keeping its length. */
-export function movedTimes(entry: CalendarEntry, target: { day: string; minutes?: number }): { start: string; end?: string } {
-  const moved = moveDate({ start: entry.start, ...(entry.end ? { end: entry.end } : {}), resolution: entry.allDay ? 'day' : 'time' }, target)
-  return { start: moved.start, ...(moved.end ? { end: moved.end } : {}) }
-}
+export const movedTimes = movedEntryTimes
 
 /** Ask which occurrences of a repeating date a change is for; null when cancelled. */
 export function askScope(action: 'change' | 'delete') {
@@ -321,7 +319,10 @@ export function askScope(action: 'change' | 'delete') {
  * Give an entry new times: a single date changes; for an occurrence of a repeating one, the user
  * picks this one, this and the following, or all. False when they cancelled.
  */
-export async function changeEntryTimes(entry: CalendarEntry, times: { start: string; end?: string } | { cancelled: true }): Promise<boolean> {
+export async function changeEntryTimes(
+  entry: CalendarEntry,
+  times: { start: string; end?: string; resolution?: 'day' | 'time' } | { cancelled: true }
+): Promise<boolean> {
   if (!entry.objectId || !entry.field) return false
   if (entry.recurring && entry.occurrence) {
     const scope = await askScope('cancelled' in times ? 'delete' : 'change')
@@ -334,8 +335,20 @@ export async function changeEntryTimes(entry: CalendarEntry, times: { start: str
   if ('cancelled' in times) return false
   await updateEntryDate(entry, (value) => {
     const { end: _end, ...rest } = value
-    return { ...rest, start: times.start, ...(times.end ? { end: times.end } : {}) }
+    return { ...rest, ...(times.resolution ? { resolution: times.resolution } : {}), start: times.start, ...(times.end ? { end: times.end } : {}) }
   })
+  return true
+}
+
+/** Set or clear a date property on an object (used when scheduling or unscheduling from the sidebar). */
+export async function setObjectSchedule(objectId: Id, field: Id, value: DateValue | undefined) {
+  await setProperty(objectId, field, value ? { kind: 'date', value } : undefined)
+}
+
+/** Clear the date property of a calendar entry (unscheduling it from the calendar). */
+export async function clearEntryDate(entry: CalendarEntry): Promise<boolean> {
+  if (!entry.objectId || !entry.field || entry.kind !== 'property') return false
+  await setObjectSchedule(entry.objectId, entry.field, undefined)
   return true
 }
 
@@ -354,23 +367,22 @@ export async function updateEntryDate(entry: CalendarEntry, change: (value: Date
   primeFromObject(await api.saveObject(object))
 }
 
-/** The status option of a task's status property that means done or to-do. */
-function statusOption(type: ObjectType | undefined, status: 'todo' | 'done'): Id | undefined {
-  const def = type?.properties.find((p) => p.id === 'status')
-  return def?.kind === 'select' ? def.options.find((o) => o.status === status)?.id : undefined
+/** The status option of a type's status property that means done or to-do. */
+function statusOption(type: ObjectType | undefined, status: 'todo' | 'done'): { field: Id; option: Id } | undefined {
+  const def = statusProperty(type)
+  const option = def?.options.find((o) => o.status === status)?.id
+  return def && option ? { field: def.id, option } : undefined
 }
 
 export function isDone(type: ObjectType | undefined, statusIds: Id[] | undefined): boolean {
-  const def = type?.properties.find((p) => p.id === 'status')
-  return def?.kind === 'select' && !!statusIds?.some((id) => def.options.find((o) => o.id === id)?.status === 'done')
+  const def = statusProperty(type)
+  return !!def && !!statusIds?.some((id) => def.options.find((o) => o.id === id)?.status === 'done')
 }
 
 export async function setTaskDone(objectId: Id, type: ObjectType | undefined, done: boolean) {
-  const option = statusOption(type, done ? 'done' : 'todo')
-  if (!option) return
-  const object = await api.object(objectId)
-  object.props.status = { kind: 'select', value: [option] }
-  primeFromObject(await api.saveObject(object))
+  const target = statusOption(type, done ? 'done' : 'todo')
+  if (!target) return
+  await setProperty(objectId, target.field, { kind: 'select', value: [target.option] })
 }
 
 /** What a day holds, for the dots of the small month calendar. */

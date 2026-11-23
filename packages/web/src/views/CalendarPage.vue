@@ -10,6 +10,7 @@ import { addDays, dayEntries, dayTotals, isValidDay } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import PopoverMenu from '../components/PopoverMenu.vue'
 import CalendarSources from '../components/calendar/CalendarSources.vue'
+import CalendarTasksPanel from '../components/calendar/CalendarTasksPanel.vue'
 import DayPage from '../components/calendar/DayPage.vue'
 import HabitChecklist from '../components/HabitChecklist.vue'
 import EventDetails from '../components/calendar/EventDetails.vue'
@@ -24,6 +25,7 @@ import { api } from '../lib/api.ts'
 import {
   CALENDAR_VIEWS,
   changeEntryTimes,
+  clearEntryDate,
   instantAt,
   movedTimes,
   stepAnchor,
@@ -33,8 +35,8 @@ import {
   type CalendarView,
   type DayMarks,
 } from '../lib/calendar.ts'
-import { ENTRY_DRAGGING, type DropTarget } from '../lib/calendar-drag.ts'
-import { swatchClasses } from '../lib/colors.ts'
+import { ENTRY_DRAGGING, drag, type DropTarget } from '../lib/calendar-drag.ts'
+import { chip, swatchClasses } from '../lib/colors.ts'
 import { onChange } from '../lib/events.ts'
 import { t } from '../lib/i18n.ts'
 import { cachedSummary, lastError, primeFromObject, primeSummaries, refreshCounts, typesById, workspace } from '../lib/state.ts'
@@ -182,8 +184,17 @@ const movable = (entry: CalendarEntry) => entry.kind === 'property' || entry.kin
 const resizable = (entry: CalendarEntry) => movable(entry) && !entry.allDay && entry.startDay === entry.endDay
 
 async function drop(entry: CalendarEntry, mode: 'move' | 'resize', target: DropTarget) {
+  if (target.unschedule) {
+    try {
+      if (!(await clearEntryDate(entry))) return
+    } catch (error) {
+      lastError.value = (error as Error).message
+    }
+    await load()
+    return
+  }
   const times = mode === 'resize' ? { start: entry.start, end: instantAt(entry.startDay, target.minutes ?? 0) } : movedTimes(entry, target)
-  if (times.start === entry.start && (times.end ?? '') === (entry.end ?? '')) return
+  if (times.start === entry.start && (times.end ?? '') === (entry.end ?? '') && !('resolution' in times && times.resolution)) return
   try {
     if (!(await changeEntryTimes(entry, times))) return
   } catch (error) {
@@ -269,17 +280,30 @@ async function startNote(text?: string, day = anchor.value) {
   }
 }
 
-// The small month beside the week and day views ---------------------------------------
-const panelOpen = ref(storage.get(PANEL_KEY) !== '0')
-watch(panelOpen, (open) => storage.set(PANEL_KEY, open ? '1' : '0'))
-const showPanel = computed(() => view.value !== 'month' && !isPhone.value && panelOpen.value)
+// Right side panel: small month (week/3-day/day) or scheduling tasks sidebar (any view)
+type RightPanel = 'none' | 'month' | 'tasks'
+function readPanel(): RightPanel {
+  const saved = storage.get(PANEL_KEY)
+  if (saved === '0' || saved === 'none') return 'none'
+  if (saved === 'tasks') return 'tasks'
+  return 'month'
+}
+const panel = ref<RightPanel>(readPanel())
+watch(panel, (value) => storage.set(PANEL_KEY, value))
+const showMonthPanel = computed(() => view.value !== 'month' && !isPhone.value && panel.value === 'month')
+const showTasksPanel = computed(() => !isPhone.value && panel.value === 'tasks')
+const showPanel = computed(() => showMonthPanel.value || showTasksPanel.value)
+const tasksCount = ref(0)
+function togglePanel(which: 'month' | 'tasks') {
+  panel.value = panel.value === which ? 'none' : which
+}
 
 const miniMonth = ref(`${anchor.value.slice(0, 7)}-01`)
 const miniMarks = ref(new Map<string, DayMarks>())
 let miniRequest = 0
 
 async function loadMini() {
-  if (!workspace.space || !showPanel.value) return
+  if (!workspace.space || !showMonthPanel.value) return
   const id = ++miniRequest
   const range = visibleDays('month', miniMonth.value)
   try {
@@ -308,7 +332,7 @@ async function loadMini() {
     // The marks are a nicety; the calendar itself reports errors.
   }
 }
-watch([miniMonth, showPanel, () => hidden.size], () => void loadMini(), { immediate: true })
+watch([miniMonth, showMonthPanel, () => hidden.size], () => void loadMini(), { immediate: true })
 
 // Keyboard ------------------------------------------------------------------------
 function onKey(event: KeyboardEvent) {
@@ -392,15 +416,27 @@ const openNote = (day: string) => {
             {{ isPhone ? option.phoneLabel ?? option.label : option.label }}
           </button>
         </div>
-        <button
-          v-if="view !== 'month' && !isPhone"
-          class="grid h-8 w-8 place-items-center rounded-md hover:bg-hover hover:text-ink"
-          :class="panelOpen ? 'bg-hover text-ink' : 'text-ink-soft'"
-          :title="panelOpen ? t('calendar.hideMonth') : t('calendar.showMonth')"
-          @click="panelOpen = !panelOpen"
-        >
-          <AppIcon fallback="ph:calendar-blank" />
-        </button>
+        <div v-if="!isPhone" class="flex items-center gap-1">
+          <button
+            v-if="view !== 'month'"
+            class="grid h-8 w-8 place-items-center rounded-md hover:bg-hover hover:text-ink"
+            :class="showMonthPanel ? 'bg-hover text-ink' : 'text-ink-soft'"
+            :title="showMonthPanel ? t('calendar.hideMonth') : t('calendar.showMonth')"
+            @click="togglePanel('month')"
+          >
+            <AppIcon fallback="ph:calendar-blank" />
+          </button>
+          <button
+            class="flex h-8 items-center gap-1.5 rounded-md px-2 text-sm hover:bg-hover hover:text-ink"
+            :class="showTasksPanel ? 'bg-hover text-ink' : 'text-ink-soft'"
+            :title="showTasksPanel ? t('calendar.tasks.hidePanel') : t('calendar.tasks.showPanel')"
+            @click="togglePanel('tasks')"
+          >
+            <AppIcon fallback="ph:check-circle" />
+            <span class="hidden lg:inline">{{ t('builtin.type.task.other') }}</span>
+            <span v-if="showTasksPanel && tasksCount" class="rounded bg-surface px-1 text-xs tabular-nums text-ink-soft ring-1 ring-line">{{ tasksCount }}</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -428,7 +464,7 @@ const openNote = (day: string) => {
           :sources="sourcesById"
           :created="createdToday"
           :starting="starting"
-          :habits="!showPanel"
+          :habits="!showMonthPanel"
           @details="showDetails"
           @create="(element) => createInMonth(anchor, element)"
           @start-note="startNote"
@@ -448,11 +484,26 @@ const openNote = (day: string) => {
         />
       </div>
 
-      <aside v-if="showPanel" class="w-[17.5rem] shrink-0 overflow-y-auto border-l border-line px-4 py-4">
-        <MiniMonth v-model:month="miniMonth" :selected="anchor" :marks="miniMarks" @pick="(day) => go({ date: day })" />
-        <HabitChecklist v-if="view === 'day'" :key="anchor" :day="anchor" class="mt-6 border-t border-line pt-5" />
+      <aside v-if="showPanel" class="w-[17.5rem] shrink-0 border-l border-line">
+        <div v-if="showMonthPanel" class="h-full overflow-y-auto px-4 py-4">
+          <MiniMonth v-model:month="miniMonth" :selected="anchor" :marks="miniMarks" @pick="(day) => go({ date: day })" />
+          <HabitChecklist v-if="view === 'day'" :key="anchor" :day="anchor" class="mt-6 border-t border-line pt-5" />
+        </div>
+        <CalendarTasksPanel v-else :view="view" :anchor="anchor" @changed="load(), loadMini()" @count="tasksCount = $event" />
       </aside>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="drag.active && drag.scheduleItem"
+        class="pointer-events-none fixed left-0 top-0 z-50 flex max-w-56 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-lg shadow-black/15"
+        :class="chip(drag.scheduleItem.color)"
+        :style="{ transform: `translate(${drag.x - 16}px, ${drag.y - 16}px) rotate(-1.5deg)` }"
+      >
+        <AppIcon :icon="drag.scheduleItem.icon" :fallback="drag.scheduleItem.fallbackIcon ?? 'ph:check-circle'" :size="13" class="shrink-0" />
+        <span class="truncate">{{ drag.scheduleItem.title }}</span>
+      </div>
+    </Teleport>
 
     <PopoverMenu v-model:open="popoverOpen" :anchor="popover?.anchor" :placement="view === 'month' ? 'bottom-start' : view === 'day' ? 'bottom-end' : 'right-start'" width="19rem">
       <QuickCreate v-if="popover?.kind === 'create'" :key="`${popover.day}:${popover.minutes}`" :day="popover.day" :minutes="popover.minutes" @done="created" />
