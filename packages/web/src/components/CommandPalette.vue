@@ -53,6 +53,8 @@ const COMMANDS: Command[] = [
   { key: 'common.calendar', icon: 'ph:calendar-dots', shortcut: 'calendar', run: GO.calendar.run },
   { key: 'common.tasks', icon: 'ph:check-circle', shortcut: 'tasks', run: GO.tasks.run },
   { key: 'common.settings', icon: 'ph:gear-six', shortcut: 'settings', run: () => router.push('/settings') },
+  { key: 'settings.section.objectTypes', icon: 'ph:shapes', run: () => router.push('/settings#object-types') },
+  { key: 'nav.newType', icon: 'ph:plus-circle', run: () => (ui.newTypeOpen = true) },
   { key: 'common.trash', icon: 'ph:trash', run: () => router.push('/trash') },
   { key: 'nav.keyboardShortcuts', icon: 'ph:keyboard', shortcut: 'shortcuts', run: () => (ui.shortcutsOpen = true) },
   { key: 'palette.toggleSidebar', icon: 'ph:sidebar-simple', shortcut: 'sidebar', run: toggleSidebar },

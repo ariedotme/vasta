@@ -8,6 +8,7 @@ export const SECTIONS = [
   { id: 'appearance', get label() { return t('settings.section.appearance') }, icon: 'ph:palette' },
   { id: 'account', get label() { return t('settings.section.account') }, icon: 'ph:user-circle' },
   { id: 'space', get label() { return t('settings.section.space') }, icon: 'ph:planet' },
+  { id: 'object-types', get label() { return t('settings.section.objectTypes') }, icon: 'ph:shapes' },
   // On the desktop app's own server: no other accounts, and the way to a real server.
   isLocalServer()
     ? { id: 'server', get label() { return t('settings.section.server') }, icon: 'ph:hard-drives' }

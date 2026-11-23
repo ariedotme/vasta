@@ -186,6 +186,7 @@ function sectionMenu(event: MouseEvent, sectionId: string) {
 function typesHeaderMenu(event: MouseEvent) {
   openContextMenu(event, [
     { label: t('nav.newTypeMenu'), icon: 'ph:plus', run: newTypeFlow },
+    { label: t('nav.manageTypes'), icon: 'ph:shapes', run: () => router.push('/settings#object-types') },
     { label: t('nav.newSection'), icon: 'ph:folder-simple-plus', run: () => newSectionFlow() },
   ])
 }

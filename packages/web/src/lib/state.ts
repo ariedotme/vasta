@@ -189,6 +189,8 @@ export const ui = reactive({
   sidebarCollapsed: readFlag(SIDEBAR_KEY),
   /** The keyboard shortcuts dialog (⌘/). */
   shortcutsOpen: false,
+  /** The new object type dialog (create your own or pick from the catalog). */
+  newTypeOpen: false,
   /** Quick capture asks a template's questions before it saves (Settings › Capture), on this device. */
   captureAsks: readFlag(CAPTURE_ASKS_KEY),
   captureDaily: readFlag('vasta.capture-daily'),

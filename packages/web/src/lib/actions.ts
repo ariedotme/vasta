@@ -183,19 +183,9 @@ export const isTodayRoute = (route: { path: string; query: Record<string, unknow
 // ---------------------------------------------------------------------------
 // Types
 
-export async function newTypeFlow() {
+export function newTypeFlow() {
   if (!workspace.space) return
-  const name = await promptDialog({
-    title: t('nav.newType'),
-    message: t('actions.newTypeMessage'),
-    placeholder: t('actions.newTypePlaceholder'),
-    confirmLabel: t('common.create'),
-  })
-  if (!name) return
-  const type = await api.createType({ spaceId: workspace.space.id, name, pluralName: name, icon: { kind: 'icon', value: 'ph:cube' } })
-  replaceType(type)
-  // Open the settings right away to pick plural name, icon, color and properties.
-  await router.push({ path: `/t/${type.id}`, query: { settings: '1' } })
+  ui.newTypeOpen = true
 }
 
 /** Ask, then move a custom type and its objects to the trash, offering Undo. Returns true when deleted. */

@@ -8,6 +8,13 @@ GitHub release page.
 
 ### Added
 
+- **Manage object types in Settings & create types from templates.** **Settings › Object types**
+  lists every custom and built-in type in a grid so you can edit or delete types from one place.
+  Creating a new type (from Settings, the sidebar or ⌘K) opens a dialog with **Create your own**
+  front and center — with icon and color pickers — alongside a growing template catalog (starting
+  with **Books**). When a template includes relations to other template types (like *Author → Person
+  → Organization*), you can import the referenced type too in a chain, link an existing type in your
+  space, or ignore the property.
 - **Schedule tasks from the calendar sidebar.** The calendar's right panel now switches between the
   mini month and a **Tasks** sidebar (available in Month, Week, Three-day and Day views). Drag open,
   overdue or all-day tasks straight onto an hour slot to timeblock them as a 1-hour resizable block

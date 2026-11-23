@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import type { ObjectType } from '@vasta/core'
 import AppSidebar from './components/AppSidebar.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ContextMenuHost from './components/ContextMenuHost.vue'
 import DialogHost from './components/DialogHost.vue'
 import AppToast from './components/AppToast.vue'
+import NewTypeDialog from './components/NewTypeDialog.vue'
 import OfflineBanner from './components/OfflineBanner.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
 import QuickCapture from './components/QuickCapture.vue'
@@ -23,6 +25,13 @@ import { isPhone } from './lib/viewport.ts'
 import LoginView from './views/LoginView.vue'
 
 const route = useRoute()
+const router = useRouter()
+
+function onNewTypeCreated(payload: { type: ObjectType; fromTemplate: boolean }) {
+  ui.newTypeOpen = false
+  if (payload.fromTemplate) void router.push(`/t/${payload.type.id}`)
+  else void router.push({ path: `/t/${payload.type.id}`, query: { settings: '1' } })
+}
 /** The desktop app's takeover window: an insistent reminder alone, over the whole screen. */
 const bare = computed(() => route.path.startsWith('/remind/') && route.query.takeover === '1')
 // Logged out (or the server failing), the takeover could only show a login: it goes at once.
@@ -116,6 +125,7 @@ function onTouchEnd(event: TouchEvent) {
     <PasswordDialog v-if="ui.passwordOpen" />
     <QuickCapture v-if="ui.captureOpen" />
     <ShortcutsDialog v-if="ui.shortcutsOpen" />
+    <NewTypeDialog v-if="ui.newTypeOpen" @close="ui.newTypeOpen = false" @created="onNewTypeCreated" />
     <ReminderDialog v-if="reminderEditor.open" />
   </div>
   <LoginView v-else-if="session.checked && !session.user && !session.error" />

@@ -18,6 +18,7 @@ import InsistentSettings from '../components/settings/InsistentSettings.vue'
 import ServerAccountsSettings from '../components/settings/ServerAccountsSettings.vue'
 import SessionSettings from '../components/settings/SessionSettings.vue'
 import SpaceSettings from '../components/settings/SpaceSettings.vue'
+import ObjectTypesSettings from '../components/settings/ObjectTypesSettings.vue'
 import TelegramSettings from '../components/settings/TelegramSettings.vue'
 import TokenSettings from '../components/settings/TokenSettings.vue'
 import AgentSettings from '../components/settings/AgentSettings.vue'
@@ -88,6 +89,7 @@ onBeforeUnmount(() => scroller?.removeEventListener('scroll', onScroll))
       <AppearanceSettings />
       <AccountSettings />
       <SpaceSettings />
+      <ObjectTypesSettings />
       <ServerAccountsSettings />
       <ImportSettings />
       <SnippetSettings />
