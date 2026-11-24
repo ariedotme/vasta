@@ -6,6 +6,8 @@ GitHub release page.
 
 ## Unreleased
 
+## 0.14.0 (2026-11-24)
+
 ### Added
 
 - **Customisable cards on Board, Gallery, Grid and Wall views.** Under **Cards**, each layout of a
