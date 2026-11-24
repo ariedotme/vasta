@@ -2,9 +2,11 @@
 // Floating panel anchored to an element. Closes on outside click or Escape.
 import { autoUpdate, computePosition, flip, offset, shift, type Placement } from '@floating-ui/dom'
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { closesOnBack } from '../lib/back.ts'
 
 const props = defineProps<{ anchor: HTMLElement | null | undefined; placement?: Placement; width?: string }>()
 const open = defineModel<boolean>('open', { required: true })
+closesOnBack(open, () => (open.value = false))
 const panel = ref<HTMLElement | null>(null)
 let stop: (() => void) | undefined
 

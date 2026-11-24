@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { closeTopLayer } from './lib/back.ts'
+import { isPhone } from './lib/viewport.ts'
 import HomeView from './views/HomeView.vue'
 
 // Pages load as their own chunks, so the first paint does not wait for the editor or the calendar.
@@ -42,6 +44,27 @@ export const router = createRouter({
     { path: '/remind/:id', component: pages.remind, props: true },
   ],
 })
+
+// Back or forward (the history already holds the entry being gone to) on a phone with a dialog, menu
+// or the side drawer open closes that instead, and the page stays (lib/back.ts). The router puts the
+// entry back by going the other way; the close waits for that, so a dialog whose close changes the
+// address (Type settings, ?settings=1) changes the entry it was opened on.
+router.beforeEach((to) => {
+  if (router.options.history.state.current !== to.fullPath || !isPhone.value) return
+  if (closeTopLayer(afterEntryBack)) return false
+})
+
+function afterEntryBack(close: () => void) {
+  let done = false
+  const run = () => {
+    if (done) return
+    done = true
+    window.removeEventListener('popstate', run)
+    close()
+  }
+  window.addEventListener('popstate', run)
+  setTimeout(run, 500) // no entry to go back to (a history state without a position)
+}
 
 // The side pane (lib/open.ts) lives in the query, as ?pane=<id>&paneBlock=<id>. A page that
 // changes only its own query (the calendar's view and date, a type page closing its settings)

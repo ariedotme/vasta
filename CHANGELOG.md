@@ -6,6 +6,14 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **Back on a phone closes what is open first.** With a dialog, a menu, the search or the side menu
+  open, Back (or the iPhone's edge swipe) now closes it and stays on the page, instead of changing the
+  page underneath it. Back and Forward also return a list to where you scrolled it, instead of its top.
+- **iPhone: the left-edge swipe no longer opens the side menu in Safari**, where it is the browser's
+  Back. It still opens it in the Home Screen app.
+
 ## 0.13.0 (2026-11-23)
 
 ### Added
