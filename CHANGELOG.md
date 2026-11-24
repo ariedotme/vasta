@@ -13,6 +13,8 @@ GitHub release page.
   page underneath it. Back and Forward also return a list to where you scrolled it, instead of its top.
 - **iPhone: the left-edge swipe no longer opens the side menu in Safari**, where it is the browser's
   Back. It still opens it in the Home Screen app.
+- **iPhone: the line you are typing in a note stays above the keyboard.** Writing low in a note, or
+  at the end of a long one, went on behind the keyboard and its toolbar.
 
 ## 0.13.0 (2026-11-23)
 

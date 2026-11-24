@@ -19,6 +19,7 @@ import { closesOnBack } from './lib/back.ts'
 import { reminderEditor } from './lib/insistent.ts'
 import { t } from './lib/i18n.ts'
 import { closeTakeover, listenToDesktop, trafficLights } from './lib/platform.ts'
+import { keepsCaretAboveKeyboard } from './lib/keyboard.ts'
 import { keepsScroll } from './lib/scroll-memory.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
@@ -67,6 +68,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 onBeforeUnmount(installShortcuts())
 const main = ref<HTMLElement | null>(null)
 onBeforeUnmount(keepsScroll(router, () => main.value))
+onBeforeUnmount(keepsCaretAboveKeyboard())
 
 // Swipe right from the left edge opens the drawer (in the installed app only: in a browser tab that
 // swipe is the browser's Back), swipe left on it closes it.

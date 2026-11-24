@@ -15,6 +15,7 @@ other addresses; never point them at the dev server on 5173/5174 or at productio
     node weblink.mjs             # a weblink created on the replica, fetched by the server
     node device.mjs; node update.mjs
     node page-width.mjs [chromium|webkit]   # Vite on 5183 only: Appearance choice, persistence, object/daily-note widths, columns, phones and panes (MODE=json too; SETTINGS=0 skips the headless WebKit Settings hang)
+    node phone-keyboard.mjs [chromium|webkit] [base]   # a note on a phone with the keyboard up (faked by shrinking visualViewport): a short note's and a long note's line being typed stay above it; the room made for it goes with it
     node desktop.mjs [base]      # Settings › This device: download links, the desktop app's version and shortcut
     node firstsync.mjs [chromium|webkit]   # LAST_OBJECT=<id>: also open it offline
     node refused.mjs             # a refused change: toast, Settings list, dismiss (PHONE=1, SHOTS=<dir>)
