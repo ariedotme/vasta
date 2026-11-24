@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { ObjectType } from '@vasta/core'
 import AppSidebar from './components/AppSidebar.vue'
@@ -15,13 +15,15 @@ import ReminderDialog from './components/ReminderDialog.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import SidePane from './components/SidePane.vue'
 import TopBar from './components/TopBar.vue'
+import { closesOnBack } from './lib/back.ts'
 import { reminderEditor } from './lib/insistent.ts'
 import { t } from './lib/i18n.ts'
 import { closeTakeover, listenToDesktop, trafficLights } from './lib/platform.ts'
+import { keepsScroll } from './lib/scroll-memory.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
 import { ui, workspace } from './lib/state.ts'
-import { isPhone } from './lib/viewport.ts'
+import { isInstalledApp, isPhone, startsDrawerSwipe } from './lib/viewport.ts'
 import LoginView from './views/LoginView.vue'
 
 const route = useRoute()
@@ -56,19 +58,23 @@ const stopDesktopWatch = watch(
 // On a phone the sidebar is a drawer over the page: it closes when a page opens and on Escape.
 watch(() => route.fullPath, () => (ui.sidebarOpen = false))
 watch(isPhone, () => (ui.sidebarOpen = false))
+closesOnBack(() => isPhone.value && ui.sidebarOpen, () => (ui.sidebarOpen = false))
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Escape' && ui.sidebarOpen && isPhone.value) ui.sidebarOpen = false
 }
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 onBeforeUnmount(installShortcuts())
+const main = ref<HTMLElement | null>(null)
+onBeforeUnmount(keepsScroll(router, () => main.value))
 
-// Swipe right from the left edge opens the drawer, swipe left on it closes it.
+// Swipe right from the left edge opens the drawer (in the installed app only: in a browser tab that
+// swipe is the browser's Back), swipe left on it closes it.
 let swipe: { x: number; y: number; opening: boolean } | undefined
 function onTouchStart(event: TouchEvent) {
   const touch = event.touches[0]
   if (!isPhone.value || event.touches.length !== 1 || !touch) return
-  const opening = !ui.sidebarOpen && touch.clientX < 24
+  const opening = !ui.sidebarOpen && startsDrawerSwipe(touch.clientX, isInstalledApp())
   swipe = opening || ui.sidebarOpen ? { x: touch.clientX, y: touch.clientY, opening } : undefined
 }
 function onTouchEnd(event: TouchEvent) {
@@ -109,6 +115,7 @@ function onTouchEnd(event: TouchEvent) {
              the query, so opening or closing the pane (?pane=) keeps the page as it is. -->
         <div class="flex min-h-0 flex-1">
           <main
+            ref="main"
             class="isolate min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface pb-[env(safe-area-inset-bottom)] md:mb-2 md:mr-2 md:rounded-xl md:border md:border-line md:shadow-[0_1px_3px_rgb(0_0_0/0.04)]"
             :class="ui.sidebarCollapsed ? 'md:ml-2' : ''"
           >

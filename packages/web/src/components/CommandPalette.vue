@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 import { foodCommand, type ObjectSummary, type ObjectType } from '@vasta/core'
 import { completionSource, createObject, dayKey } from '../lib/actions.ts'
 import { api } from '../lib/api.ts'
+import { closesOnBack } from '../lib/back.ts'
 import { bareUrl } from '../lib/embeds.ts'
 import { displayTitle } from '../lib/format.ts'
 import { t, typeName, typePluralName, type MessageKey } from '../lib/i18n.ts'
@@ -139,6 +140,7 @@ watch(query, () => {
   })
 })
 
+closesOnBack(() => ui.paletteOpen, () => (ui.paletteOpen = false))
 watch(
   () => ui.paletteOpen,
   async (open) => {

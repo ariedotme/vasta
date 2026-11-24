@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Centered dialog with a header and scrollable body. Closes on Escape or backdrop click.
 import { onBeforeUnmount, onMounted } from 'vue'
+import { closesOnBack } from '../lib/back.ts'
 import { t } from '../lib/i18n.ts'
 import { isPhone } from '../lib/viewport.ts'
 import AppIcon from './AppIcon.vue'
@@ -12,6 +13,7 @@ function onKey(event: KeyboardEvent) {
   // Popovers inside the dialog handle their own Escape first.
   if (event.key === 'Escape' && !event.defaultPrevented) emit('close')
 }
+closesOnBack(() => true, () => emit('close'))
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>

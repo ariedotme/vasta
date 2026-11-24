@@ -4,6 +4,7 @@
 import { computePosition, flip, offset, shift, size } from '@floating-ui/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ColorName, Icon } from '@vasta/core'
+import { closesOnBack } from '../lib/back.ts'
 import { blockBackgroundClasses, blockTextClasses, colorNames } from '../lib/colors.ts'
 import { t } from '../lib/i18n.ts'
 import { closeContextMenu, contextMenu, type MenuItem } from '../lib/overlays.ts'
@@ -35,6 +36,7 @@ const iconProps = (icon: string | Icon) => (typeof icon === 'string' ? { fallbac
 /** A menu taller than the room on either side scrolls instead of leaving the screen. */
 const fit = (element: HTMLElement) => size({ padding: 8, apply: ({ availableHeight }) => void (element.style.maxHeight = `${Math.max(160, availableHeight)}px`) })
 
+closesOnBack(() => contextMenu.open, closeContextMenu)
 watch(
   () => [contextMenu.open, contextMenu.x, contextMenu.y],
   async () => {

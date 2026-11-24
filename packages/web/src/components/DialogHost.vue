@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Renders the active prompt/confirm dialog from lib/overlays.ts.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { closesOnBack } from '../lib/back.ts'
 import { t } from '../lib/i18n.ts'
 import { activeDialog } from '../lib/overlays.ts'
 
@@ -30,6 +31,8 @@ watch(activeDialog, async (dialog) => {
     input.value?.select()
   } else confirmButton.value?.focus()
 })
+
+closesOnBack(() => !!activeDialog.value, () => cancel())
 
 function cancel() {
   const dialog = activeDialog.value

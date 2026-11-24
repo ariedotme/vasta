@@ -13,3 +13,18 @@ function mediaFlag(query: string) {
 
 export const isPhone = mediaFlag('(max-width: 767px)')
 export const isTouch = mediaFlag('(hover: none)')
+
+/** The page runs as an installed Home Screen app (no browser bar), not in a browser tab. */
+export function isInstalledApp() {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia?.('(display-mode: standalone)').matches === true || (navigator as { standalone?: boolean }).standalone === true
+}
+
+/**
+ * Whether a touch starting at `x` may open the sidebar drawer: only at the screen's left edge, and
+ * only in the installed app. In a browser tab that swipe is the browser's own Back (iPhone Safari),
+ * which would also open the drawer under it.
+ */
+export function startsDrawerSwipe(x: number, installed: boolean) {
+  return installed && x < 24
+}
