@@ -812,6 +812,16 @@ export const ja: Messages = {
   'board.setWipLimit': 'WIP上限を設定…',
   'board.wipTooltip': 'WIP上限 {limit}',
   'board.columnOptions': '列のオプション',
+  'board.sectionOptions': 'セクションのオプション',
+  'board.collapseSection': 'セクションを折りたたむ',
+  'board.expandSection': 'セクションを展開',
+  'board.collapseAllSections': 'すべてのセクションを折りたたむ',
+  'board.expandAllSections': 'すべてのセクションを展開',
+  'board.moveLeft': '左へ移動',
+  'board.moveRight': '右へ移動',
+  'board.moveUp': '上へ移動',
+  'board.moveDown': '下へ移動',
+  'board.resetOrder': '順序をリセット',
   'board.newCardPlaceholder': 'タイトルを入力して Enter',
 
   // Type settings & templates -------------------------------------------------

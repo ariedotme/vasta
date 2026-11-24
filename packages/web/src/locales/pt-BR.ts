@@ -812,6 +812,16 @@ export const ptBR: Messages = {
   'board.setWipLimit': 'Definir limite WIP…',
   'board.wipTooltip': 'Limite WIP {limit}',
   'board.columnOptions': 'Opções da coluna',
+  'board.sectionOptions': 'Opções da seção',
+  'board.collapseSection': 'Recolher seção',
+  'board.expandSection': 'Expandir seção',
+  'board.collapseAllSections': 'Recolher todas as seções',
+  'board.expandAllSections': 'Expandir todas as seções',
+  'board.moveLeft': 'Mover para a esquerda',
+  'board.moveRight': 'Mover para a direita',
+  'board.moveUp': 'Mover para cima',
+  'board.moveDown': 'Mover para baixo',
+  'board.resetOrder': 'Restaurar ordem',
   'board.newCardPlaceholder': 'Título e Enter',
 
   // Type settings & templates -------------------------------------------------

@@ -590,7 +590,8 @@ export type ViewOpenIn = 'page' | 'pane'
 
 /**
  * The board layout's settings: which fields cards show, a second grouping in rows (swimlanes),
- * folded columns and the most cards a column should hold, by the group's key.
+ * folded columns and collapsed lanes, custom section orders, and the most cards a column should
+ * hold, by the group's key.
  */
 export interface BoardSettings {
   /** Property ids, in order; unset: the first two with a value that are not the columns or lanes. */
@@ -598,6 +599,9 @@ export interface BoardSettings {
   /** A field to group cards in rows by, across the columns. */
   swimlanes?: string
   collapsed?: string[]
+  collapsedLanes?: string[]
+  columnOrder?: string[]
+  laneOrder?: string[]
   wip?: Record<string, number>
 }
 

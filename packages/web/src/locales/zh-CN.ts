@@ -812,6 +812,16 @@ export const zhCN: Messages = {
   'board.setWipLimit': '设置在制品上限…',
   'board.wipTooltip': '在制品上限 {limit}',
   'board.columnOptions': '列选项',
+  'board.sectionOptions': '分区选项',
+  'board.collapseSection': '折叠分区',
+  'board.expandSection': '展开分区',
+  'board.collapseAllSections': '折叠所有分区',
+  'board.expandAllSections': '展开所有分区',
+  'board.moveLeft': '向左移动',
+  'board.moveRight': '向右移动',
+  'board.moveUp': '向上移动',
+  'board.moveDown': '向下移动',
+  'board.resetOrder': '恢复默认顺序',
   'board.newCardPlaceholder': '输入标题后按 Enter',
 
   // Type settings & templates -------------------------------------------------

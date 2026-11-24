@@ -363,9 +363,13 @@ function resetCardFields() {
   updateView({ board: Object.keys(rest).length ? rest : undefined })
 }
 function setSwimlanes(field: string) {
-  const { swimlanes: _, ...rest } = view.value.board ?? {}
+  const { swimlanes: _, collapsedLanes: _c, laneOrder: _o, ...rest } = view.value.board ?? {}
   const next = field ? { ...rest, swimlanes: field } : rest
   updateView({ board: Object.keys(next).length ? next : undefined })
+}
+function resetBoardOrder() {
+  const { columnOrder: _, laneOrder: _l, ...rest } = view.value.board ?? {}
+  updateView({ board: Object.keys(rest).length ? rest : undefined })
 }
 
 function moved(saved: ObjectRecord) {
@@ -419,7 +423,9 @@ function setSort(field: string) {
 }
 
 function setGroup(field: string) {
-  updateView({ groupBy: field ? [{ field } as GroupRule] : undefined })
+  const { collapsed: _, columnOrder: _o, ...restBoard } = view.value.board ?? {}
+  const board = view.value.layout === 'kanban' && field !== groupField.value ? (Object.keys(restBoard).length ? restBoard : undefined) : view.value.board
+  updateView({ groupBy: field ? [{ field } as GroupRule] : undefined, ...(view.value.layout === 'kanban' ? { board } : {}) })
   groupOpen.value = false
 }
 
@@ -641,6 +647,12 @@ async function newMenu(event: MouseEvent) {
           <AppIcon :fallback="cardFieldIds?.includes(p.id) ? 'ph:check-square-fill' : 'ph:square'" :class="cardFieldIds?.includes(p.id) ? 'text-accent' : 'text-ink-faint'" />
           {{ propName(p) }}
         </button>
+        <template v-if="view.board?.columnOrder?.length || view.board?.laneOrder?.length">
+          <div class="my-1 border-t border-line" />
+          <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-ink-soft hover:bg-hover hover:text-ink" @click="resetBoardOrder">
+            <AppIcon fallback="ph:arrow-counter-clockwise" :size="14" /> {{ t('board.resetOrder') }}
+          </button>
+        </template>
       </PopoverMenu>
       <PopoverMenu v-model:open="columnsOpen" :anchor="columnsAnchor" placement="bottom-end" width="17rem">
         <ColumnsMenu v-if="view.layout === 'table'" :table="view.table" :type-ids="[id]" @update="updateView({ table: $event })" />

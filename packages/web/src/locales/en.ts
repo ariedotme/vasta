@@ -812,6 +812,16 @@ export const en = {
   'board.setWipLimit': 'Set a WIP limit…',
   'board.wipTooltip': 'WIP limit {limit}',
   'board.columnOptions': 'Column options',
+  'board.sectionOptions': 'Section options',
+  'board.collapseSection': 'Collapse section',
+  'board.expandSection': 'Expand section',
+  'board.collapseAllSections': 'Collapse all sections',
+  'board.expandAllSections': 'Expand all sections',
+  'board.moveLeft': 'Move left',
+  'board.moveRight': 'Move right',
+  'board.moveUp': 'Move up',
+  'board.moveDown': 'Move down',
+  'board.resetOrder': 'Reset order',
   'board.newCardPlaceholder': 'Title, then Enter',
 
   // Type settings & templates -------------------------------------------------

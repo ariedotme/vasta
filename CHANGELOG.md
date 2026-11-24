@@ -6,7 +6,16 @@ GitHub release page.
 
 ## Unreleased
 
+### Added
+
+- **Board: collapse and reorder sections.** Swimlanes can now be collapsed individually (or all at
+  once from a section's menu), keeping column headers visible at the top; holding a dragged card
+  over a collapsed section opens it. Both swimlanes and columns can be reordered by dragging their
+  handle or from their menu (and reset back to default order), saved per view.
+
 ### Fixed
+
+- **Board: folded tag and relation columns now show their title** instead of `…`.
 
 - **Back on a phone closes what is open first.** With a dialog, a menu, the search or the side menu
   open, Back (or the iPhone's edge swipe) now closes it and stays on the page, instead of changing the

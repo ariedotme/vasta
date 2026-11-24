@@ -118,6 +118,7 @@ function onTouchEnd(event: TouchEvent) {
         <div class="flex min-h-0 flex-1">
           <main
             ref="main"
+            data-drag-scroll
             class="isolate min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface pb-[env(safe-area-inset-bottom)] md:mb-2 md:mr-2 md:rounded-xl md:border md:border-line md:shadow-[0_1px_3px_rgb(0_0_0/0.04)]"
             :class="ui.sidebarCollapsed ? 'md:ml-2' : ''"
           >

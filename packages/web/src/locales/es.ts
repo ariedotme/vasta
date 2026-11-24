@@ -812,6 +812,16 @@ export const es: Messages = {
   'board.setWipLimit': 'Definir límite WIP…',
   'board.wipTooltip': 'Límite WIP {limit}',
   'board.columnOptions': 'Opciones de columna',
+  'board.sectionOptions': 'Opciones de sección',
+  'board.collapseSection': 'Plegar sección',
+  'board.expandSection': 'Desplegar sección',
+  'board.collapseAllSections': 'Plegar todas las secciones',
+  'board.expandAllSections': 'Desplegar todas las secciones',
+  'board.moveLeft': 'Mover a la izquierda',
+  'board.moveRight': 'Mover a la derecha',
+  'board.moveUp': 'Subir',
+  'board.moveDown': 'Bajar',
+  'board.resetOrder': 'Restablecer orden',
   'board.newCardPlaceholder': 'Título y Enter',
 
   // Type settings & templates -------------------------------------------------

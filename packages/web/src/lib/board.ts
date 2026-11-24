@@ -12,6 +12,7 @@ import { placeInGroup, type Group } from './query.ts'
 import { primeFromObject } from './state.ts'
 
 const LONG_PRESS = 400
+const HOVER_EXPAND = 450
 const SLOP = 6
 
 export interface CardTarget {
@@ -25,20 +26,57 @@ export const boardDrag = reactive({
   active: false,
   cardId: '' as Id,
   target: null as CardTarget | null,
+  /** Collapsed swimlane header currently under the dragged card (auto-expands after a brief hold). */
+  hoverLane: '',
+})
+
+export type SectionAxis = 'column' | 'lane'
+
+export const sectionDrag = reactive({
+  active: false,
+  axis: '' as '' | SectionAxis,
+  key: '',
+  /** Insertion slot index (0..count) among the axis's sections. */
+  index: -1,
 })
 
 let press:
-  | { cardId: Id; pointerId: number; x: number; y: number; timer?: ReturnType<typeof setTimeout>; onDrop: (cardId: Id, target: CardTarget) => void }
+  | {
+      cardId: Id
+      pointerId: number
+      x: number
+      y: number
+      timer?: ReturnType<typeof setTimeout>
+      onDrop: (cardId: Id, target: CardTarget) => void
+      onExpandLane?: (laneKey: string) => void
+    }
   | undefined
+let sectionPress:
+  | {
+      axis: SectionAxis
+      key: string
+      root: HTMLElement
+      pointerId: number
+      x: number
+      y: number
+      onDrop: (key: string, toIndex: number) => void
+    }
+  | undefined
+let expandTimer: ReturnType<typeof setTimeout> | undefined
 let lastPoint = { x: 0, y: 0 }
 let scrollFrame = 0
 
 /** Start following a press on a card (pointerdown). A press that never becomes a drag stays a click. */
-export function pressCard(event: PointerEvent, cardId: Id, onDrop: (cardId: Id, target: CardTarget) => void) {
-  if (event.button !== 0 || press) return
+export function pressCard(
+  event: PointerEvent,
+  cardId: Id,
+  onDrop: (cardId: Id, target: CardTarget) => void,
+  onExpandLane?: (laneKey: string) => void
+) {
+  if (event.button !== 0 || press || sectionPress) return
   // Controls on the card (a chip's link) keep their own clicks.
   if ((event.target as HTMLElement).closest('button, input, select, textarea')) return
-  press = { cardId, pointerId: event.pointerId, x: event.clientX, y: event.clientY, onDrop }
+  press = { cardId, pointerId: event.pointerId, x: event.clientX, y: event.clientY, onDrop, onExpandLane }
   lastPoint = { x: event.clientX, y: event.clientY }
   if (event.pointerType === 'touch') press.timer = setTimeout(begin, LONG_PRESS)
   window.addEventListener('pointermove', onMove)
@@ -46,6 +84,21 @@ export function pressCard(event: PointerEvent, cardId: Id, onDrop: (cardId: Id, 
   window.addEventListener('pointercancel', cancel)
   window.addEventListener('keydown', onKey, true)
   window.addEventListener('touchmove', onTouchMove, { passive: false })
+}
+
+/** Start dragging a board column or swimlane from its handle (pointerdown). */
+export function pressSection(event: PointerEvent, axis: SectionAxis, key: string, onDrop: (key: string, toIndex: number) => void) {
+  if (event.button !== 0 || press || sectionPress) return
+  const root = (event.currentTarget as HTMLElement | null)?.closest<HTMLElement>('[data-board-root]')
+  if (!root) return
+  event.preventDefault()
+  sectionPress = { axis, key, root, pointerId: event.pointerId, x: event.clientX, y: event.clientY, onDrop }
+  lastPoint = { x: event.clientX, y: event.clientY }
+  window.addEventListener('pointermove', onSectionMove)
+  window.addEventListener('pointerup', onSectionUp)
+  window.addEventListener('pointercancel', cancelSection)
+  window.addEventListener('keydown', onSectionKey, true)
+  window.addEventListener('touchmove', onSectionTouchMove, { passive: false })
 }
 
 function begin() {
@@ -72,10 +125,33 @@ function onMove(event: PointerEvent) {
   update(event.clientX, event.clientY)
 }
 
+function clearHoverLane() {
+  clearTimeout(expandTimer)
+  expandTimer = undefined
+  boardDrag.hoverLane = ''
+}
+
 function update(x: number, y: number) {
   if (!press) return
   autoScroll(x, y)
-  const cell = document.elementsFromPoint(x, y).find((element): element is HTMLElement => element instanceof HTMLElement && element.dataset.boardCell !== undefined)
+  const under = document.elementsFromPoint(x, y)
+  const collapsedLane = under.find((element): element is HTMLElement => element instanceof HTMLElement && element.dataset.boardCollapsedLane !== undefined)
+  if (collapsedLane) {
+    const laneKey = collapsedLane.dataset.boardCollapsedLane!
+    if (boardDrag.hoverLane !== laneKey) {
+      clearHoverLane()
+      boardDrag.hoverLane = laneKey
+      expandTimer = setTimeout(() => {
+        const cb = press?.onExpandLane
+        clearHoverLane()
+        cb?.(laneKey)
+      }, HOVER_EXPAND)
+    }
+    boardDrag.target = null
+    return
+  }
+  if (boardDrag.hoverLane) clearHoverLane()
+  const cell = under.find((element): element is HTMLElement => element instanceof HTMLElement && element.dataset.boardCell !== undefined)
   if (!cell) {
     boardDrag.target = null
     return
@@ -87,6 +163,75 @@ function update(x: number, y: number) {
     return box.top + box.height / 2 < y
   }).length
   boardDrag.target = { column, lane, index }
+}
+
+function sectionElements(root: HTMLElement, axis: SectionAxis): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(axis === 'lane' ? '[data-board-lane]' : '[data-board-col-header]')]
+}
+
+function onSectionMove(event: PointerEvent) {
+  if (!sectionPress || event.pointerId !== sectionPress.pointerId) return
+  lastPoint = { x: event.clientX, y: event.clientY }
+  if (!sectionDrag.active) {
+    if (Math.hypot(event.clientX - sectionPress.x, event.clientY - sectionPress.y) <= SLOP) return
+    sectionDrag.active = true
+    sectionDrag.axis = sectionPress.axis
+    sectionDrag.key = sectionPress.key
+    document.documentElement.classList.add('vasta-dragging')
+  }
+  updateSection(event.clientX, event.clientY)
+}
+
+function updateSection(x: number, y: number) {
+  if (!sectionPress) return
+  autoScroll(x, y)
+  const items = sectionElements(sectionPress.root, sectionPress.axis)
+  sectionDrag.index = items.filter((element) => {
+    const box = element.getBoundingClientRect()
+    return sectionPress!.axis === 'lane' ? box.top + box.height / 2 < y : box.left + box.width / 2 < x
+  }).length
+}
+
+function onSectionUp(event: PointerEvent) {
+  if (!sectionPress || event.pointerId !== sectionPress.pointerId) return
+  let drop: { key: string; toIndex: number; onDrop: (key: string, toIndex: number) => void } | undefined
+  if (sectionDrag.active && sectionDrag.index >= 0) {
+    const items = sectionElements(sectionPress.root, sectionPress.axis)
+    const attr = sectionPress.axis === 'lane' ? 'boardLane' : 'boardColHeader'
+    const from = items.findIndex((el) => el.dataset[attr] === sectionPress!.key)
+    const toIndex = from < sectionDrag.index ? sectionDrag.index - 1 : sectionDrag.index
+    if (from >= 0 && toIndex !== from) drop = { key: sectionPress.key, toIndex, onDrop: sectionPress.onDrop }
+    swallowClick()
+  }
+  cancelSection()
+  if (drop) drop.onDrop(drop.key, drop.toIndex)
+}
+
+function onSectionKey(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !sectionDrag.active) return
+  event.preventDefault()
+  event.stopPropagation()
+  swallowClick()
+  cancelSection()
+}
+
+function onSectionTouchMove(event: TouchEvent) {
+  if (sectionPress) event.preventDefault()
+}
+
+function cancelSection() {
+  cancelAnimationFrame(scrollFrame)
+  sectionPress = undefined
+  sectionDrag.active = false
+  sectionDrag.axis = ''
+  sectionDrag.key = ''
+  sectionDrag.index = -1
+  document.documentElement.classList.remove('vasta-dragging')
+  window.removeEventListener('pointermove', onSectionMove)
+  window.removeEventListener('pointerup', onSectionUp)
+  window.removeEventListener('pointercancel', cancelSection)
+  window.removeEventListener('keydown', onSectionKey, true)
+  window.removeEventListener('touchmove', onSectionTouchMove)
 }
 
 /** Near the edge of the board (or the page), scroll it while the pointer stays there. */
@@ -104,6 +249,7 @@ function autoScroll(x: number, y: number) {
   scrollFrame = requestAnimationFrame(() => {
     for (const { scroller, dx, dy } of step) scroller.scrollBy(dx * 10, dy * 10)
     if (boardDrag.active) update(lastPoint.x, lastPoint.y)
+    else if (sectionDrag.active) updateSection(lastPoint.x, lastPoint.y)
   })
 }
 
@@ -145,6 +291,7 @@ function swallowClick() {
 
 function cancel() {
   clearTimeout(press?.timer)
+  clearHoverLane()
   cancelAnimationFrame(scrollFrame)
   press = undefined
   boardDrag.active = false
