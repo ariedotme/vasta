@@ -8,6 +8,10 @@ GitHub release page.
 
 ### Added
 
+- **Customisable cards on Board, Gallery, Grid and Wall views.** Under **Cards**, each layout of a
+  view can independently toggle cover images (with a **Fit image** option for book covers and
+  vertical images), text previews, property names, card size (S/M/L), and choose and reorder which
+  fields — including tags — appear on cards.
 - **Board: collapse and reorder sections.** Swimlanes can now be collapsed individually (or all at
   once from a section's menu), keeping column headers visible at the top; holding a dragged card
   over a collapsed section opens it. Both swimlanes and columns can be reordered by dragging their
@@ -16,7 +20,6 @@ GitHub release page.
 ### Fixed
 
 - **Board: folded tag and relation columns now show their title** instead of `…`.
-
 - **Back on a phone closes what is open first.** With a dialog, a menu, the search or the side menu
   open, Back (or the iPhone's edge swipe) now closes it and stays on the page, instead of changing the
   page underneath it. Back and Forward also return a list to where you scrolled it, instead of its top.

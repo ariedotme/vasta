@@ -5,11 +5,12 @@
 // Columns fold, lanes collapse, both reorder by dragging their handle or via their menu, and
 // columns can have a WIP limit; all are saved on the view's settings (`board`).
 import { computed, nextTick, ref } from 'vue'
-import type { BoardSettings, Id, ObjectRecord, ObjectSummary, PropertyDef } from '@vasta/core'
+import type { BoardSettings, Id, ObjectRecord, ObjectSummary } from '@vasta/core'
 import { RANK_PROPERTY_ID, byRank, rankOf, rankBetween } from '@vasta/core'
 import { createObject } from '../lib/actions.ts'
 import { boardDrag, moveCard, pressCard, pressSection, sectionDrag, type BoardAxis, type CardTarget } from '../lib/board.ts'
 import { moveKey, orderGroups, shiftKey, toggleKey } from '../lib/board-sections.ts'
+import { resolveCard } from '../lib/cards.ts'
 import { chip } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
 import { t } from '../lib/i18n.ts'
@@ -183,14 +184,9 @@ const colDropBefore = (index: number) =>
 const colDropAfter = (index: number) =>
   draggedColumnIndex.value >= 0 && index === columns.value.length - 1 && sectionDrag.index === columns.value.length && draggedColumnIndex.value !== columns.value.length - 1
 
-// Card fields: the view's, or the first two with a value that are not the columns or lanes.
-const cardFields = computed<PropertyDef[] | undefined>(() => {
-  const ids = props.board?.cardFields
-  if (!ids) return undefined
-  const defs = types.value.flatMap((t) => t.properties)
-  return ids.flatMap((id) => defs.find((d) => d.id === id) ?? [])
-})
-// A date's group (This week) does not say the day, so cards keep showing it.
+// Card sizing & fields hidden in automatic mode (the columns and lanes already say them, except dates).
+const cardSize = computed(() => resolveCard('kanban', props.board).size)
+const columnWidthClass = computed(() => (cardSize.value === 'sm' ? 'w-56' : cardSize.value === 'lg' ? 'w-[22rem] max-w-[85vw]' : 'w-72'))
 const hiddenFields = computed(() => [props.groupField, laneField.value].filter((field): field is string => !!field && !isDateField(field, types.value)))
 
 // Dragging cards ---------------------------------------------------------------
@@ -285,7 +281,7 @@ async function addCard(column: Group, lane: Group) {
           :data-board-col-header="column.key"
           class="group/col relative flex shrink-0 items-center gap-1.5 rounded-xl bg-raised text-sm ring-1 ring-line"
           :class="[
-            collapsed.has(column.key) ? 'w-11 cursor-pointer flex-col px-1.5 py-2' : 'w-72 px-2.5 py-2',
+            collapsed.has(column.key) ? 'w-11 cursor-pointer flex-col px-1.5 py-2' : `${columnWidthClass} px-2.5 py-2`,
             sectionDrag.active && sectionDrag.axis === 'column' && sectionDrag.key === column.key ? 'opacity-50' : '',
           ]"
           @click="collapsed.has(column.key) && toggleFold(column)"
@@ -387,7 +383,7 @@ async function addCard(column: Group, lane: Group) {
               :data-board-col-header="!laneField ? column.key : undefined"
               class="relative flex shrink-0 flex-col rounded-xl bg-raised ring-1 ring-line"
               :class="[
-                collapsed.has(column.key) ? 'w-11 p-1.5' : 'w-72 p-2',
+                collapsed.has(column.key) ? 'w-11 p-1.5' : `${columnWidthClass} p-2`,
                 !laneField && sectionDrag.active && sectionDrag.axis === 'column' && sectionDrag.key === column.key ? 'opacity-50' : '',
               ]"
             >
@@ -461,7 +457,7 @@ async function addCard(column: Group, lane: Group) {
                     @contextmenu="onContextMenu($event, object)"
                     @dragstart.prevent
                   >
-                    <ObjectCard :object="object" :type="typeOf(object)" variant="kanban" :fields="cardFields" :hide="hiddenFields" />
+                    <ObjectCard :object="object" :type="typeOf(object)" variant="kanban" :card="board" :hide="hiddenFields" />
                   </div>
                 </template>
                 <div v-if="landing(column, lane) >= 0 && landing(column, lane) >= placed(column, lane).filter((p) => p.place >= 0).length" class="h-1 rounded-full bg-accent" />

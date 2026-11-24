@@ -2,8 +2,9 @@
 // A set of objects shown in one of the view layouts (list, table, wall, grid, gallery, board),
 // optionally grouped. Used by type pages, query pages and queries embedded in documents.
 import { computed, nextTick, provide, ref, watch, type Directive } from 'vue'
-import type { BoardSettings, Id, ListSettings, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
+import type { BoardSettings, CardLayout, CardSettings, Id, ListSettings, ObjectRecord, ObjectSummary, PropertyDef, PropertyValue, SelectOption, TableSettings, ViewLayout, ViewOpenIn } from '@vasta/core'
 import { addSelectOption, setProperty } from '../lib/actions.ts'
+import { resolveCard } from '../lib/cards.ts'
 import { chip } from '../lib/colors.ts'
 import { columnWidth, listFields, MIN_COLUMN_WIDTH, rowFields, tableColumns, tableSettings, type Column } from '../lib/columns.ts'
 import { displayTitle, formatDate, formatRelative } from '../lib/format.ts'
@@ -35,6 +36,8 @@ const props = defineProps<{
   list?: ListSettings
   /** The board layout's settings, and whether its cards keep their manual order (no sort chosen). */
   board?: BoardSettings
+  /** Per-layout card settings for grid, wall and gallery. */
+  cards?: Partial<Record<CardLayout, CardSettings>>
   manual?: boolean
   /** Where a click on an object opens it, as saved on the view or query; unset: as its type says. */
   openIn?: ViewOpenIn
@@ -169,7 +172,30 @@ function addOption(object: ObjectSummary, column: Column, option: SelectOption) 
   if (type) void addSelectOption(type, column.field, option).catch((error) => (lastError.value = (error as Error).message))
 }
 
-const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))
+const cardVariant = computed<CardLayout>(() => (props.layout === 'wall' || props.layout === 'embed' ? 'wall' : props.layout === 'gallery' ? 'gallery' : 'grid'))
+const activeCard = computed(() => props.cards?.[cardVariant.value])
+const cardSize = computed(() => resolveCard(cardVariant.value, activeCard.value).size)
+const wallGridClass = computed(() =>
+  cardSize.value === 'sm'
+    ? 'columns-1 gap-3 @md:columns-2 @2xl:columns-3 @5xl:columns-4 @7xl:columns-5'
+    : cardSize.value === 'lg'
+      ? 'columns-1 gap-3 @2xl:columns-2 @6xl:columns-3'
+      : 'columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4'
+)
+const cardGridClass = computed(() => {
+  if (cardVariant.value === 'gallery') {
+    return cardSize.value === 'sm'
+      ? 'grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]'
+      : cardSize.value === 'lg'
+        ? 'grid-cols-[repeat(auto-fill,minmax(19rem,1fr))]'
+        : 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]'
+  }
+  return cardSize.value === 'sm'
+    ? 'grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]'
+    : cardSize.value === 'lg'
+      ? 'grid-cols-[repeat(auto-fill,minmax(21rem,1fr))]'
+      : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'
+})
 
 </script>
 
@@ -309,13 +335,13 @@ const cardVariant = computed(() => (props.layout === 'wall' || props.layout === 
       </div>
 
       <!-- Wall: masonry columns -->
-      <div v-else-if="cardVariant === 'wall'" class="columns-1 gap-3 @lg:columns-2 @4xl:columns-3 @7xl:columns-4">
-        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" @contextmenu="emit('menu', $event, object)" />
+      <div v-else-if="cardVariant === 'wall'" :class="wallGridClass">
+        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" variant="wall" :card="activeCard" @contextmenu="emit('menu', $event, object)" />
       </div>
 
       <!-- Grid and gallery -->
-      <div v-else class="grid gap-3" :class="cardVariant === 'gallery' ? 'grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'">
-        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" @contextmenu="emit('menu', $event, object)" />
+      <div v-else class="grid gap-3" :class="cardGridClass">
+        <ObjectCard v-for="object in shown(group)" :key="object.id" :object="object" :type="typeOf(object)" :variant="cardVariant" :card="activeCard" @contextmenu="emit('menu', $event, object)" />
       </div>
 
       <button

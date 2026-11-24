@@ -2,10 +2,11 @@
 import { newId } from '@vasta/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { FilterGroup, GroupRule, ObjectRecord, ObjectSummary, ObjectType, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
-import { RANK_PROPERTY_ID, matchesFilter, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
+import type { CardLayout, CardSettings, FilterGroup, GroupRule, ObjectRecord, ObjectSummary, ObjectType, SortRule, ViewDef, ViewLayout, ViewOpenIn } from '@vasta/core'
+import { BLOCKED_PROPERTY_ID, RANK_PROPERTY_ID, matchesFilter, sortKey as fieldSortKey, statusProperty } from '@vasta/core'
 import AppIcon from '../components/AppIcon.vue'
 import TipsCard from '../components/TipsCard.vue'
+import CardOptionsMenu from '../components/CardOptionsMenu.vue'
 import ColumnsMenu from '../components/ColumnsMenu.vue'
 import ListFieldsMenu from '../components/ListFieldsMenu.vue'
 import FilterGroupEditor from '../components/FilterGroupEditor.vue'
@@ -23,6 +24,8 @@ import { chip } from '../lib/colors.ts'
 import { displayTitle } from '../lib/format.ts'
 import { propName, t, typeName, typePluralName } from '../lib/i18n.ts'
 import { confirmDialog, openContextMenu, openMenuAt, promptDialog } from '../lib/overlays.ts'
+import { patchCardSettings, type CardFieldOption, type CardVariant } from '../lib/cards.ts'
+import { kindIcon } from '../lib/properties.ts'
 import { groupOptions, queryContext } from '../lib/query.ts'
 import { keysOf } from '../lib/shortcuts.ts'
 import { meId, sharedSpace } from '../lib/people.ts'
@@ -348,19 +351,37 @@ function created(object: ObjectRecord) {
   if (!objects.value.some((o) => o.id === object.id)) objects.value.push({ ...object, preview: '' } as ObjectSummary)
 }
 
-// Board options: the fields cards show and the rows (swimlanes) they are in.
+// Card & board options: each card layout (board, gallery, grid, wall) keeps its own settings on the view.
 const boardAnchor = ref<HTMLElement | null>(null)
 const boardOpen = ref(false)
-const cardFieldChoices = computed(() => valueProps.value.filter((p) => p.id !== groupField.value))
-const cardFieldIds = computed(() => view.value.board?.cardFields)
-function toggleCardField(id: string) {
-  const current = cardFieldIds.value ?? []
-  const next = current.includes(id) ? current.filter((f) => f !== id) : cardFieldChoices.value.map((p) => p.id).filter((f) => f === id || current.includes(f))
-  updateView({ board: { ...view.value.board, cardFields: next } })
-}
-function resetCardFields() {
-  const { cardFields: _, ...rest } = view.value.board ?? {}
-  updateView({ board: Object.keys(rest).length ? rest : undefined })
+const cardVariant = computed<CardVariant | null>(() => {
+  const layout = view.value.layout
+  if (layout === 'kanban' || layout === 'gallery' || layout === 'grid' || layout === 'wall') return layout
+  return null
+})
+const activeCardSettings = computed<CardSettings | undefined>(() => {
+  if (!cardVariant.value) return undefined
+  return cardVariant.value === 'kanban' ? view.value.board : view.value.cards?.[cardVariant.value]
+})
+const cardFieldChoices = computed<CardFieldOption[]>(() => [
+  ...valueProps.value
+    .filter((p) => p.id !== BLOCKED_PROPERTY_ID && (view.value.layout !== 'kanban' || p.id !== groupField.value))
+    .map((p) => ({ id: p.id, label: propName(p), icon: kindIcon(p.kind), def: p })),
+  { id: 'tags', label: t('builtin.type.tag.other'), icon: 'ph:tag' },
+])
+function patchCard(patch: Partial<CardSettings>) {
+  const variant = cardVariant.value
+  if (!variant) return
+  if (variant === 'kanban') {
+    updateView({ board: patchCardSettings(view.value.board, patch, 'kanban') })
+    return
+  }
+  const layout: CardLayout = variant
+  const nextForLayout = patchCardSettings(view.value.cards?.[layout], patch, layout)
+  const nextCards = { ...(view.value.cards ?? {}) }
+  if (nextForLayout) nextCards[layout] = nextForLayout
+  else delete nextCards[layout]
+  updateView({ cards: Object.keys(nextCards).length ? nextCards : undefined })
 }
 function setSwimlanes(field: string) {
   const { swimlanes: _, collapsedLanes: _c, laneOrder: _o, ...rest } = view.value.board ?? {}
@@ -589,7 +610,7 @@ async function newMenu(event: MouseEvent) {
           <AppIcon fallback="ph:rows" />
           {{ groupField ? groupFields.find((f) => f.field === groupField)?.label ?? t('views.group') : t('views.group') }}
         </button>
-        <button v-if="view.layout === 'kanban'" ref="boardAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="boardOpen = !boardOpen">
+        <button v-if="cardVariant" ref="boardAnchor" class="flex items-center gap-1 rounded-lg px-2 py-1.5 text-ink-soft hover:bg-hover" @click="boardOpen = !boardOpen">
           <AppIcon fallback="ph:cards" /> {{ t('views.cards') }}
         </button>
         <button
@@ -622,32 +643,22 @@ async function newMenu(event: MouseEvent) {
           <AppIcon v-if="groupField === f.field" fallback="ph:check" class="ml-auto text-accent" />
         </button>
       </PopoverMenu>
-      <PopoverMenu v-model:open="boardOpen" :anchor="boardAnchor" placement="bottom-end" width="15rem">
-        <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{{ t('views.swimlanes') }}</div>
-        <select
-          :value="view.board?.swimlanes ?? ''"
-          class="mx-1.5 mb-2 w-[calc(100%-0.75rem)] rounded-md bg-hover px-2 py-1 text-sm outline-none"
-          :aria-label="t('views.swimlanes')"
-          @change="setSwimlanes(($event.target as HTMLSelectElement).value)"
-        >
-          <option value="">{{ t('object.none') }}</option>
-          <option v-for="f in groupFields.filter((g) => g.field && g.field !== groupField)" :key="f.field" :value="f.field">{{ f.label }}</option>
-        </select>
-        <div class="flex items-center px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">
-          {{ t('views.cardFields') }}
-          <button v-if="cardFieldIds" class="ml-auto normal-case tracking-normal text-ink-faint hover:text-ink" @click="resetCardFields">{{ t('views.automatic') }}</button>
-        </div>
-        <p v-if="!cardFieldIds" class="px-2.5 pb-1 text-xs text-ink-faint">{{ t('views.cardFieldsHint') }}</p>
-        <button
-          v-for="p in cardFieldChoices"
-          :key="p.id"
-          class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-hover"
-          @click="toggleCardField(p.id)"
-        >
-          <AppIcon :fallback="cardFieldIds?.includes(p.id) ? 'ph:check-square-fill' : 'ph:square'" :class="cardFieldIds?.includes(p.id) ? 'text-accent' : 'text-ink-faint'" />
-          {{ propName(p) }}
-        </button>
-        <template v-if="view.board?.columnOrder?.length || view.board?.laneOrder?.length">
+      <PopoverMenu v-model:open="boardOpen" :anchor="boardAnchor" placement="bottom-end" width="16.5rem">
+        <template v-if="view.layout === 'kanban'">
+          <div class="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{{ t('views.swimlanes') }}</div>
+          <select
+            :value="view.board?.swimlanes ?? ''"
+            class="mx-1.5 mb-2 w-[calc(100%-0.75rem)] rounded-md bg-hover px-2 py-1 text-sm outline-none"
+            :aria-label="t('views.swimlanes')"
+            @change="setSwimlanes(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">{{ t('object.none') }}</option>
+            <option v-for="f in groupFields.filter((g) => g.field && g.field !== groupField)" :key="f.field" :value="f.field">{{ f.label }}</option>
+          </select>
+          <div class="my-1 border-t border-line" />
+        </template>
+        <CardOptionsMenu v-if="cardVariant" :variant="cardVariant" :card="activeCardSettings" :choices="cardFieldChoices" @patch="patchCard" />
+        <template v-if="view.layout === 'kanban' && (view.board?.columnOrder?.length || view.board?.laneOrder?.length)">
           <div class="my-1 border-t border-line" />
           <button class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-ink-soft hover:bg-hover hover:text-ink" @click="resetBoardOrder">
             <AppIcon fallback="ph:arrow-counter-clockwise" :size="14" /> {{ t('board.resetOrder') }}
@@ -704,6 +715,7 @@ async function newMenu(event: MouseEvent) {
       :table="view.table"
       :list="view.list"
       :board="view.board"
+      :cards="view.cards"
       :manual="manual"
       :open-in="view.openIn"
       @table="updateView({ table: $event })"
