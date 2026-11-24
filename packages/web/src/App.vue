@@ -18,6 +18,7 @@ import TopBar from './components/TopBar.vue'
 import { reminderEditor } from './lib/insistent.ts'
 import { t } from './lib/i18n.ts'
 import { closeTakeover, listenToDesktop, trafficLights } from './lib/platform.ts'
+import { keepsCaretAboveKeyboard } from './lib/keyboard.ts'
 import { installShortcuts } from './lib/shortcuts.ts'
 import { checkSession, session } from './lib/session.ts'
 import { ui, workspace } from './lib/state.ts'
@@ -62,6 +63,7 @@ function onKey(event: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 onBeforeUnmount(installShortcuts())
+onBeforeUnmount(keepsCaretAboveKeyboard())
 
 // Swipe right from the left edge opens the drawer, swipe left on it closes it.
 let swipe: { x: number; y: number; opening: boolean } | undefined

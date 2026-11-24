@@ -6,6 +6,11 @@ GitHub release page.
 
 ## Unreleased
 
+### Fixed
+
+- **iPhone: the line you are typing in a note stays above the keyboard.** Writing low in a note, or
+  at the end of a long one, went on behind the keyboard and its toolbar.
+
 ## 0.13.0 (2026-11-23)
 
 ### Added
