@@ -11,55 +11,62 @@ const WAIT = 2000
 
 export function keepsScroll(router: Router, main: () => HTMLElement | null | undefined) {
   const left = new Map<string, number>()
-  const entry = () => `${router.options.history.state.position}:${router.currentRoute.value.path}`
+  const entry = () => `${router.options.history.state?.position}:${router.currentRoute.value.path}`
   let current = entry()
   let going: 'back' | 'new' = 'new'
   let restoring = 0
+  let stopRestore: (() => void) | undefined
 
   const stopBefore = router.beforeEach((to) => {
     const element = main()
     if (element) left.set(current, element.scrollTop)
     // Back or Forward: the history already holds the entry being gone to (as in router.ts).
-    going = router.options.history.state.current === to.fullPath ? 'back' : 'new'
+    going = router.options.history.state?.current === to.fullPath ? 'back' : 'new'
   })
   const stopAfter = router.afterEach((to, from, failure) => {
     if (failure) return
     current = entry()
     if (to.path === from.path) return
+    stopRestore?.()
     const target = going === 'back' ? (left.get(current) ?? 0) : 0
     const run = ++restoring
     void nextTick(() => restore(target, run))
   })
 
   function restore(target: number, run: number) {
+    if (run !== restoring) return
     const element = main()
     if (!element) return
     element.scrollTop = target
-    if (!target) return
+    if (!target || Math.abs(element.scrollTop - target) <= 1) return
     // A finger, the wheel, the scrollbar or a key on the page takes over; so does another page.
-    let touched = false
-    const take = () => (touched = true)
+    let frame = 0
+    const done = () => {
+      cancelAnimationFrame(frame)
+      element.removeEventListener('touchstart', take)
+      element.removeEventListener('wheel', take)
+      element.removeEventListener('pointerdown', take)
+      window.removeEventListener('keydown', take)
+      if (stopRestore === done) stopRestore = undefined
+    }
+    const take = () => done()
+    stopRestore = done
     element.addEventListener('touchstart', take, { once: true, passive: true })
     element.addEventListener('wheel', take, { once: true, passive: true })
     element.addEventListener('pointerdown', take, { once: true, passive: true })
     window.addEventListener('keydown', take, { once: true })
     const start = performance.now()
     const step = () => {
-      if (touched || run !== restoring) return done()
       if (Math.abs(element.scrollTop - target) > 1) element.scrollTop = target
       if (Math.abs(element.scrollTop - target) <= 1 || performance.now() - start > WAIT) return done()
-      requestAnimationFrame(step)
+      frame = requestAnimationFrame(step)
     }
-    const done = () => {
-      element.removeEventListener('touchstart', take)
-      element.removeEventListener('wheel', take)
-      element.removeEventListener('pointerdown', take)
-      window.removeEventListener('keydown', take)
-    }
-    requestAnimationFrame(step)
+    frame = requestAnimationFrame(step)
   }
 
   return () => {
+    ++restoring
+    stopRestore?.()
     stopBefore()
     stopAfter()
   }

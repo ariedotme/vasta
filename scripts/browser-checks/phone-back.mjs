@@ -173,7 +173,6 @@ try {
     await back()
     await gone('text=Discard your changes to this type?', 'Back closes the question')
     if ((await page.locator(`${dialog} input`).first().inputValue()) !== `Tasks ${tag}`) throw new Error('the change was lost')
-    await page.getByRole('button', { name: 'Discard' }).click().catch(() => {})
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'Discard' }).click()
     await gone(dialog, 'Discard closes Type settings')

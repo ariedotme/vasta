@@ -49,21 +49,29 @@ export const router = createRouter({
 // or the side drawer open closes that instead, and the page stays (lib/back.ts). The router puts the
 // entry back by going the other way; the close waits for that, so a dialog whose close changes the
 // address (Type settings, ?settings=1) changes the entry it was opened on.
-router.beforeEach((to) => {
-  if (router.options.history.state.current !== to.fullPath || !isPhone.value) return
-  if (closeTopLayer(afterEntryBack)) return false
+router.beforeEach((to, from) => {
+  if (router.options.history.state?.current !== to.fullPath || !isPhone.value) return
+  if (closeTopLayer((close) => afterEntryBack(from.fullPath, close))) return false
 })
 
-function afterEntryBack(close: () => void) {
+let pendingBackClose: (() => void) | undefined
+function afterEntryBack(expected: string, close: () => void) {
+  if (pendingBackClose === close) return
+  pendingBackClose = close
   let done = false
-  const run = () => {
+  const finish = () => {
     if (done) return
     done = true
-    window.removeEventListener('popstate', run)
+    if (pendingBackClose === close) pendingBackClose = undefined
+    clearTimeout(timer)
+    window.removeEventListener('popstate', onPop)
     close()
   }
-  window.addEventListener('popstate', run)
-  setTimeout(run, 500) // no entry to go back to (a history state without a position)
+  const onPop = () => {
+    if (router.options.history.state?.current === expected) finish()
+  }
+  window.addEventListener('popstate', onPop)
+  const timer = setTimeout(finish, 500) // no entry to go back to (a history state without a position)
 }
 
 // The side pane (lib/open.ts) lives in the query, as ?pane=<id>&paneBlock=<id>. A page that
@@ -74,7 +82,7 @@ export const paneNavigation = { closing: false }
 router.beforeEach((to, from) => {
   const { pane, paneBlock } = from.query
   if (!pane || paneNavigation.closing || to.path !== from.path || 'pane' in to.query) return
-  if (router.options.history.state.current === to.fullPath) return
+  if (router.options.history.state?.current === to.fullPath) return
   return { path: to.path, hash: to.hash, query: { ...to.query, pane, ...(paneBlock ? { paneBlock } : {}) } }
 })
 

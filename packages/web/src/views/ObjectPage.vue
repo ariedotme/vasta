@@ -51,7 +51,9 @@ import { clearOtherDefaults, deleteTemplate, loadTemplates, previewTemplate, rem
 import DocPreview from '../components/DocPreview.ts'
 import ModalDialog from '../components/ModalDialog.vue'
 import { writeContent, type JsonDoc } from '@vasta/editor-schema/yjs'
+import { closesOnBack } from '../lib/back.ts'
 import { pageWidthClass } from '../lib/page-width.ts'
+import { isPhone } from '../lib/viewport.ts'
 
 /**
  * `variant`: 'page' (its own page), 'pane' (the side pane next to another page: no comments or
@@ -160,6 +162,7 @@ const isWhiteboard = computed(() => type.value?.system === 'whiteboard')
 const board = shallowRef<TextSession | null>(null)
 const boardFailed = ref(false)
 const boardFull = ref(false)
+closesOnBack(() => boardFull.value, () => (boardFull.value = false))
 /**
  * The board takes the rest of the window below the title and properties, so it opens whole with
  * no scrolling (on an iPad above all); what follows it (comments, backlinks) is below.
@@ -197,6 +200,7 @@ const boardLayout = computed(() => isWhiteboard.value && !embedded.value && !inP
 const DETAILS_KEY = 'vasta.board-details'
 const detailsOpen = ref(readFlag(DETAILS_KEY))
 watch(detailsOpen, (open) => writeFlag(DETAILS_KEY, open))
+closesOnBack(() => isPhone.value && boardLayout.value && detailsOpen.value, () => (detailsOpen.value = false))
 function readFlag(key: string) {
   try {
     return localStorage.getItem(key) === '1'
