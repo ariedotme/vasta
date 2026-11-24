@@ -1,8 +1,9 @@
 // The caret above the on-screen keyboard. The app scrolls in <main>, not the window, and iOS Safari
 // only brings a note's caret above the keyboard when the window scrolls: typing low in a note went
-// on behind the keyboard and its toolbar. While the keyboard
-// is up, each keystroke or caret move in a note scrolls its scrolling box just enough to keep the
-// caret inside the part of the screen the keyboard leaves.
+// on behind the keyboard and its toolbar. While the keyboard is up on a touch/phone device, each
+// keystroke or caret move in a note scrolls its scrolling box just enough to keep the caret inside
+// the part of the screen the keyboard leaves.
+import { isPhone, isTouch } from './viewport.ts'
 
 /** Room kept between the caret and the keyboard, in px. */
 const MARGIN = 12
@@ -18,15 +19,24 @@ export function scrollToClear(caretBottom: number, visibleBottom: number, margin
 }
 
 /** The bottom of the caret in the editor, in window px; undefined when there is none. */
-function caretBottom(): number | undefined {
+function caretBottom(root: HTMLElement): number | undefined {
   const selection = document.getSelection()
   if (!selection?.rangeCount || !selection.isCollapsed) return undefined
   const range = selection.getRangeAt(0)
   const rect = range.getBoundingClientRect()
   if (rect.height) return rect.bottom
-  // An empty line has no rect of its own: its block's.
+  // An empty line has no rect of its own: its child or enclosing block's (never the whole editor).
   const node = range.startContainer
-  return (node instanceof Element ? node : node.parentElement)?.getBoundingClientRect().bottom
+  if (node instanceof Element) {
+    const child = node.childNodes[range.startOffset]
+    if (child instanceof Element) {
+      const childRect = child.getBoundingClientRect()
+      if (childRect.height) return childRect.bottom
+    }
+    return node === root ? undefined : node.getBoundingClientRect().bottom
+  }
+  const parent = node.parentElement
+  return !parent || parent === root ? undefined : parent.getBoundingClientRect().bottom
 }
 
 /** The box the caret scrolls in (<main>, a dialog's body), even one too short to scroll yet. */
@@ -39,14 +49,14 @@ function scrollParent(from: Element): HTMLElement | undefined {
 }
 
 /** Start keeping the caret above the keyboard; returns the stop. */
-export function keepsCaretAboveKeyboard(): () => void {
+export function keepsCaretAboveKeyboard(enabled: () => boolean = () => isTouch.value || isPhone.value): () => void {
   const viewport = typeof window === 'undefined' ? undefined : window.visualViewport
   if (!viewport) return () => {}
   let frame = 0
   // The keyboard's height: how much shorter the visual viewport is than the tallest it has been at
-  // this width (window.innerHeight follows Safari's toolbars and page scroll, not the keyboard).
+  // this width (window.innerHeight seeds the height on rotation while the keyboard is already up).
   let width = viewport.width
-  let tallest = viewport.height
+  let tallest = Math.max(viewport.height, window.innerHeight)
   // Where the keyboard begins, in the coordinates the caret's rect uses: a fixed marker set at the
   // visual viewport's bottom. (iOS Safari gives rects from the visual viewport's top once it moved
   // down the page, other browsers from the layout viewport's; the marker reads the same as both.)
@@ -58,30 +68,37 @@ export function keepsCaretAboveKeyboard(): () => void {
   }
   // A box scrolled for the keyboard gets room below its end while the keyboard is up, as the window
   // does in a browser: else a short note, or one scrolled to its end, has nowhere to scroll to.
-  const padded = new Set<HTMLElement>()
+  const padded = new Map<HTMLElement, number>()
   const unpad = () => {
-    for (const box of padded) box.style.paddingBottom = ''
+    for (const box of padded.keys()) box.style.paddingBottom = ''
     padded.clear()
   }
   const check = () => {
     frame = 0
-    if (viewport.width !== width) [width, tallest] = [viewport.width, viewport.height]
+    if (!enabled()) return unpad()
+    if (viewport.width !== width) [width, tallest] = [viewport.width, Math.max(viewport.height, window.innerHeight)]
     tallest = Math.max(tallest, viewport.height)
     const keyboard = tallest - viewport.height
     // A pinch zoom also shrinks the visual viewport; only a keyboard does it at scale 1.
     if (viewport.scale !== 1 || keyboard < KEYBOARD) return unpad()
+    for (const [box, height] of padded) {
+      if (height !== keyboard) {
+        box.style.paddingBottom = `${keyboard}px`
+        padded.set(box, keyboard)
+      }
+    }
     // Only while typing in a note: Safari brings a focused field (input, textarea) into view by
     // itself, also in a scrolling box; it is the caret in the editor it leaves behind the keyboard.
     const active = document.activeElement
     if (!(active instanceof HTMLElement && active.isContentEditable)) return
-    const bottom = caretBottom()
+    const bottom = caretBottom(active)
     if (bottom === undefined) return
     const by = scrollToClear(bottom, keyboardTop())
     const box = by ? scrollParent(active) : undefined
     if (!box) return
-    if (!padded.has(box)) {
+    if (padded.get(box) !== keyboard) {
       box.style.paddingBottom = `${keyboard}px`
-      padded.add(box)
+      padded.set(box, keyboard)
     }
     box.scrollTop += by
   }
@@ -92,6 +109,7 @@ export function keepsCaretAboveKeyboard(): () => void {
   // keyboard), and may undo the first scroll: look again twice, then stop.
   let later: ReturnType<typeof setTimeout>[] = []
   const onEdit = () => {
+    if (!enabled()) return
     soon()
     for (const timer of later) clearTimeout(timer)
     later = [150, 400].map((ms) => setTimeout(soon, ms))
@@ -99,10 +117,12 @@ export function keepsCaretAboveKeyboard(): () => void {
   document.addEventListener('selectionchange', onEdit)
   document.addEventListener('input', onEdit, true)
   viewport.addEventListener('resize', soon)
+  viewport.addEventListener('scroll', soon)
   return () => {
     document.removeEventListener('selectionchange', onEdit)
     document.removeEventListener('input', onEdit, true)
     viewport.removeEventListener('resize', soon)
+    viewport.removeEventListener('scroll', soon)
     if (frame) cancelAnimationFrame(frame)
     for (const timer of later) clearTimeout(timer)
     marker?.remove()
